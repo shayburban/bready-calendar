@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppRole } from '@/api/entities';
-import Header from './components/layout/Header';
-import Footer from './components/layout/Footer';
-import GlobalAdminBanner from './components/common/GlobalAdminBanner';
-import { cssVariables } from './components/design-system/Colors';
+import Header from '../components/layout/Header';
+import Footer from '../components/layout/Footer';
+import GlobalAdminBanner from '../components/common/GlobalAdminBanner';
+import { cssVariables } from '../components/design-system/Colors';
 
 export default function Layout({ children, currentPageName }) {
   const [bannerActive, setBannerActive] = useState(false);

@@ -1,62 +1,64 @@
 import React from 'react';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Search, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 
-const ServiceTag = ({ name, href, tooltip }) => (
-    <div className="relative group">
-        <Link to={createPageUrl(href)} className="text-white bg-black bg-opacity-20 px-3 py-1 rounded-full text-sm hover:bg-opacity-40 transition-all">
-            {name}
-        </Link>
-        <div className="absolute bottom-full mb-2 w-48 bg-gray-800 text-white text-xs rounded py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-            {tooltip}
-        </div>
-    </div>
-);
-
 export default function HeroSection() {
     return (
-        <div className="relative text-white">
-            {/* You can replace this with your own banner image after uploading it. */}
-            <img src="https://images.unsplash.com/photo-1516979187457-637abb4f9353?q=80&w=2070&auto=format&fit=crop" alt="Banner" className="w-full h-[500px] object-cover" />
-            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-                <div className="text-center p-4">
-                    <h1 className="text-4xl md:text-6xl font-bold mb-2">Find The Perfect Online Teacher</h1>
-                    <h3 className="text-xl md:text-2xl font-light text-gray-200 mb-8">To Receive The Best Solution</h3>
-                    
-                    <div className="bg-white rounded-lg shadow-lg p-2 max-w-2xl mx-auto flex items-center gap-2">
-                        <Input 
-                            type="text" 
-                            placeholder="Search a subject or keyword" 
-                            className="flex-grow border-none focus:ring-0 text-gray-700" 
-                        />
-                        <Select defaultValue="all">
-                            <SelectTrigger className="w-[180px] border-none focus:ring-0 text-gray-500">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Services</SelectItem>
-                                <SelectItem value="online-class">Online Class</SelectItem>
-                                <SelectItem value="consulting">Consulting</SelectItem>
-                                <SelectItem value="interview">Technical Interview</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Button size="icon" className="bg-brand-blue hover:bg-brand-blue-dark">
-                            <Search className="h-5 w-5" />
-                        </Button>
-                    </div>
+        <section className="relative min-h-[700px] flex items-center justify-center pt-20 px-8">
+            {/* Background */}
+            <div className="absolute inset-0 z-0">
+                <img
+                    className="w-full h-full object-cover opacity-10"
+                    src="https://images.unsplash.com/photo-1507842217343-583bb7270b66?q=80&w=2090&auto=format&fit=crop"
+                    alt="Modern library interior"
+                />
+                <div className="absolute inset-0 bg-gradient-to-b from-stitch-surface via-transparent to-stitch-surface" />
+            </div>
 
-                    <div className="mt-6 flex items-center justify-center gap-4 flex-wrap">
-                        <span className="text-gray-300">Our Services:</span>
-                        <ServiceTag name="Online Class" href="FindTutors" tooltip="Private online lessons with video." />
-                        <ServiceTag name="Consulting" href="FindTutors" tooltip="Consult with a teacher about your problem." />
-                        <ServiceTag name="Technical Interview" href="FindTutors" tooltip="Prepare for a job interview in a professional way." />
+            {/* Content */}
+            <div className="relative z-10 max-w-4xl w-full text-center">
+                <h1 className="text-5xl md:text-7xl font-bold text-stitch-on-surface tracking-tight mb-8 leading-[1.1] font-headline">
+                    Find The Perfect <br />
+                    <span className="text-stitch-primary-light italic">Online Teacher</span>
+                </h1>
+                <p className="text-stitch-on-surface-variant text-lg mb-10">
+                    To Receive The Best Solution for your academic journey. Curated experts ready to guide you.
+                </p>
+
+                {/* Search Bar */}
+                <div className="bg-white p-2 md:p-3 rounded-full shadow-2xl flex flex-col md:flex-row gap-2 max-w-3xl mx-auto items-center">
+                    <div className="flex items-center gap-3 px-6 py-3 w-full md:border-r border-stitch-outline-variant/20">
+                        <Search className="h-5 w-5 text-stitch-outline" />
+                        <Input
+                            type="text"
+                            placeholder="Subject (e.g. Quantum Physics)"
+                            className="w-full bg-transparent border-none focus-visible:ring-0 text-stitch-on-surface placeholder:text-stitch-outline/60 text-sm shadow-none"
+                        />
                     </div>
+                    <div className="flex items-center gap-3 px-6 py-3 w-full">
+                        <MapPin className="h-5 w-5 text-stitch-outline" />
+                        <Input
+                            type="text"
+                            placeholder="Level or Location"
+                            className="w-full bg-transparent border-none focus-visible:ring-0 text-stitch-on-surface placeholder:text-stitch-outline/60 text-sm shadow-none"
+                        />
+                    </div>
+                    <Link to={createPageUrl('FindTutors')}>
+                        <Button className="w-full md:w-auto bg-gradient-to-br from-stitch-primary to-stitch-primary-light text-white px-10 py-6 rounded-full font-bold text-sm hover:opacity-90 transition-opacity">
+                            Search
+                        </Button>
+                    </Link>
+                </div>
+
+                <div className="mt-12 flex flex-wrap justify-center gap-8 opacity-60">
+                    <span className="text-xs font-bold tracking-widest uppercase text-stitch-on-surface-variant">
+                        Trusted by institutions worldwide
+                    </span>
                 </div>
             </div>
-        </div>
+        </section>
     );
 }

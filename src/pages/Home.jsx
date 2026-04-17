@@ -11,38 +11,37 @@ import { createPageUrl } from '@/utils';
 
 export default function HomePage() {
   return (
-    <div>
+    <div className="bg-stitch-surface font-body text-stitch-on-surface">
       {/* Temporary Admin Dashboard Access Button - Keep only admin access for testing */}
-      <div style={{ 
-        position: 'fixed', 
-        top: '100px', 
-        right: '20px', 
+      <div style={{
+        position: 'fixed',
+        top: '100px',
+        right: '20px',
         zIndex: 9999,
         display: 'flex',
         flexDirection: 'column',
         gap: '10px'
       }}>
         <Link to={createPageUrl('AdminDashboard')}>
-          <Button 
-            variant="destructive" 
+          <Button
+            variant="destructive"
             size="lg"
             className="bg-red-600 hover:bg-red-700 text-white font-bold shadow-lg"
           >
-            🔒 Admin Dashboard
+            Admin Dashboard
           </Button>
         </Link>
-        {/* --- TEMPORARY TEST BUTTON --- */}
         <Link to={createPageUrl('TeacherCalendar')}>
-          <Button 
-            variant="default" 
+          <Button
+            variant="default"
             size="lg"
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg w-full"
+            className="bg-stitch-primary-light hover:bg-stitch-primary text-white font-bold shadow-lg w-full"
           >
-            📅 Teacher Calendar
+            Teacher Calendar
           </Button>
         </Link>
       </div>
-      
+
       <HeroSection />
       <SubjectsSection />
       <TrendingSection />

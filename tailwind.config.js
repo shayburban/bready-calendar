@@ -9,7 +9,21 @@ module.exports = {
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
+  		fontFamily: {
+  			headline: ['Manrope', 'sans-serif'],
+  			body: ['Manrope', 'sans-serif'],
+  		},
   		colors: {
+  			'stitch-primary': '#003c90',
+  			'stitch-primary-light': '#0f52ba',
+  			'stitch-secondary': '#b9100b',
+  			'stitch-surface': '#f9f9ff',
+  			'stitch-surface-low': '#f1f3ff',
+  			'stitch-on-surface': '#141b2c',
+  			'stitch-on-surface-variant': '#434653',
+  			'stitch-outline': '#737784',
+  			'stitch-outline-variant': '#c3c6d5',
+  			'stitch-inverse-surface': '#293041',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

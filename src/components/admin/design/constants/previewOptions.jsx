@@ -34,15 +34,15 @@ export const PAGE_OPTIONS = [
 // Dynamic imports for live preview pages (keys must match previewable PAGE_OPTIONS values)
 // CORRECTED PATHS: from /components/admin/design/constants -> ../../../pages/
 export const PAGE_LOADERS = {
-  Home:                () => import('../../../pages/Home'),
-  TeacherRegistration: () => import('../../../pages/TeacherRegistration'),
-  FindTutors:          () => import('../../../pages/FindTutors'),
-  AdminDashboard:      () => import('../../../pages/AdminDashboard'),
-  TeacherCalendar:     () => import('../../../pages/TeacherCalendar'),
-  MyProfile:           () => import('../../../pages/MyProfile'),
-  PostRequirement:     () => import('../../../pages/PostRequirement'),
-  TeacherDashboard:    () => import('../../../pages/TeacherDashboard'),
-  StudentDashboard:    () => import('../../../pages/StudentDashboard'),
-  LiveSession:         () => import('../../../pages/LiveSession'),
-  BookingCalendar:     () => import('../../../pages/BookingCalendar'),
+  Home:                () => import('../../../../pages/Home'),
+  TeacherRegistration: () => import('../../../../pages/TeacherRegistration'),
+  FindTutors:          () => import('../../../../pages/FindTutors'),
+  AdminDashboard:      () => import('../../../../pages/AdminDashboard'),
+  TeacherCalendar:     () => import('../../../../pages/TeacherCalendar'),
+  MyProfile:           () => import('../../../../pages/MyProfile'),
+  PostRequirement:     () => import('../../../../pages/PostRequirement'),
+  TeacherDashboard:    () => import('../../../../pages/TeacherDashboard'),
+  StudentDashboard:    () => import('../../../../pages/StudentDashboard'),
+  LiveSession:         () => import('../../../../pages/LiveSession'),
+  BookingCalendar:     () => import('../../../../pages/BookingCalendar'),
 };
