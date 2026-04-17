@@ -2,13 +2,56 @@
 // the UI runs end-to-end without a backend. Layout.jsx seeds AppRole on first
 // load; other pages can create/read/update like a real DB.
 
-const MOCK_USER = {
+// Dev-only role switch: `?role=student&uid=u-student1` (or teacher/parent/admin).
+// The id must match a seeded user so dashboards scoped to that user render data.
+// Persisted to localStorage so it survives navigation within the SPA.
+const DEFAULT_MOCK_USER = {
   id: 'demo-user',
   email: 'demo@local',
   full_name: 'Demo User',
   role: 'admin',
   ai_searches_today: 0,
   country_code: 'US',
+};
+
+const PRESET_USERS = {
+  admin: { id: 'demo-user', email: 'demo@local', full_name: 'Demo User', role: 'admin', country_code: 'US' },
+  teacher: { id: 'u-sarah', email: 'sarah@example.com', full_name: 'Sarah Johnson', role: 'teacher', country_code: 'US' },
+  student: { id: 'u-student1', email: 'alex@example.com', full_name: 'Alex Kim', role: 'student', country_code: 'US' },
+  parent: { id: 'u-parent1', email: 'parent@example.com', full_name: 'David Goldberg', role: 'parent', country_code: 'IL' },
+};
+
+const applyUidOverride = (preset, uid, seedUsers) => {
+  if (!uid) return preset;
+  const seeded = seedUsers.find((u) => u.id === uid);
+  return seeded
+    ? { ...preset, id: seeded.id, email: seeded.email, full_name: seeded.full_name, country_code: seeded.country_code, role: seeded.role || preset.role }
+    : { ...preset, id: uid };
+};
+
+const resolveMockUser = (seedUsers) => {
+  if (typeof window === 'undefined') return { ...DEFAULT_MOCK_USER };
+  try {
+    const url = new URL(window.location.href);
+    const roleParam = url.searchParams.get('role');
+    const uidParam = url.searchParams.get('uid');
+    if (roleParam && PRESET_USERS[roleParam]) {
+      const preset = applyUidOverride({ ...PRESET_USERS[roleParam] }, uidParam, seedUsers);
+      window.localStorage.setItem('mock_user_role', roleParam);
+      if (uidParam) window.localStorage.setItem('mock_user_uid', uidParam);
+      else window.localStorage.removeItem('mock_user_uid');
+      return { ...DEFAULT_MOCK_USER, ...preset, ai_searches_today: 0 };
+    }
+    const storedRole = window.localStorage.getItem('mock_user_role');
+    const storedUid = window.localStorage.getItem('mock_user_uid');
+    if (storedRole && PRESET_USERS[storedRole]) {
+      const preset = applyUidOverride({ ...PRESET_USERS[storedRole] }, storedUid, seedUsers);
+      return { ...DEFAULT_MOCK_USER, ...preset, ai_searches_today: 0 };
+    }
+  } catch {
+    // fall through to default
+  }
+  return { ...DEFAULT_MOCK_USER };
 };
 
 const daysFromNow = (d) => new Date(Date.now() + d * 86400000).toISOString();
@@ -102,6 +145,8 @@ const seed = {
   TeacherEmbedding: [],
   Session: [],
 };
+
+const MOCK_USER = resolveMockUser(seed.User);
 
 const store = Object.create(null);
 
