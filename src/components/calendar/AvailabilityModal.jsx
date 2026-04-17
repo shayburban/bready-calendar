@@ -1,0 +1,31 @@
+
+import React from 'react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import TeacherAvailabilityCard from './TeacherAvailabilityCard';
+import GlobalBookingCard from './GlobalBookingCard';
+
+export default function AvailabilityModal({ event, isOpen, onClose }) {
+  if (!event) return null;
+  
+  // Decide which card to show based on the event type
+  const renderCard = () => {
+    switch(event.type) {
+        case 'availability':
+            return <TeacherAvailabilityCard event={event} onClose={onClose} />;
+        case 'booked':
+            return <GlobalBookingCard event={event} onClose={onClose} />;
+        default:
+            // Fallback for other types or if type is not specified
+            return <TeacherAvailabilityCard event={event} onClose={onClose} />;
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto p-0 bg-gray-50">
+        {/* onInteractOutside is removed to allow closing, it will be handled by the popover inside */}
+        {renderCard()}
+      </DialogContent>
+    </Dialog>
+  );
+}
