@@ -24,3 +24,11 @@ dist-ssr
 *.sw?
 
 .env
+.vercel
+.auth
+baseline
+baseline-stitch-old
+current
+diff
+
+.vercel

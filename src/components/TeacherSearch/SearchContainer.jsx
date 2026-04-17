@@ -1,5 +1,5 @@
 import React, { useReducer, useEffect } from 'react';
-import { searchReducer, initialState, actionTypes } from '@/components/teacherSearch/searchReducer';
+import { searchReducer, initialState, actionTypes } from '@/components/TeacherSearch/searchReducer';
 import FilterPanel from './Filters/FilterPanel';
 import ResultsGrid from './SearchResults/ResultsGrid';
 import SearchBar from './SearchBar/SearchBar';

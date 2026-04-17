@@ -1,5 +1,5 @@
 import React from 'react';
-import { actionTypes } from '@/components/teacherSearch/searchReducer';
+import { actionTypes } from '@/components/TeacherSearch/searchReducer';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 

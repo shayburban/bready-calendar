@@ -1,5 +1,5 @@
 import React from 'react';
-import { actionTypes } from '@/components/teacherSearch/searchReducer';
+import { actionTypes } from '@/components/TeacherSearch/searchReducer';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { X } from 'lucide-react';

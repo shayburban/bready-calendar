@@ -1,0 +1,15 @@
+import { chromium } from 'playwright';
+const browser = await chromium.launch();
+const context = await browser.newContext();
+await context.route(/base44\.(com|app)/i, (r) => r.abort());
+const page = await context.newPage();
+page.on('console', (msg) => console.log(`[${msg.type()}]`, msg.text()));
+page.on('pageerror', (err) => console.log('[pageerror]', err.message));
+page.on('requestfailed', (r) => console.log('[reqfail]', r.url(), '-', r.failure()?.errorText));
+await page.goto('http://localhost:5173/Home', { waitUntil: 'domcontentloaded' });
+await page.waitForTimeout(3000);
+console.log('\n--- document body HTML (first 1000 chars) ---');
+console.log((await page.content()).slice(0, 1000));
+console.log('\n--- body innerText ---');
+console.log(await page.evaluate(() => document.body.innerText.slice(0, 500)));
+await browser.close();
