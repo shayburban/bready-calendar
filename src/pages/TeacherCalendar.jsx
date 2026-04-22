@@ -50,7 +50,7 @@ const sampleEvents = [
   { id: 5, date: 16, time: '11:00 - 14:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 5, description: 'Available slots', timeSlots: ["11:00-12:00", "12:00-13:00", "14:00-15:00", "15:00-16:00"] },
   { id: 6, date: 17, time: '11:00 - 14:00', type: 'not-reviewed', role: 'T', color: 'bg-red-500', student: 'Sarah M.', description: 'Pending review for Physics session' },
   { id: 7, date: 18, time: '11:00 - 14:00', type: 'cancelled', role: 'S', color: 'bg-gray-600', description: 'Session cancelled by student' },
-  { id: 8, date: 25, time: '11:00 - 14:00', type: 'cancelled', color: 'bg-gray-600', description: 'Cancelled session' },
+  { id: 8, date: 25, time: '11:00 - 14:00', type: 'cancelled', role: 'T', color: 'bg-gray-600', description: 'Cancelled session by teacher' },
   // Additional events for same days to test grouping
   { id: 9, date: 10, time: '15:00 - 16:00', type: 'availability', role: 'T', color: 'bg-green-500', description: 'Additional availability', timeSlots: ["15:00-16:00"]},
   { id: 10, date: 10, time: '16:00 - 17:00', type: 'availability', role: 'S', color: 'bg-green-500', description: 'My study slot', timeSlots: ["16:00-17:00"]},
@@ -191,7 +191,7 @@ export default function TeacherCalendar() {
     if (
       event.type === 'availability' ||
       event.type === 'booked' ||
-      (event.type === 'cancelled' && event.role === 'S')
+      (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T'))
     ) {
         setShowAvailabilityModal(true);
     } else {

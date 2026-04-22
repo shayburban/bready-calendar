@@ -5,6 +5,7 @@ import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
 import BookedAsStudentCard from './BookedAsStudentCard';
 import CancellationFeesCard from './CancellationFeesCard';
+import CancellationFeesTeacherCard from './CancellationFeesTeacherCard';
 
 export default function AvailabilityModal({ event, isOpen, onClose }) {
   if (!event) return null;
@@ -20,6 +21,9 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
             }
             return <GlobalBookingCard event={event} onClose={onClose} />;
         case 'cancelled':
+            if (event.role === 'T') {
+                return <CancellationFeesTeacherCard event={event} onClose={onClose} />;
+            }
             return <CancellationFeesCard event={event} onClose={onClose} />;
         default:
             // Fallback for other types or if type is not specified
