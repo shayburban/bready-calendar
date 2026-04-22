@@ -3,16 +3,20 @@ import React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
+import BookedAsStudentCard from './BookedAsStudentCard';
 
 export default function AvailabilityModal({ event, isOpen, onClose }) {
   if (!event) return null;
-  
+
   // Decide which card to show based on the event type
   const renderCard = () => {
     switch(event.type) {
         case 'availability':
             return <TeacherAvailabilityCard event={event} onClose={onClose} />;
         case 'booked':
+            if (event.role === 'S') {
+                return <BookedAsStudentCard event={event} onClose={onClose} />;
+            }
             return <GlobalBookingCard event={event} onClose={onClose} />;
         default:
             // Fallback for other types or if type is not specified
