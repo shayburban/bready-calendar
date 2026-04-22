@@ -59,7 +59,9 @@ const sampleEvents = [
   { id: 12, date: 19, time: '15:00 - 16:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Global Booking Test' },
   { id: 13, date: 24, time: '11:00 - 14:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Pending review as a student' },
   { id: 14, date: 22, time: '11:00 - 14:00', type: 'booked', role: 'S', reschedule: true, color: 'bg-orange-500', teacher: 'Teacher N.', description: 'Reschedule proposed by student' },
-  { id: 15, date: 23, time: '11:00 - 14:00', type: 'booked', role: 'T', reschedule: true, color: 'bg-orange-500', student: 'Student N.', description: 'Reschedule proposed by teacher' }
+  { id: 15, date: 23, time: '11:00 - 14:00', type: 'booked', role: 'T', reschedule: true, color: 'bg-orange-500', student: 'Student N.', description: 'Reschedule proposed by teacher' },
+  { id: 16, date: 26, time: '11:00 - 14:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - new booking' },
+  { id: 17, date: 27, time: '11:00 - 14:00', type: 'waiting', role: 'T', reschedule: true, color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule request' }
 ];
 
 export default function TeacherCalendar() {
@@ -195,7 +197,8 @@ export default function TeacherCalendar() {
       event.type === 'availability' ||
       event.type === 'booked' ||
       (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T')) ||
-      (event.type === 'not-reviewed' && (event.role === 'T' || event.role === 'S'))
+      (event.type === 'not-reviewed' && (event.role === 'T' || event.role === 'S')) ||
+      (event.type === 'waiting' && event.role === 'T')
     ) {
         setShowAvailabilityModal(true);
     } else {
