@@ -191,7 +191,8 @@ export default function TeacherCalendar() {
     if (
       event.type === 'availability' ||
       event.type === 'booked' ||
-      (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T'))
+      (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T')) ||
+      (event.type === 'not-reviewed' && event.role === 'T')
     ) {
         setShowAvailabilityModal(true);
     } else {
