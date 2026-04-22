@@ -4,6 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
 import BookedAsStudentCard from './BookedAsStudentCard';
+import CancellationFeesCard from './CancellationFeesCard';
 
 export default function AvailabilityModal({ event, isOpen, onClose }) {
   if (!event) return null;
@@ -18,6 +19,8 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
                 return <BookedAsStudentCard event={event} onClose={onClose} />;
             }
             return <GlobalBookingCard event={event} onClose={onClose} />;
+        case 'cancelled':
+            return <CancellationFeesCard event={event} onClose={onClose} />;
         default:
             // Fallback for other types or if type is not specified
             return <TeacherAvailabilityCard event={event} onClose={onClose} />;

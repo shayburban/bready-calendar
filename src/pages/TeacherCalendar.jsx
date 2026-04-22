@@ -188,7 +188,11 @@ export default function TeacherCalendar() {
       dateString: eventDate.toISOString(),
       availableDatesForCategory: uniqueDates,
     });
-    if (event.type === 'availability' || event.type === 'booked') {
+    if (
+      event.type === 'availability' ||
+      event.type === 'booked' ||
+      (event.type === 'cancelled' && event.role === 'S')
+    ) {
         setShowAvailabilityModal(true);
     } else {
         setShowEventModal(true);
