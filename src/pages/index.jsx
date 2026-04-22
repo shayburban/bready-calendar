@@ -42,6 +42,8 @@ import UserSearchInsights from "./UserSearchInsights";
 
 import TeacherInbox from "./TeacherInbox";
 
+import TeacherInboxDetail from "./TeacherInboxDetail";
+
 import TeacherChat from "./TeacherChat";
 
 import TeacherTasks from "./TeacherTasks";
@@ -97,6 +99,8 @@ const PAGES = {
     UserSearchInsights: UserSearchInsights,
     
     TeacherInbox: TeacherInbox,
+
+    TeacherInboxDetail: TeacherInboxDetail,
     
     TeacherChat: TeacherChat,
     
@@ -176,6 +180,8 @@ function PagesContent() {
                 <Route path="/UserSearchInsights" element={<UserSearchInsights />} />
                 
                 <Route path="/TeacherInbox" element={<TeacherInbox />} />
+
+                <Route path="/TeacherInboxDetail" element={<TeacherInboxDetail />} />
                 
                 <Route path="/TeacherChat" element={<TeacherChat />} />
                 
