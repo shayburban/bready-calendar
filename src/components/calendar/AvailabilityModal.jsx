@@ -13,6 +13,8 @@ import NotReviewedStudentCard from './NotReviewedStudentCard';
 import TeacherAvailabilityStudentCard from './TeacherAvailabilityStudentCard';
 import WaitingForConfirmationTeacherCard from './WaitingForConfirmationTeacherCard';
 import WaitingForConfirmationTeacherRescheduleCard from './WaitingForConfirmationTeacherRescheduleCard';
+import WaitingForConfirmationStudentCard from './WaitingForConfirmationStudentCard';
+import WaitingForConfirmationStudentRescheduleCard from './WaitingForConfirmationStudentRescheduleCard';
 
 export default function AvailabilityModal({ event, isOpen, onClose }) {
   if (!event) return null;
@@ -47,6 +49,12 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
                     return <WaitingForConfirmationTeacherRescheduleCard event={event} onClose={onClose} />;
                 }
                 return <WaitingForConfirmationTeacherCard event={event} onClose={onClose} />;
+            }
+            if (event.role === 'S') {
+                if (event.reschedule) {
+                    return <WaitingForConfirmationStudentRescheduleCard event={event} onClose={onClose} />;
+                }
+                return <WaitingForConfirmationStudentCard event={event} onClose={onClose} />;
             }
             return <TeacherAvailabilityCard event={event} onClose={onClose} />;
         case 'not-reviewed':
