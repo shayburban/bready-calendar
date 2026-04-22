@@ -4,6 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
 import BookedAsStudentCard from './BookedAsStudentCard';
+import BookedAsStudentRescheduleCard from './BookedAsStudentRescheduleCard';
 import CancellationFeesCard from './CancellationFeesCard';
 import CancellationFeesTeacherCard from './CancellationFeesTeacherCard';
 import NotReviewedTeacherCard from './NotReviewedTeacherCard';
@@ -23,6 +24,9 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
             return <TeacherAvailabilityCard event={event} onClose={onClose} />;
         case 'booked':
             if (event.role === 'S') {
+                if (event.reschedule) {
+                    return <BookedAsStudentRescheduleCard event={event} onClose={onClose} />;
+                }
                 return <BookedAsStudentCard event={event} onClose={onClose} />;
             }
             return <GlobalBookingCard event={event} onClose={onClose} />;

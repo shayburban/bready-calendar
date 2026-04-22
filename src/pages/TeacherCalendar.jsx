@@ -57,7 +57,8 @@ const sampleEvents = [
   { id: 11, date: 16, time: '15:00 - 16:00', type: 'availability', role: 'T', color: 'bg-green-500', description: 'Afternoon slot', timeSlots: ["15:00-16:00"] },
   // Added a Booked (T) event
   { id: 12, date: 19, time: '15:00 - 16:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Global Booking Test' },
-  { id: 13, date: 24, time: '11:00 - 14:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Pending review as a student' }
+  { id: 13, date: 24, time: '11:00 - 14:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Pending review as a student' },
+  { id: 14, date: 22, time: '11:00 - 14:00', type: 'booked', role: 'S', reschedule: true, color: 'bg-orange-500', teacher: 'Teacher N.', description: 'Reschedule proposed by student' }
 ];
 
 export default function TeacherCalendar() {
