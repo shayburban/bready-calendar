@@ -5,6 +5,7 @@ import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
 import BookedAsStudentCard from './BookedAsStudentCard';
 import BookedAsStudentRescheduleCard from './BookedAsStudentRescheduleCard';
+import BookedAsTeacherRescheduleCard from './BookedAsTeacherRescheduleCard';
 import CancellationFeesCard from './CancellationFeesCard';
 import CancellationFeesTeacherCard from './CancellationFeesTeacherCard';
 import NotReviewedTeacherCard from './NotReviewedTeacherCard';
@@ -28,6 +29,9 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
                     return <BookedAsStudentRescheduleCard event={event} onClose={onClose} />;
                 }
                 return <BookedAsStudentCard event={event} onClose={onClose} />;
+            }
+            if (event.role === 'T' && event.reschedule) {
+                return <BookedAsTeacherRescheduleCard event={event} onClose={onClose} />;
             }
             return <GlobalBookingCard event={event} onClose={onClose} />;
         case 'cancelled':
