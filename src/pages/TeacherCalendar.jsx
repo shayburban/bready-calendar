@@ -56,7 +56,8 @@ const sampleEvents = [
   { id: 10, date: 10, time: '16:00 - 17:00', type: 'availability', role: 'S', color: 'bg-green-500', description: 'My study slot', timeSlots: ["16:00-17:00"]},
   { id: 11, date: 16, time: '15:00 - 16:00', type: 'availability', role: 'T', color: 'bg-green-500', description: 'Afternoon slot', timeSlots: ["15:00-16:00"] },
   // Added a Booked (T) event
-  { id: 12, date: 19, time: '15:00 - 16:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Global Booking Test' }
+  { id: 12, date: 19, time: '15:00 - 16:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Global Booking Test' },
+  { id: 13, date: 24, time: '11:00 - 14:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Pending review as a student' }
 ];
 
 export default function TeacherCalendar() {
@@ -192,7 +193,7 @@ export default function TeacherCalendar() {
       event.type === 'availability' ||
       event.type === 'booked' ||
       (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T')) ||
-      (event.type === 'not-reviewed' && event.role === 'T')
+      (event.type === 'not-reviewed' && (event.role === 'T' || event.role === 'S'))
     ) {
         setShowAvailabilityModal(true);
     } else {
