@@ -15,6 +15,8 @@ import WaitingForConfirmationTeacherCard from './WaitingForConfirmationTeacherCa
 import WaitingForConfirmationTeacherRescheduleCard from './WaitingForConfirmationTeacherRescheduleCard';
 import WaitingForConfirmationStudentCard from './WaitingForConfirmationStudentCard';
 import WaitingForConfirmationStudentRescheduleCard from './WaitingForConfirmationStudentRescheduleCard';
+import CompletedTeacherCard from './CompletedTeacherCard';
+import CompletedStudentCard from './CompletedStudentCard';
 
 export default function AvailabilityModal({ event, isOpen, onClose }) {
   if (!event) return null;
@@ -63,6 +65,14 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
             }
             if (event.role === 'S') {
                 return <NotReviewedStudentCard event={event} onClose={onClose} />;
+            }
+            return <TeacherAvailabilityCard event={event} onClose={onClose} />;
+        case 'completed':
+            if (event.role === 'T') {
+                return <CompletedTeacherCard event={event} onClose={onClose} />;
+            }
+            if (event.role === 'S') {
+                return <CompletedStudentCard event={event} onClose={onClose} />;
             }
             return <TeacherAvailabilityCard event={event} onClose={onClose} />;
         default:

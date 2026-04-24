@@ -63,7 +63,9 @@ const sampleEvents = [
   { id: 16, date: 26, time: '11:00 - 14:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - new booking' },
   { id: 17, date: 27, time: '11:00 - 14:00', type: 'waiting', role: 'T', reschedule: true, color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule request' },
   { id: 18, date: 28, time: '11:00 - 14:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation (S) - new booking' },
-  { id: 19, date: 29, time: '11:00 - 14:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation (S) - reschedule request' }
+  { id: 19, date: 29, time: '11:00 - 14:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation (S) - reschedule request' },
+  { id: 20, date: 30, time: '11:00 - 14:00', type: 'completed', role: 'T', color: 'bg-gray-800', student: 'Student N.', description: 'Completed (T)' },
+  { id: 21, date: 20, time: '11:00 - 14:00', type: 'completed', role: 'S', color: 'bg-gray-800', teacher: 'Teacher N.', description: 'Completed (S)' }
 ];
 
 export default function TeacherCalendar() {
@@ -200,7 +202,8 @@ export default function TeacherCalendar() {
       event.type === 'booked' ||
       (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T')) ||
       (event.type === 'not-reviewed' && (event.role === 'T' || event.role === 'S')) ||
-      (event.type === 'waiting' && (event.role === 'T' || event.role === 'S'))
+      (event.type === 'waiting' && (event.role === 'T' || event.role === 'S')) ||
+      (event.type === 'completed' && (event.role === 'T' || event.role === 'S'))
     ) {
         setShowAvailabilityModal(true);
     } else {

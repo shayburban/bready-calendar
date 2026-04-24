@@ -14,6 +14,7 @@ const tabVariants = cva(
         orange: "data-[state=active]:bg-orange-200 data-[state=active]:border-orange-400 data-[state=active]:text-orange-900 border border-orange-300 text-orange-800 hover:bg-orange-200 hover:border-orange-400",
         red: "data-[state=active]:bg-red-200 data-[state=active]:border-red-400 data-[state=active]:text-red-900 border border-red-300 text-red-800 hover:bg-red-200 hover:border-red-400",
         green: "data-[state=active]:bg-green-200 data-[state=active]:border-green-400 data-[state=active]:text-green-900 border border-green-300 text-green-800 hover:bg-green-200 hover:border-green-400",
+        black: "data-[state=active]:bg-gray-800 data-[state=active]:border-gray-900 data-[state=active]:text-white border border-gray-700 text-gray-800 hover:bg-gray-800 hover:text-white hover:border-gray-900",
       },
     },
     defaultVariants: {
