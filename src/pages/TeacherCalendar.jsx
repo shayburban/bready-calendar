@@ -44,6 +44,47 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { sampleEvents } from '@/data/sampleEvents';
 
+// Visual mapping for the in-calendar event chips (NOT the popup cards).
+// Matches the dot colors from the legend and the design mockup.
+const TYPE_DOT_COLOR = {
+  availability: 'bg-green-600',
+  booked: 'bg-orange-500',
+  'not-reviewed': 'bg-red-600',
+  synced: 'bg-indigo-600',
+  waiting: 'bg-pink-300',
+  cancelled: 'bg-gray-800',
+  completed: 'bg-gray-800',
+};
+
+// Per-type, per-role label used to build the hover tooltip breakdown.
+const TYPE_ROLE_LABEL = {
+  availability: { T: 'My Availability', S: 'Other Availability' },
+  booked: { T: 'Bookings', S: 'Bookings' },
+  'not-reviewed': { T: 'Not Reviewed', S: 'Not Reviewed' },
+  waiting: { T: 'Waiting', S: 'Waiting' },
+  cancelled: { T: 'Cancelled', S: 'Cancelled' },
+  completed: { T: 'Completed', S: 'Completed' },
+  synced: { '-': 'Synced Calendar Event' },
+};
+
+// Build the hover-tooltip text from the role breakdown of one type's events.
+// e.g. for 3 avail T + 2 avail S → "3 My Availability (T), 2 Other Availability (S)"
+const buildEventTooltip = (events, type) => {
+  const byRole = events.reduce((acc, e) => {
+    const role = e.role || '-';
+    acc[role] = (acc[role] || 0) + 1;
+    return acc;
+  }, {});
+  const labels = TYPE_ROLE_LABEL[type] || {};
+  return Object.entries(byRole)
+    .map(([role, n]) => {
+      const label = labels[role] || type;
+      const suffix = role === '-' ? '' : ` (${role})`;
+      return `${n} ${label}${suffix}`;
+    })
+    .join(', ');
+};
+
 export default function TeacherCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('Month');
@@ -150,15 +191,13 @@ export default function TeacherCalendar() {
     return days;
   };
 
-  // Helper to group events by type and role for a given day
-  const getGroupedEventsForDay = (dayEvents) => {
+  // Visual grouping: one chip per type per day (across roles).
+  // Roles are surfaced via the hover tooltip, not separate chips.
+  const getEventsByTypeForDay = (dayEvents) => {
     const grouped = {};
-    dayEvents.forEach(event => {
-      const key = event.role ? `${event.type}-${event.role}` : event.type;
-      if (!grouped[key]) {
-        grouped[key] = [];
-      }
-      grouped[key].push(event);
+    dayEvents.forEach((event) => {
+      if (!grouped[event.type]) grouped[event.type] = [];
+      grouped[event.type].push(event);
     });
     return grouped;
   };
@@ -337,7 +376,7 @@ export default function TeacherCalendar() {
               <div className="grid grid-cols-7 gap-0 border">
                 {days.map((day, index) => {
                   const dayEvents = events.filter(event => event.date === day.date && day.isCurrentMonth);
-                  const groupedEvents = getGroupedEventsForDay(dayEvents);
+                  const eventsByType = getEventsByTypeForDay(dayEvents);
 
                   return (
                     <div
@@ -369,34 +408,36 @@ export default function TeacherCalendar() {
                         </Button>
                       )}
 
-                      {/* Events grouped by type and role */}
+                      {/* Events: one chip per type, dot + time + count badge.
+                          Hover shows the role breakdown.  Popups unchanged. */}
                       <div className="space-y-1">
-                        {Object.entries(groupedEvents).map(([groupKey, groupEvents]) => {
-                          const firstEvent = groupEvents[0];
-                          const hasMultiple = groupEvents.length > 1;
-                          const roleDisplay = firstEvent.role ? `(${firstEvent.role})` : '';
-                          
+                        {Object.entries(eventsByType).map(([type, typeEvents]) => {
+                          const firstEvent = typeEvents[0];
+                          const total = typeEvents.length;
+                          const tooltip = buildEventTooltip(typeEvents, type);
+                          const isCompleted = type === 'completed';
+                          const dotColor = TYPE_DOT_COLOR[type] || 'bg-gray-400';
+                          let badge = null;
+                          if (total > 1) badge = `+${total}`;
+                          else if (firstEvent.count && firstEvent.count > 1) badge = `+${firstEvent.count}`;
+
                           return (
                             <div
-                              key={groupKey}
-                              className={`
-                                text-xs px-2 py-1 rounded text-white cursor-pointer
-                                hover:opacity-80 transition-opacity
-                                ${firstEvent.color}
-                              `}
-                              onClick={() => handleEventClick(groupEvents)}
+                              key={type}
+                              title={tooltip}
+                              onClick={() => handleEventClick(typeEvents)}
+                              className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
                             >
-                              <div className="font-medium flex justify-between items-center">
-                                <span>{firstEvent.time}</span>
-                                {roleDisplay && <span className="font-bold">{roleDisplay}</span>}
-                              </div>
-                              {hasMultiple && (
-                                <div className="font-bold">
-                                  +{groupEvents.length}
-                                </div>
+                              {isCompleted ? (
+                                <span className="text-gray-800 font-bold leading-none text-[12px] w-3 flex justify-center">$</span>
+                              ) : (
+                                <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
                               )}
-                              {firstEvent.count && !hasMultiple && (
-                                <div>+{firstEvent.count}</div>
+                              <span className="truncate flex-1 min-w-0">{firstEvent.time}</span>
+                              {badge && (
+                                <span className="bg-white border border-gray-300 text-gray-600 rounded-full text-[9px] leading-none px-1 min-w-[1rem] h-4 flex items-center justify-center flex-shrink-0">
+                                  {badge}
+                                </span>
                               )}
                             </div>
                           );
