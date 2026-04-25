@@ -1,5 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
 import { User } from '@/api/entities';
+import {
+  TITLE_OPTIONS,
+  TODO_ROWS,
+  DONE_ROWS,
+  subscribeTeacherTasks,
+  getTeacherTasksVersion,
+} from '@/data/teacherTasks';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -41,16 +48,6 @@ import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 
-const TITLE_OPTIONS = [
-  { id: 'booked', label: 'Booked', color: 'bg-orange-400' },
-  { id: 'not-reviewed', label: 'Not Reviewed', color: 'bg-red-500' },
-  { id: 'availability', label: 'Availability', color: 'bg-green-500' },
-  { id: 'completed', label: 'Completed', color: 'bg-emerald-600' },
-  { id: 'cancelled', label: 'Cancelled', color: 'bg-gray-500' },
-  { id: 'synced', label: 'Synced Calendar Events', color: 'bg-blue-500' },
-  { id: 'waiting', label: 'Waiting For Confirmation', color: 'bg-amber-300' },
-];
-
 const COLUMN_OPTIONS = [
   'Name',
   'Type',
@@ -66,34 +63,6 @@ const OUTER_TABS = [
   { value: 'teacher', label: 'As A Teacher' },
   { value: 'student', label: 'As A Student' },
 ];
-
-const TODO_ROWS = {
-  all: [
-    { id: 't1', name: 'John Doe', type: 'Booked(T)', typeColor: 'bg-orange-400', date: '16.08.2021', time: '09:00 – 14:00', service: 'Online Classes', referred: true, duration: '5 Hours', rate: '10 $', total: '5 * 10 $ = 50 $', deposited: true },
-    { id: 't2', name: 'John Doe', type: 'Booked(S)', typeColor: 'bg-orange-400', date: '16.08.2021', time: '09:00 – 14:00', service: 'Online Classes', referred: false, duration: '5 Hours', rate: '10 $', total: '5 * 10 $ = 50 $', deposited: false },
-    { id: 't3', name: 'Alice K.',  type: 'Waiting For Confirmation', typeColor: 'bg-amber-300', date: '18.08.2021', time: '10:00 – 11:00', service: 'In-Person', referred: true, duration: '1 Hour', rate: '20 $', total: '1 * 20 $ = 20 $', deposited: false },
-  ],
-  teacher: [
-    { id: 't4', name: 'John Doe', type: 'Booked(T)', typeColor: 'bg-orange-400', date: '16.08.2021', time: '09:00 – 14:00', service: 'Online Classes', referred: true, duration: '5 Hours', rate: '10 $', total: '5 * 10 $ = 50 $', deposited: true },
-    { id: 't5', name: 'Sarah M.', type: 'Availability', typeColor: 'bg-green-500', date: '20.08.2021', time: '08:00 – 12:00', service: 'Online Classes', referred: true, duration: '4 Hours', rate: '10 $', total: '4 * 10 $ = 40 $', deposited: false },
-  ],
-  student: [
-    { id: 't6', name: 'John Doe', type: 'Booked(S)', typeColor: 'bg-orange-400', date: '16.08.2021', time: '09:00 – 14:00', service: 'Online Classes', referred: false, duration: '5 Hours', rate: '10 $', total: '5 * 10 $ = 50 $', deposited: false },
-  ],
-};
-
-const DONE_ROWS = {
-  all: [
-    { id: 'd1', name: 'John Doe', type: 'Completed', typeColor: 'bg-emerald-600', date: '10.08.2021', time: '09:00 – 14:00', service: 'Online Classes', referred: true, duration: '5 Hours', rate: '10 $', total: '5 * 10 $ = 50 $', deposited: true },
-    { id: 'd2', name: 'John Doe', type: 'Cancelled', typeColor: 'bg-gray-500', date: '08.08.2021', time: '09:00 – 14:00', service: 'Online Classes', referred: false, duration: '5 Hours', rate: '10 $', total: '5 * 10 $ = 50 $', deposited: false },
-  ],
-  teacher: [
-    { id: 'd3', name: 'Maria L.', type: 'Completed', typeColor: 'bg-emerald-600', date: '05.08.2021', time: '16:00 – 17:00', service: 'In-Person', referred: true, duration: '1 Hour', rate: '25 $', total: '1 * 25 $ = 25 $', deposited: true },
-  ],
-  student: [
-    { id: 'd4', name: 'John Doe', type: 'Completed', typeColor: 'bg-emerald-600', date: '02.08.2021', time: '18:00 – 20:00', service: 'Online Classes', referred: false, duration: '2 Hours', rate: '15 $', total: '2 * 15 $ = 30 $', deposited: true },
-  ],
-};
 
 function FilterChip({ label, onRemove }) {
   return (
@@ -542,6 +511,7 @@ function TaskTabPanel({ todoRows, doneRows }) {
 }
 
 export default function TeacherTasks() {
+  useSyncExternalStore(subscribeTeacherTasks, getTeacherTasksVersion, getTeacherTasksVersion);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');

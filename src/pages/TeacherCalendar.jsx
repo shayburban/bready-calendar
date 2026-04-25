@@ -37,6 +37,8 @@ import {
 import CalendarSidebar from '../components/calendar/CalendarSidebar';
 import EventModal from '../components/calendar/EventModal';
 import AvailabilityModal from '../components/calendar/AvailabilityModal';
+import AddNewBookingOrAvailabilityModal from '../components/calendar/AddNewBookingOrAvailabilityModal';
+import SyncedEventsModal from '../components/calendar/SyncedEventsModal';
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
@@ -45,8 +47,8 @@ import { createPageUrl } from '@/utils';
 const sampleEvents = [
   { id: 1, date: 10, time: '11:00 - 14:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 5, description: 'Available for booking', timeSlots: ["11:00-12:00", "12:00-13:00", "13:00-14:00"]},
   { id: 2, date: 11, time: '11:00 - 14:00', type: 'booked', role: 'S', color: 'bg-orange-500', student: 'John D.', description: 'Mathematics tutoring session' },
-  { id: 3, date: 12, time: '11:00 - 14:00', type: 'synced', color: 'bg-blue-500', description: 'Google Calendar event' },
-  { id: 4, date: 15, time: '11:00 - 14:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event' },
+  { id: 3, date: 12, time: '11:00 - 14:00', type: 'synced', color: 'bg-blue-500', description: 'Google Calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00'] },
+  { id: 4, date: 15, time: '11:00 - 14:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00', '17:00 - 19:00'] },
   { id: 5, date: 16, time: '11:00 - 14:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 5, description: 'Available slots', timeSlots: ["11:00-12:00", "12:00-13:00", "14:00-15:00", "15:00-16:00"] },
   { id: 6, date: 17, time: '11:00 - 14:00', type: 'not-reviewed', role: 'T', color: 'bg-red-500', student: 'Sarah M.', description: 'Pending review for Physics session' },
   { id: 7, date: 18, time: '11:00 - 14:00', type: 'cancelled', role: 'S', color: 'bg-gray-600', description: 'Session cancelled by student' },
@@ -77,6 +79,17 @@ export default function TeacherCalendar() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [showSyncedModal, setShowSyncedModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedAddDate, setSelectedAddDate] = useState('');
+
+  const openAddModalForDay = (dayNumber) => {
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+    const d = String(dayNumber).padStart(2, '0');
+    setSelectedAddDate(`${y}-${m}-${d}`);
+    setShowAddModal(true);
+  };
 
   useEffect(() => {
     const fetchUserAndEvents = async () => {
@@ -197,7 +210,9 @@ export default function TeacherCalendar() {
       dateString: eventDate.toISOString(),
       availableDatesForCategory: uniqueDates,
     });
-    if (
+    if (event.type === 'synced') {
+        setShowSyncedModal(true);
+    } else if (
       event.type === 'availability' ||
       event.type === 'booked' ||
       (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T')) ||
@@ -357,7 +372,6 @@ export default function TeacherCalendar() {
                         min-h-[120px] border-r border-b p-2 relative group
                         ${!day.isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''}
                         ${day.isToday ? 'bg-blue-50' : ''}
-                        hover:bg-gray-50 cursor-pointer
                       `}
                     >
                       {/* Date Number */}
@@ -370,9 +384,11 @@ export default function TeacherCalendar() {
 
                       {/* Add Event Button - Only visible on hover */}
                       {day.isCurrentMonth && (
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="Add New Booking Or Availability"
+                          onClick={(e) => { e.stopPropagation(); openAddModalForDay(day.date); }}
                           className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-400 hover:bg-gray-500 text-white rounded-full"
                         >
                           <Plus className="w-3 h-3" />
@@ -443,6 +459,16 @@ export default function TeacherCalendar() {
         event={selectedEvent}
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
+      />
+      <SyncedEventsModal
+        event={selectedEvent}
+        isOpen={showSyncedModal}
+        onClose={() => setShowSyncedModal(false)}
+      />
+      <AddNewBookingOrAvailabilityModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        selectedDate={selectedAddDate}
       />
     </div>
   );

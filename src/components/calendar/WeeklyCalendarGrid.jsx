@@ -129,7 +129,7 @@ const EventCard = ({ event, onEventClick }) => {
     );
 };
 
-export default function WeeklyCalendarGrid({ currentDate, onEventClick }) {
+export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick }) {
     const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
     
     const getWeekDays = (date) => {
@@ -177,7 +177,12 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick }) {
                     <div key={dayIndex} className="relative border-l">
                         {/* Hour Cells */}
                         {hours.map((_, hourIndex) => (
-                            <div key={hourIndex} className="h-14 border-b"></div>
+                            <div
+                                key={hourIndex}
+                                title="Add New Booking Or Availability"
+                                onClick={() => onEmptyClick && onEmptyClick(dayIndex, hourIndex)}
+                                className="h-14 border-b cursor-pointer hover:bg-blue-50"
+                            ></div>
                         ))}
                         
                         {/* Events for this day */}

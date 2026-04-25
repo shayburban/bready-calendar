@@ -11,6 +11,9 @@ import { createPageUrl } from '@/utils';
 import { Link } from 'react-router-dom';
 import { format } from "date-fns";
 import DateRangePicker from '../common/DateRangePicker';
+import CalendarTaskManagerPanel from './CalendarTaskManagerPanel';
+import CalendarSetPricePanel from './CalendarSetPricePanel';
+import CalendarNewBookingPanel from './CalendarNewBookingPanel';
 import { User } from '@/api/entities';
 import { AppRole } from '@/api/entities';
 
@@ -344,7 +347,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange })
                     </div>
         }
                 
-                {activeTab !== 'setavail' && <div className="text-center p-4 border rounded-lg text-gray-500">Content for {activeTab}</div>}
+                {activeTab === 'task' && <CalendarTaskManagerPanel />}
+
+                {activeTab === 'setprice' && <CalendarSetPricePanel />}
+
+                {activeTab === 'book' && <CalendarNewBookingPanel />}
+
+                {activeTab !== 'setavail' && activeTab !== 'task' && activeTab !== 'setprice' && activeTab !== 'book' && <div className="text-center p-4 border rounded-lg text-gray-500">Content for {activeTab}</div>}
 
             </div>
 

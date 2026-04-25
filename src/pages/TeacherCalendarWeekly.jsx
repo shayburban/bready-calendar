@@ -27,6 +27,8 @@ import CalendarSidebar from '../components/calendar/CalendarSidebar';
 import WeeklyCalendarGrid from '../components/calendar/WeeklyCalendarGrid';
 import EventModal from '../components/calendar/EventModal';
 import AvailabilityModal from '../components/calendar/AvailabilityModal';
+import AddNewBookingOrAvailabilityModal from '../components/calendar/AddNewBookingOrAvailabilityModal';
+import SyncedEventsModal from '../components/calendar/SyncedEventsModal';
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
@@ -39,6 +41,8 @@ export default function TeacherCalendarWeekly() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [showSyncedModal, setShowSyncedModal] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
 
   useEffect(() => {
     const fetchUserAndEvents = async () => {
@@ -63,7 +67,9 @@ export default function TeacherCalendarWeekly() {
 
   const handleEventClick = (event) => {
     setSelectedEvent(event);
-    if (event.type === 'availability') {
+    if (event.type === 'synced') {
+        setShowSyncedModal(true);
+    } else if (event.type === 'availability') {
         setShowAvailabilityModal(true);
     } else {
         setShowEventModal(true);
@@ -184,6 +190,7 @@ export default function TeacherCalendarWeekly() {
               <WeeklyCalendarGrid
                 currentDate={currentDate}
                 onEventClick={handleEventClick}
+                onEmptyClick={() => setShowAddModal(true)}
               />
             </div>
           </div>
@@ -200,6 +207,15 @@ export default function TeacherCalendarWeekly() {
         event={selectedEvent}
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
+      />
+      <SyncedEventsModal
+        event={selectedEvent}
+        isOpen={showSyncedModal}
+        onClose={() => setShowSyncedModal(false)}
+      />
+      <AddNewBookingOrAvailabilityModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
       />
     </div>
   );
