@@ -105,7 +105,7 @@ export default function BookedAsTeacherRescheduleCard({ event, onClose }) {
             </div>
 
             <div className="text-sm space-y-1 mb-4">
-                <p className="font-bold">Proposed Booking</p>
+                <p className="font-bold">Your Requested Change</p>
                 <p className="underline">Student N.</p>
                 <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
                 <p><span className="text-blue-600 font-semibold">30$</span> (10$ * 3 Hr = 30$ total price)</p>
