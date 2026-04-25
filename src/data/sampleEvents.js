@@ -1,31 +1,47 @@
 // Single source of truth for teacher calendar mock events.
 // Both the monthly and weekly views consume from here.
+//
+// All mock events live within ONE calendar week (April 19-25, 2026,
+// Sun-Sat) so the weekly view can showcase every type+role combo at once.
+// The monthly view also reads from this list, so the same events appear in
+// both places.
+//
 // Shape: { id, date (day-of-month), time ('HH:MM - HH:MM'), type, role,
 //          color (Tailwind bg-*), description, student?, teacher?,
 //          timeSlots?, count?, reschedule? }
 
 export const sampleEvents = [
-  { id: 1, date: 10, time: '11:00 - 14:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 5, description: 'Available for booking', timeSlots: ['11:00-12:00', '12:00-13:00', '13:00-14:00'] },
-  { id: 2, date: 11, time: '11:00 - 14:00', type: 'booked', role: 'S', color: 'bg-orange-500', student: 'John D.', description: 'Mathematics tutoring session' },
-  { id: 3, date: 12, time: '11:00 - 14:00', type: 'synced', color: 'bg-blue-500', description: 'Google Calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00'] },
-  { id: 4, date: 15, time: '11:00 - 14:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00', '17:00 - 19:00'] },
-  { id: 5, date: 16, time: '11:00 - 14:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 5, description: 'Available slots', timeSlots: ['11:00-12:00', '12:00-13:00', '14:00-15:00', '15:00-16:00'] },
-  { id: 6, date: 17, time: '11:00 - 14:00', type: 'not-reviewed', role: 'T', color: 'bg-red-500', student: 'Sarah M.', description: 'Pending review for Physics session' },
-  { id: 7, date: 18, time: '11:00 - 14:00', type: 'cancelled', role: 'S', color: 'bg-gray-600', description: 'Session cancelled by student' },
-  { id: 8, date: 25, time: '11:00 - 14:00', type: 'cancelled', role: 'T', color: 'bg-gray-600', description: 'Cancelled session by teacher' },
-  { id: 9, date: 10, time: '15:00 - 16:00', type: 'availability', role: 'T', color: 'bg-green-500', description: 'Additional availability', timeSlots: ['15:00-16:00'] },
-  { id: 10, date: 10, time: '16:00 - 17:00', type: 'availability', role: 'S', color: 'bg-green-500', description: 'My study slot', timeSlots: ['16:00-17:00'] },
-  { id: 11, date: 16, time: '15:00 - 16:00', type: 'availability', role: 'T', color: 'bg-green-500', description: 'Afternoon slot', timeSlots: ['15:00-16:00'] },
-  { id: 12, date: 19, time: '15:00 - 16:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Global Booking Test' },
-  { id: 13, date: 24, time: '11:00 - 14:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Pending review as a student' },
-  { id: 14, date: 22, time: '11:00 - 14:00', type: 'booked', role: 'S', reschedule: true, color: 'bg-orange-500', teacher: 'Teacher N.', description: 'Reschedule proposed by student' },
-  { id: 15, date: 23, time: '11:00 - 14:00', type: 'booked', role: 'T', reschedule: true, color: 'bg-orange-500', student: 'Student N.', description: 'Reschedule proposed by teacher' },
-  { id: 16, date: 26, time: '11:00 - 14:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - new booking' },
-  { id: 17, date: 27, time: '11:00 - 14:00', type: 'waiting', role: 'T', reschedule: true, color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule request' },
-  { id: 18, date: 28, time: '11:00 - 14:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation (S) - new booking' },
-  { id: 19, date: 29, time: '11:00 - 14:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation (S) - reschedule request' },
-  { id: 20, date: 30, time: '11:00 - 14:00', type: 'completed', role: 'T', color: 'bg-gray-800', student: 'Student N.', description: 'Completed (T)' },
-  { id: 21, date: 20, time: '11:00 - 14:00', type: 'completed', role: 'S', color: 'bg-gray-800', teacher: 'Teacher N.', description: 'Completed (S)' },
+  // --- Sun, April 19 ---
+  { id: 1, date: 19, time: '08:00 - 09:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 5, description: 'Available for booking', timeSlots: ['08:00-09:00', '11:00-12:00', '13:00-14:00'] },
+  { id: 2, date: 19, time: '09:00 - 10:00', type: 'availability', role: 'S', color: 'bg-green-500', description: 'My study slot as a student', timeSlots: ['09:00-10:00'] },
+  { id: 3, date: 19, time: '13:00 - 14:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Confirmed lesson as teacher' },
+
+  // --- Mon, April 20 ---
+  { id: 4, date: 20, time: '10:00 - 11:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher N.', description: 'Confirmed lesson as student' },
+  { id: 5, date: 20, time: '14:00 - 15:00', type: 'booked', role: 'S', reschedule: true, color: 'bg-orange-500', teacher: 'Teacher N.', description: 'Reschedule proposed by student' },
+  { id: 6, date: 20, time: '16:00 - 17:00', type: 'booked', role: 'T', reschedule: true, color: 'bg-orange-500', student: 'Student N.', description: 'Reschedule proposed by teacher' },
+
+  // --- Tue, April 21 ---
+  { id: 7, date: 21, time: '10:00 - 11:00', type: 'not-reviewed', role: 'T', color: 'bg-red-500', student: 'Sarah M.', description: 'Pending review for Physics session' },
+  { id: 8, date: 21, time: '14:00 - 15:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Pending review as a student' },
+  { id: 9, date: 21, time: '16:00 - 17:00', type: 'synced', color: 'bg-blue-500', description: 'Google Calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00'] },
+
+  // --- Wed, April 22 ---
+  { id: 10, date: 22, time: '10:00 - 11:00', type: 'completed', role: 'T', color: 'bg-gray-800', student: 'Student N.', description: 'Completed (T)' },
+  { id: 11, date: 22, time: '14:00 - 15:00', type: 'completed', role: 'S', color: 'bg-gray-800', teacher: 'Teacher N.', description: 'Completed (S)' },
+
+  // --- Thu, April 23 ---
+  { id: 12, date: 23, time: '10:00 - 11:00', type: 'cancelled', role: 'T', color: 'bg-gray-600', description: 'Cancelled session by teacher' },
+  { id: 13, date: 23, time: '14:00 - 15:00', type: 'cancelled', role: 'S', color: 'bg-gray-600', description: 'Session cancelled by student' },
+
+  // --- Fri, April 24 ---
+  { id: 14, date: 24, time: '10:00 - 11:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - new booking' },
+  { id: 15, date: 24, time: '14:00 - 15:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - new booking (S)' },
+
+  // --- Sat, April 25 ---
+  { id: 16, date: 25, time: '10:00 - 11:00', type: 'waiting', role: 'T', reschedule: true, color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule (T)' },
+  { id: 17, date: 25, time: '14:00 - 15:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - reschedule (S)' },
+  { id: 18, date: 25, time: '17:00 - 18:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00', '17:00 - 19:00'] },
 ];
 
 // Maps the monthly solid bg-* color to the weekly's left-border + tinted bg style.
