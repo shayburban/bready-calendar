@@ -69,7 +69,14 @@ export default function TeacherCalendarWeekly() {
     setSelectedEvent(event);
     if (event.type === 'synced') {
         setShowSyncedModal(true);
-    } else if (event.type === 'availability') {
+    } else if (
+      event.type === 'availability' ||
+      event.type === 'booked' ||
+      (event.type === 'cancelled' && (event.role === 'S' || event.role === 'T')) ||
+      (event.type === 'not-reviewed' && (event.role === 'T' || event.role === 'S')) ||
+      (event.type === 'waiting' && (event.role === 'T' || event.role === 'S')) ||
+      (event.type === 'completed' && (event.role === 'T' || event.role === 'S'))
+    ) {
         setShowAvailabilityModal(true);
     } else {
         setShowEventModal(true);

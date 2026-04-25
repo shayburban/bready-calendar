@@ -1,90 +1,8 @@
 
-import React, { useState } from 'react';
+import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Clock, User, DollarSign, X } from 'lucide-react';
-import EventModal from './EventModal';
-import AvailabilityModal from './AvailabilityModal';
-
-// Enhanced sample events for weekly view matching the legend
-const sampleEvents = [
-    { 
-        id: 1, dayIndex: 2, startHour: 1, endHour: 2, 
-        title: 'Booked Session', type: 'booked', role: 'S', student: 'Joan P.', 
-        color: 'border-l-4 border-orange-500 bg-orange-50',
-        time: '11:00 - 14:00',
-        description: 'Mathematics tutoring session'
-    },
-    { 
-        id: 2, dayIndex: 4, startHour: 1, endHour: 2, 
-        title: 'Booked Session', type: 'booked', role: 'S', student: 'Joan P.', 
-        color: 'border-l-4 border-orange-500 bg-orange-50',
-        time: '11:00 - 14:00',
-        description: 'Science tutoring session'
-    },
-    { 
-        id: 3, dayIndex: 2, startHour: 2, endHour: 4, 
-        title: 'Not Reviewed', type: 'not-reviewed', role: 'T',
-        color: 'border-l-4 border-red-500 bg-red-50',
-        time: '11:00 - 14:00',
-        description: 'Pending review session'
-    },
-    { 
-        id: 4, dayIndex: 4, startHour: 2, endHour: 4, 
-        title: 'Not Reviewed', type: 'not-reviewed', role: 'S', 
-        color: 'border-l-4 border-red-500 bg-red-50',
-        time: '11:00 - 14:00',
-        description: 'Requires confirmation'
-    },
-    { 
-        id: 5, dayIndex: 4, startHour: 4, endHour: 6, 
-        title: 'Not Reviewed', type: 'not-reviewed', role: 'S', 
-        color: 'border-l-4 border-red-500 bg-red-50',
-        time: '11:00 - 14:00',
-        description: 'Student booking request'
-    },
-    { 
-        id: 6, dayIndex: 2, startHour: 8, endHour: 9, 
-        title: 'Completed', type: 'completed', role: 'T', 
-        color: 'border-l-4 border-gray-700 bg-gray-100',
-        time: '11:00 - 14:00',
-        description: 'Session completed successfully'
-    },
-    { 
-        id: 7, dayIndex: 4, startHour: 8, endHour: 9, 
-        title: 'Completed', type: 'completed', role: 'S', 
-        color: 'border-l-4 border-gray-700 bg-gray-100',
-        time: '11:00 - 14:00',
-        description: 'Payment received'
-    },
-    { 
-        id: 8, dayIndex: 2, startHour: 10, endHour: 11, 
-        title: 'Cancelled', type: 'cancelled', role: 'S', 
-        color: 'border-l-4 border-gray-600 bg-gray-50',
-        time: '11:00 - 14:00',
-        description: 'Session cancelled by student'
-    },
-    { 
-        id: 9, dayIndex: 4, startHour: 10, endHour: 11, 
-        title: 'Cancelled', type: 'cancelled', role: 'T', 
-        color: 'border-l-4 border-gray-600 bg-gray-50',
-        time: '11:00 - 14:00',
-        description: 'Technical issues'
-    },
-    {
-        id: 10, dayIndex: 1, startHour: 5, endHour: 7,
-        title: 'My Availability', type: 'availability', role: 'T',
-        color: 'border-l-4 border-green-500 bg-green-50',
-        time: '15:00 - 17:00',
-        description: 'Teacher is available'
-    },
-    {
-        id: 11, dayIndex: 3, startHour: 6, endHour: 8,
-        title: 'Open Slot', type: 'availability', role: 'T',
-        color: 'border-l-4 border-green-500 bg-green-50',
-        time: '16:00 - 18:00',
-        description: 'Available for booking'
-    }
-];
+import { Clock, User, DollarSign, X } from 'lucide-react';
+import { sampleEvents, weeklyColorMap, weeklyTitleMap, parseTimeRange } from '@/data/sampleEvents';
 
 const EventIcon = ({ type }) => {
     switch (type) {
@@ -101,28 +19,30 @@ const EventIcon = ({ type }) => {
 
 const EventCard = ({ event, onEventClick }) => {
     const roleDisplay = event.role ? `(${event.role})` : '';
+    const colorClass = weeklyColorMap[event.color] || 'border-l-4 border-gray-400 bg-gray-50';
+    const title = weeklyTitleMap[event.type] || event.type;
+    const studentOrTeacher = event.student || event.teacher;
     return (
-        <div 
-            className={`absolute w-full p-2 text-xs rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${event.color}`}
+        <div
+            className={`absolute p-2 text-xs rounded-lg cursor-pointer hover:opacity-80 transition-opacity ${colorClass}`}
             style={{
                 top: `${event.startHour * 3.5}rem`,
-                height: `${(event.endHour - event.startHour) * 3.5}rem`,
+                height: `${Math.max(event.endHour - event.startHour, 1) * 3.5}rem`,
                 left: '0.25rem',
                 right: '0.25rem',
-                width: 'calc(100% - 0.5rem)',
             }}
-            onClick={() => onEventClick(event)}
+            onClick={(e) => { e.stopPropagation(); onEventClick(event); }}
         >
             <div className="flex items-start">
                 <EventIcon type={event.type} />
-                <div className="flex-1"> {/* Use flex-1 to allow content to take available space */}
+                <div className="flex-1 min-w-0">
                     <div className="flex justify-between w-full">
-                      <p className="font-semibold text-gray-800">{event.time}</p>
+                      <p className="font-semibold text-gray-800 truncate">{event.time}</p>
                       {roleDisplay && <p className="font-bold text-gray-600 pr-2">{roleDisplay}</p>}
                     </div>
-                    <p className="text-gray-600">{event.title}</p>
+                    <p className="text-gray-600 truncate">{title}</p>
                     {event.type === 'waiting' && <p className="text-red-500 font-bold">Waiting</p>}
-                    {event.student && <Badge variant="secondary">{event.student}</Badge>}
+                    {studentOrTeacher && <Badge variant="secondary" className="mt-1">{studentOrTeacher}</Badge>}
                 </div>
             </div>
         </div>
@@ -131,7 +51,7 @@ const EventCard = ({ event, onEventClick }) => {
 
 export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick }) {
     const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
-    
+
     const getWeekDays = (date) => {
         const startOfWeek = new Date(date);
         startOfWeek.setDate(date.getDate() - date.getDay());
@@ -141,16 +61,52 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
             return day;
         });
     };
-    
+
     const weekDays = getWeekDays(currentDate);
     const today = new Date();
+
+    // Build per-day enriched events from the shared sampleEvents source.
+    // An event is shown on weekday `i` if its `date` matches that day's day-of-month
+    // AND the day falls in the same month/year as `currentDate` (matches monthly view's filter).
+    const eventsByDayIndex = weekDays.map((day, dayIndex) => {
+        const sameMonth =
+            day.getMonth() === currentDate.getMonth() &&
+            day.getFullYear() === currentDate.getFullYear();
+        if (!sameMonth) return [];
+
+        const dayEvents = sampleEvents.filter((e) => e.date === day.getDate());
+
+        // Build the same `availableDatesForCategory` that monthly produces for SyncedEventsModal etc.
+        const allDatesByCategory = {};
+        sampleEvents.forEach((e) => {
+            const key = `${e.type}-${e.role || ''}`;
+            const iso = new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString();
+            if (!allDatesByCategory[key]) allDatesByCategory[key] = new Set();
+            allDatesByCategory[key].add(iso);
+        });
+
+        return dayEvents.map((e) => {
+            const { startHour, endHour } = parseTimeRange(e.time);
+            const dateString = new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString();
+            const key = `${e.type}-${e.role || ''}`;
+            const availableDatesForCategory = Array.from(allDatesByCategory[key] || []);
+            return {
+                ...e,
+                startHour,
+                endHour,
+                dayIndex,
+                dateString,
+                availableDatesForCategory,
+            };
+        });
+    });
 
     return (
         <div className="relative grid grid-cols-[auto_1fr] min-w-[800px] overflow-x-auto">
             {/* Time Gutter */}
             <div className="flex flex-col">
-                <div className="h-12 border-b"></div> {/* Empty corner */}
-                {hours.map(hour => (
+                <div className="h-12 border-b"></div>
+                {hours.map((hour) => (
                     <div key={hour} className="h-14 flex items-start justify-center pr-2">
                         <span className="text-xs text-gray-500">{hour}</span>
                     </div>
@@ -161,8 +117,11 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
             <div className="grid grid-cols-7 flex-1">
                 {/* Day Headers */}
                 {weekDays.map((day, index) => {
-                     const isToday = day.getDate() === today.getDate() && day.getMonth() === today.getMonth();
-                     return (
+                    const isToday =
+                        day.getDate() === today.getDate() &&
+                        day.getMonth() === today.getMonth() &&
+                        day.getFullYear() === today.getFullYear();
+                    return (
                         <div key={index} className="flex flex-col items-center p-2 border-b border-l h-12">
                             <span className="text-xs text-gray-600">{day.toLocaleDateString('en-US', { weekday: 'short' })}</span>
                             <span className={`text-lg font-semibold ${isToday ? 'bg-gray-800 text-white rounded-full w-7 h-7 flex items-center justify-center' : ''}`}>
@@ -184,12 +143,12 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
                                 className="h-14 border-b cursor-pointer hover:bg-blue-50"
                             ></div>
                         ))}
-                        
+
                         {/* Events for this day */}
-                        {sampleEvents.filter(e => e.dayIndex === dayIndex).map(event => (
-                            <EventCard 
-                                key={event.id} 
-                                event={event} 
+                        {eventsByDayIndex[dayIndex].map((event) => (
+                            <EventCard
+                                key={event.id}
+                                event={event}
                                 onEventClick={onEventClick}
                             />
                         ))}
