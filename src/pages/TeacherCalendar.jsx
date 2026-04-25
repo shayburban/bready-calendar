@@ -92,6 +92,7 @@ export default function TeacherCalendar() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [selectedEvents, setSelectedEvents] = useState([]);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showSyncedModal, setShowSyncedModal] = useState(false);
@@ -202,27 +203,30 @@ export default function TeacherCalendar() {
     return grouped;
   };
 
-  // Handler for clicking an event to show the modal
+  // Handler for clicking an event to show the modal.
+  // Enriches every event in the click-bundle so the tabbed modal can render
+  // a card per (role, variant) without losing per-event context.
   const handleEventClick = (events) => {
-    // For now, take the first event for details, but pass all events of that type
-    // to the modal if needed for further display/actions.
-    const event = events[0];
-    const eventDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), event.date);
-    
-    // Find all dates with events of the same type and role
-    const allDatesForCategory = sampleEvents
-        .filter(e => e.type === event.type && e.role === event.role)
-        .map(e => new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString());
-    
-    const uniqueDates = [...new Set(allDatesForCategory)];
-    
-    setSelectedEvent({
-      ...event,
-      totalCount: events.length,
-      allEvents: events,
-      dateString: eventDate.toISOString(),
-      availableDatesForCategory: uniqueDates,
-    });
+    const enrichEvent = (event) => {
+      const eventDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), event.date);
+      const allDatesForCategory = sampleEvents
+        .filter((e) => e.type === event.type && e.role === event.role)
+        .map((e) => new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString());
+      const uniqueDates = [...new Set(allDatesForCategory)];
+      return {
+        ...event,
+        totalCount: events.length,
+        allEvents: events,
+        dateString: eventDate.toISOString(),
+        availableDatesForCategory: uniqueDates,
+      };
+    };
+
+    const enrichedEvents = events.map(enrichEvent);
+    setSelectedEvents(enrichedEvents);
+    setSelectedEvent(enrichedEvents[0]);
+
+    const event = enrichedEvents[0];
     if (event.type === 'synced') {
         setShowSyncedModal(true);
     } else if (
@@ -472,6 +476,7 @@ export default function TeacherCalendar() {
       />
       <AvailabilityModal
         event={selectedEvent}
+        events={selectedEvents}
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
       />
