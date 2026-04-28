@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -67,6 +68,54 @@ const TYPE_ROLE_LABEL = {
   synced: { '-': 'Synced Calendar Event' },
 };
 
+// Header label for the popover picker — "Select X event".
+const TYPE_HEADER_LABEL = {
+  availability: 'Availability',
+  booked: 'Booked',
+  'not-reviewed': 'Not Reviewed',
+  synced: 'Synced Calendar Events',
+  waiting: 'Waiting For Confirmation',
+  cancelled: 'Cancelled',
+  completed: 'Completed',
+};
+
+// Lightweight popover that lists every event in a chip's bundle so the user
+// can pick which exact card to open. Shown only when the chip groups 2+ events.
+function EventPickerPopover({ chip, headerLabel, dotColor, items, onSelect }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>{chip}</PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <div className="px-3 py-2 border-b font-semibold text-sm text-gray-800">
+          Select {headerLabel} event
+        </div>
+        <div className="py-1">
+          {items.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => { setOpen(false); onSelect(e); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
+            >
+              <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+              {e.role && (
+                <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
+              )}
+              <span className="text-gray-700 flex-shrink-0">{e.time}</span>
+              {e.reschedule && (
+                <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
+                  Reschedule
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 // Build the hover-tooltip text from the role breakdown of one type's events.
 // e.g. for 3 avail T + 2 avail S → "3 My Availability (T), 2 Other Availability (S)"
 const buildEventTooltip = (events, type) => {
@@ -92,7 +141,6 @@ export default function TeacherCalendar() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
-  const [selectedEvents, setSelectedEvents] = useState([]);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showSyncedModal, setShowSyncedModal] = useState(false);
@@ -203,32 +251,23 @@ export default function TeacherCalendar() {
     return grouped;
   };
 
-  // Handler for clicking an event to show the modal.
-  // Enriches every event in the click-bundle so the tabbed modal can render
-  // a card per (role, variant) without losing per-event context.
-  const handleEventClick = (events) => {
-    const enrichEvent = (event) => {
-      const eventDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), event.date);
-      const allDatesForCategory = sampleEvents
-        .filter((e) => e.type === event.type && e.role === event.role)
-        .map((e) => new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString());
-      const uniqueDates = [...new Set(allDatesForCategory)];
-      return {
-        ...event,
-        totalCount: events.length,
-        allEvents: events,
-        dateString: eventDate.toISOString(),
-        availableDatesForCategory: uniqueDates,
-      };
-    };
+  // Open the right modal for a single picked event. The popover picker calls
+  // this when a row is selected; chips with only one event call it directly.
+  const openEventModal = (event) => {
+    const eventDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), event.date);
+    const allDatesForCategory = sampleEvents
+      .filter((e) => e.type === event.type && e.role === event.role)
+      .map((e) => new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString());
+    const uniqueDates = [...new Set(allDatesForCategory)];
 
-    const enrichedEvents = events.map(enrichEvent);
-    setSelectedEvents(enrichedEvents);
-    setSelectedEvent(enrichedEvents[0]);
+    setSelectedEvent({
+      ...event,
+      dateString: eventDate.toISOString(),
+      availableDatesForCategory: uniqueDates,
+    });
 
-    const event = enrichedEvents[0];
     if (event.type === 'synced') {
-        setShowSyncedModal(true);
+      setShowSyncedModal(true);
     } else if (
       event.type === 'availability' ||
       event.type === 'booked' ||
@@ -237,9 +276,9 @@ export default function TeacherCalendar() {
       (event.type === 'waiting' && (event.role === 'T' || event.role === 'S')) ||
       (event.type === 'completed' && (event.role === 'T' || event.role === 'S'))
     ) {
-        setShowAvailabilityModal(true);
+      setShowAvailabilityModal(true);
     } else {
-        setShowEventModal(true);
+      setShowEventModal(true);
     }
   };
 
@@ -413,7 +452,9 @@ export default function TeacherCalendar() {
                       )}
 
                       {/* Events: one chip per type, dot + time + count badge.
-                          Hover shows the role breakdown.  Popups unchanged. */}
+                          Hover shows the role breakdown. Chips with 2+ events
+                          open a popover picker so the user chooses which card
+                          to open; single-event chips open the modal directly. */}
                       <div className="space-y-1">
                         {Object.entries(eventsByType).map(([type, typeEvents]) => {
                           const firstEvent = typeEvents[0];
@@ -421,17 +462,13 @@ export default function TeacherCalendar() {
                           const tooltip = buildEventTooltip(typeEvents, type);
                           const isCompleted = type === 'completed';
                           const dotColor = TYPE_DOT_COLOR[type] || 'bg-gray-400';
+                          const headerLabel = TYPE_HEADER_LABEL[type] || type;
                           let badge = null;
                           if (total > 1) badge = `+${total}`;
                           else if (firstEvent.count && firstEvent.count > 1) badge = `+${firstEvent.count}`;
 
-                          return (
-                            <div
-                              key={type}
-                              title={tooltip}
-                              onClick={() => handleEventClick(typeEvents)}
-                              className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                            >
+                          const chipInner = (
+                            <>
                               {isCompleted ? (
                                 <span className="text-gray-800 font-bold leading-none text-[12px] w-3 flex justify-center">$</span>
                               ) : (
@@ -443,7 +480,41 @@ export default function TeacherCalendar() {
                                   {badge}
                                 </span>
                               )}
+                            </>
+                          );
+
+                          // Single event: chip is the trigger and opens the modal directly.
+                          if (total === 1) {
+                            return (
+                              <div
+                                key={type}
+                                title={tooltip}
+                                onClick={() => openEventModal(firstEvent)}
+                                className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                              >
+                                {chipInner}
+                              </div>
+                            );
+                          }
+
+                          // Multiple events: chip opens the popover picker.
+                          const chipNode = (
+                            <div
+                              title={tooltip}
+                              className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                            >
+                              {chipInner}
                             </div>
+                          );
+                          return (
+                            <EventPickerPopover
+                              key={type}
+                              chip={chipNode}
+                              headerLabel={headerLabel}
+                              dotColor={dotColor}
+                              items={typeEvents}
+                              onSelect={openEventModal}
+                            />
                           );
                         })}
                       </div>
@@ -476,7 +547,6 @@ export default function TeacherCalendar() {
       />
       <AvailabilityModal
         event={selectedEvent}
-        events={selectedEvents}
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
       />
