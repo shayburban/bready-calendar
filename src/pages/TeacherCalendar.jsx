@@ -347,7 +347,9 @@ export default function TeacherCalendar() {
           startTime(sortByStart(eventsByType[b])[0])
         )
       );
-      const visibleTypes = typesByEarliest.slice(0, 2);
+      // One row per distinct type so the user can see every event type at
+      // a glance (e.g. April 8 has not-reviewed + completed + cancelled).
+      const visibleTypes = typesByEarliest;
 
       return (
         <div className="space-y-1">
