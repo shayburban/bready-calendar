@@ -186,6 +186,10 @@ export default function TeacherCalendar() {
   // Active weekday filter from the "Advanced date selection" sidebar dropdown.
   // Indices follow Date#getDay(): 0=Sun … 6=Sat. Default = all days included.
   const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
+  // Slots saved via the Set Availability sidebar. Each entry:
+  // { date: 'YYYY-MM-DD', startTime: 'HH:MM', endTime: 'HH:MM' }.
+  // Renders as green availability dots on the matching calendar day.
+  const [savedAvailabilitySlots, setSavedAvailabilitySlots] = useState([]);
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -516,6 +520,28 @@ export default function TeacherCalendar() {
   // Bidirectional sync: sidebar-row-0 picks call this; drag handles also
   // write here via setPrimaryRange. The guard avoids an infinite re-emit
   // when the value-prop sync echoes the same range back from the picker.
+  // Sidebar's "Save Dates" button calls this. mode='open' adds slots; mode='closed'
+  // removes any saved slot matching the supplied (date, [startTime, endTime])
+  // tuples — slots without time fields wildcard-match every saved slot on
+  // that date.
+  const handleSaveAvailability = (slots, mode) => {
+    setSavedAvailabilitySlots((prev) => {
+      if (mode === 'open') {
+        const key = (s) => `${s.date}|${s.startTime}|${s.endTime}`;
+        const map = new Map(prev.map((s) => [key(s), s]));
+        slots.forEach((s) => map.set(key(s), s));
+        return Array.from(map.values());
+      }
+      return prev.filter((saved) =>
+        !slots.some((rm) =>
+          rm.date === saved.date &&
+          (rm.startTime === undefined ||
+            (rm.startTime === saved.startTime && rm.endTime === saved.endTime))
+        )
+      );
+    });
+  };
+
   const handlePrimaryRangeChange = (rangeData) => {
     if (!rangeData?.startDate || !rangeData?.endDate) return;
     const ns = new Date(rangeData.startDate); ns.setHours(0, 0, 0, 0);
@@ -622,6 +648,7 @@ export default function TeacherCalendar() {
             primaryRangeValue={primaryRange}
             onPrimaryRangeChange={handlePrimaryRangeChange}
             onActiveWeekdaysChange={setActiveWeekdays}
+            onSaveAvailability={handleSaveAvailability}
           />
 
           {/* Main Calendar Area */}
@@ -741,12 +768,6 @@ export default function TeacherCalendar() {
                           );
                         }
                         const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
-                        const dayEvents = events.filter(event =>
-                          event.date === day.date &&
-                          day.isCurrentMonth &&
-                          (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
-                        );
-                        const eventsByType = getEventsByTypeForDay(dayEvents);
                         // Highlight every cell whose full date (year+month+day)
                         // falls inside any range from the sidebar's "Set
                         // Availability" tab. Defaults to today when no range
@@ -754,6 +775,30 @@ export default function TeacherCalendar() {
                         const cellDate = day.isCurrentMonth
                           ? new Date(monthDate.getFullYear(), monthDate.getMonth(), day.date)
                           : null;
+                        const dayEvents = events.filter(event =>
+                          event.date === day.date &&
+                          day.isCurrentMonth &&
+                          (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
+                        );
+                        // Synthesize availability events from sidebar-saved
+                        // Open slots so they render as green dots on the
+                        // exact date the teacher saved.
+                        const savedSlotsForCell = cellDate
+                          ? savedAvailabilitySlots.filter((slot) => {
+                              const sd = new Date(slot.date);
+                              return sd.getFullYear() === cellDate.getFullYear() &&
+                                     sd.getMonth() === cellDate.getMonth() &&
+                                     sd.getDate() === cellDate.getDate();
+                            })
+                          : [];
+                        const savedAvailEvents = savedSlotsForCell.map((slot, i) => ({
+                          id: `saved-avail-${slot.date}-${slot.startTime}-${slot.endTime}-${i}`,
+                          type: 'availability',
+                          role: 'T',
+                          date: day.date,
+                          time: `${slot.startTime} - ${slot.endTime}`,
+                        }));
+                        const eventsByType = getEventsByTypeForDay([...dayEvents, ...savedAvailEvents]);
                         const isAvailabilityDay =
                           !!cellDate && isDateInAvailabilityRange(cellDate);
                         const showStartHandle = isPrimaryStartDay(cellDate);

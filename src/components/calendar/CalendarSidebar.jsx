@@ -64,20 +64,30 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
     </Button>;
 
 
-const TimeAvailabilityRow = ({ onRemove }) =>
+const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) =>
 <div className="flex items-center gap-2">
         <div className="relative flex-1">
              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-             <Input type="time" className="pl-9" />
+             <Input
+               type="time"
+               className="pl-9"
+               value={row.startTime}
+               onChange={(e) => onChange({ ...row, startTime: e.target.value })}
+             />
         </div>
         <div className="relative flex-1">
              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-             <Input type="time" className="pl-9" />
+             <Input
+               type="time"
+               className="pl-9"
+               value={row.endTime}
+               onChange={(e) => onChange({ ...row, endTime: e.target.value })}
+             />
         </div>
-        <Button variant="ghost" size="icon" onClick={onRemove} className="text-gray-500 hover:bg-gray-100">
+        <Button variant="ghost" size="icon" onClick={onRemove} disabled={!canRemove} className="text-gray-500 hover:bg-gray-100">
             <X className="w-4 h-4" />
         </Button>
-        <Button variant="ghost" size="icon" className="text-gray-500 hover:bg-gray-100">
+        <Button variant="ghost" size="icon" onClick={onAdd} className="text-gray-500 hover:bg-gray-100">
             <Plus className="w-4 h-4" />
         </Button>
     </div>;
@@ -107,7 +117,7 @@ const WEEKDAY_OPTIONS = [
   { idx: 6, label: 'Sat' },
 ];
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   // Active weekday indices for the "Advanced date selection" filter. Default
@@ -119,7 +129,10 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
   // are picked. Aggregated and emitted to parent for the blue availability
   // overlay on the monthly calendar.
   const [rangesById, setRangesById] = useState({});
-  const [timeRanges, setTimeRanges] = useState([1]);
+  const [timeRanges, setTimeRanges] = useState([{ id: 1, startTime: '', endTime: '' }]);
+  // 'open' = save the current range as Available; 'closed' = remove any saved
+  // Open slots in the current range. The toggle is committed by Save Dates.
+  const [availabilityMode, setAvailabilityMode] = useState('open');
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [user, setUser] = useState(null); // Retained state but not used in new legend logic
   const [appRoles, setAppRoles] = useState([]); // Retained state but not used in new legend logic
@@ -262,6 +275,67 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
     setRangesById((prev) => ({ ...prev, [id]: rangeData }));
   };
 
+  const updateTimeRange = (id, next) => {
+    setTimeRanges((prev) => prev.map((r) => (r.id === id ? next : r)));
+  };
+  const addTimeRange = () => {
+    setTimeRanges((prev) => {
+      const newId = Math.max(0, ...prev.map((r) => r.id)) + 1;
+      return [...prev, { id: newId, startTime: '', endTime: '' }];
+    });
+  };
+  const removeTimeRange = (id) => {
+    setTimeRanges((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.id !== id)));
+  };
+
+  // Build the slot list from the selected ranges/weekdays/times and emit it to
+  // the parent. In 'open' mode this saves new availability; in 'closed' mode
+  // the parent removes matching saved slots from its store.
+  const handleSave = () => {
+    const ranges = [primaryRangeValue, ...Object.values(rangesById)]
+      .filter((r) => r && r.startDate && r.endDate);
+    if (ranges.length === 0) return;
+
+    const validTimes = timeRanges.filter((t) => t.startTime && t.endTime);
+
+    const dateKeys = [];
+    ranges.forEach((range) => {
+      const start = new Date(range.startDate); start.setHours(0, 0, 0, 0);
+      const end = new Date(range.endDate); end.setHours(0, 0, 0, 0);
+      const cur = new Date(start);
+      while (cur.getTime() <= end.getTime()) {
+        if (activeWeekdays.includes(cur.getDay())) {
+          const yyyy = cur.getFullYear();
+          const mm = String(cur.getMonth() + 1).padStart(2, '0');
+          const dd = String(cur.getDate()).padStart(2, '0');
+          dateKeys.push(`${yyyy}-${mm}-${dd}`);
+        }
+        cur.setDate(cur.getDate() + 1);
+      }
+    });
+    if (dateKeys.length === 0) return;
+
+    let slots;
+    if (availabilityMode === 'open') {
+      // Open mode requires explicit times — that's the data we're saving.
+      if (validTimes.length === 0) return;
+      slots = dateKeys.flatMap((date) =>
+        validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
+      );
+    } else {
+      // Closed mode: if user specified times, target those exact slots;
+      // otherwise emit a date-only entry that wildcard-matches all slots
+      // saved on that date.
+      slots = dateKeys.flatMap((date) =>
+        validTimes.length
+          ? validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
+          : [{ date }]
+      );
+    }
+
+    if (onSaveAvailability) onSaveAvailability(slots, availabilityMode);
+  };
+
   const handleViewChange = (newView) => {
     if (newView === 'Month') {
       window.location.href = createPageUrl('TeacherCalendar');
@@ -335,8 +409,21 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                                 Open or close for booking <Info className="w-4 h-4 ml-1 text-gray-400" />
                             </label>
                             <div className="flex space-x-2 mt-2">
-                                <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white">Open</Button>
-                                <Button size="sm" variant="outline">Closed</Button>
+                                <Button
+                                  size="sm"
+                                  onClick={() => setAvailabilityMode('open')}
+                                  className={availabilityMode === 'open' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}
+                                >
+                                  Open
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant={availabilityMode === 'closed' ? 'default' : 'outline'}
+                                  onClick={() => setAvailabilityMode('closed')}
+                                  className={availabilityMode === 'closed' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
+                                >
+                                  Closed
+                                </Button>
                             </div>
                         </div>
 
@@ -400,9 +487,16 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                             <Info className="w-4 h-4 text-gray-400" />
                         </div>
                         <div className="space-y-2">
-                            {timeRanges.map((id) =>
-            <TimeAvailabilityRow key={id} onRemove={() => setTimeRanges(timeRanges.filter((rId) => rId !== id))} />
-            )}
+                            {timeRanges.map((row) => (
+            <TimeAvailabilityRow
+              key={row.id}
+              row={row}
+              onChange={(next) => updateTimeRange(row.id, next)}
+              onRemove={() => removeTimeRange(row.id)}
+              onAdd={addTimeRange}
+              canRemove={timeRanges.length > 1}
+            />
+            ))}
                         </div>
 
                         <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
@@ -420,7 +514,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
 
                         <div className="flex gap-2">
                             <Button variant="outline" className="w-full">Cancel</Button>
-                            <Button className="w-full bg-green-600 hover:bg-green-700">Save Dates</Button>
+                            <Button onClick={handleSave} className="w-full bg-green-600 hover:bg-green-700">Save Dates</Button>
                         </div>
 
                         <div>
