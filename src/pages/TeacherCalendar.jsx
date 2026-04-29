@@ -183,6 +183,9 @@ export default function TeacherCalendar() {
     return { startDate: t, endDate: t };
   });
   const [dragMode, setDragMode] = useState(null); // 'start' | 'end' | null
+  // Active weekday filter from the "Advanced date selection" sidebar dropdown.
+  // Indices follow Date#getDay(): 0=Sun … 6=Sat. Default = all days included.
+  const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -487,13 +490,17 @@ export default function TeacherCalendar() {
   const effectiveAvailabilityRanges = [primaryRange, ...availabilityRanges]
     .filter((r) => r && r.startDate && r.endDate);
 
-  const isDateInAvailabilityRange = (cellDate) =>
-    effectiveAvailabilityRanges.some((r) => {
+  const isDateInAvailabilityRange = (cellDate) => {
+    // Apply the "Advanced date selection" weekday filter: a cell only counts
+    // as in-range if its weekday is currently checked in the sidebar.
+    if (!activeWeekdays.includes(cellDate.getDay())) return false;
+    return effectiveAvailabilityRanges.some((r) => {
       const s = new Date(r.startDate); s.setHours(0, 0, 0, 0);
       const e = new Date(r.endDate); e.setHours(0, 0, 0, 0);
       const c = cellDate.getTime();
       return c >= s.getTime() && c <= e.getTime();
     });
+  };
 
   const isPrimaryStartDay = (cellDate) => {
     if (!cellDate || !primaryRange) return false;
@@ -614,6 +621,7 @@ export default function TeacherCalendar() {
             onAvailabilityRangesChange={setAvailabilityRanges}
             primaryRangeValue={primaryRange}
             onPrimaryRangeChange={handlePrimaryRangeChange}
+            onActiveWeekdaysChange={setActiveWeekdays}
           />
 
           {/* Main Calendar Area */}

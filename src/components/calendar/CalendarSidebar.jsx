@@ -94,8 +94,25 @@ const getInitialActiveLegendKeys = () => {
   map((category) => category.key);
 };
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange }) {
+// Weekday filter: index uses JS Date#getDay() — 0=Sun … 6=Sat. By default all
+// seven are active, so every day inside the blue range is "selected." Unchecking
+// a weekday excludes any date with that getDay() from the highlight.
+const WEEKDAY_OPTIONS = [
+  { idx: 0, label: 'Sun' },
+  { idx: 1, label: 'Mon' },
+  { idx: 2, label: 'Tue' },
+  { idx: 3, label: 'Wed' },
+  { idx: 4, label: 'Thu' },
+  { idx: 5, label: 'Fri' },
+  { idx: 6, label: 'Sat' },
+];
+
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
+  // Active weekday indices for the "Advanced date selection" filter. Default
+  // all seven on so the blue range covers every day until the user narrows it.
+  const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [activeTab, setActiveTab] = useState('setavail');
   const [dateRanges, setDateRanges] = useState([{ id: 1 }]);
   // Resolved {startDate, endDate} for each row id, only set once both ends
@@ -198,6 +215,20 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
       onAvailabilityRangesChange(Object.values(rangesById));
     }
   }, [rangesById, onAvailabilityRangesChange]);
+
+  // Emit active weekday filter to parent so the blue range respects it.
+  useEffect(() => {
+    if (onActiveWeekdaysChange) {
+      onActiveWeekdaysChange(activeWeekdays);
+    }
+  }, [activeWeekdays, onActiveWeekdaysChange]);
+
+  const toggleWeekday = (idx, checked) => {
+    setActiveWeekdays((prev) => {
+      if (checked) return [...new Set([...prev, idx])].sort();
+      return prev.filter((d) => d !== idx);
+    });
+  };
 
   // Handle checkbox changes from LegendItem
   const handleLegendCheckedChange = (itemKey, newChecked) => {
@@ -334,10 +365,31 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                         </div>
 
                         <div>
-                            <Button variant="ghost" className="w-full justify-start p-0 text-blue-600 hover:text-blue-700 hover:bg-transparent">
-                                <ChevronDown className="w-4 h-4 mr-1" /> Advanced date selection
+                            <Button
+                              variant="ghost"
+                              onClick={() => setIsAdvancedOpen((o) => !o)}
+                              className="w-full justify-start p-0 text-blue-600 hover:text-blue-700 hover:bg-transparent"
+                            >
+                                <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${isAdvancedOpen ? '' : '-rotate-90'}`} /> Advanced date selection
                             </Button>
-                             <Button variant="ghost" className="w-full justify-start p-0 text-blue-600 hover:text-blue-700 hover:bg-transparent">
+                            {isAdvancedOpen && (
+                              <div className="mt-2 ml-5 grid grid-cols-2 gap-x-3 gap-y-1">
+                                {WEEKDAY_OPTIONS.map((opt) => (
+                                  <label
+                                    key={opt.idx}
+                                    className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer"
+                                  >
+                                    <Checkbox
+                                      checked={activeWeekdays.includes(opt.idx)}
+                                      onCheckedChange={(c) => toggleWeekday(opt.idx, c === true)}
+                                      aria-label={`Toggle ${opt.label}`}
+                                    />
+                                    {opt.label}
+                                  </label>
+                                ))}
+                              </div>
+                            )}
+                             <Button variant="ghost" className="w-full justify-start p-0 text-blue-600 hover:text-blue-700 hover:bg-transparent mt-2">
                                 <ChevronDown className="w-4 h-4 mr-1" /> View Monthly Calander
                             </Button>
                         </div>
