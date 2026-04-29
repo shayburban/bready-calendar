@@ -94,10 +94,14 @@ const getInitialActiveLegendKeys = () => {
   map((category) => category.key);
 };
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('setavail');
   const [dateRanges, setDateRanges] = useState([{ id: 1 }]);
+  // Resolved {startDate, endDate} for each row id, only set once both ends
+  // are picked. Aggregated and emitted to parent for the blue availability
+  // overlay on the monthly calendar.
+  const [rangesById, setRangesById] = useState({});
   const [timeRanges, setTimeRanges] = useState([1]);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [user, setUser] = useState(null); // Retained state but not used in new legend logic
@@ -187,6 +191,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange })
     }
   }, [activeLegendKeys, onLegendFilterChange]);
 
+  // Emit aggregated availability ranges to parent (TeacherCalendar) so
+  // the monthly grid can render a blue overlay on the matching dates.
+  useEffect(() => {
+    if (onAvailabilityRangesChange) {
+      onAvailabilityRangesChange(Object.values(rangesById));
+    }
+  }, [rangesById, onAvailabilityRangesChange]);
+
   // Handle checkbox changes from LegendItem
   const handleLegendCheckedChange = (itemKey, newChecked) => {
     setActiveLegendKeys((prevKeys) => {
@@ -208,6 +220,15 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange })
       return;
     }
     setDateRanges(dateRanges.filter((range) => range.id !== idToRemove));
+    setRangesById((prev) => {
+      const next = { ...prev };
+      delete next[idToRemove];
+      return next;
+    });
+  };
+
+  const handleRowRangeChange = (id, rangeData) => {
+    setRangesById((prev) => ({ ...prev, [id]: rangeData }));
   };
 
   const handleViewChange = (newView) => {
@@ -296,7 +317,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange })
                 key={range.id}
                 onRemove={() => removeDateRange(range.id)}
                 onAdd={index === dateRanges.length - 1 ? addDateRange : null}
-                onRangeChange={(rangeData) => console.log('Range selected:', rangeData)}
+                onRangeChange={(rangeData) => handleRowRangeChange(range.id, rangeData)}
                 isOnlyRow={dateRanges.length === 1} />
 
               )}

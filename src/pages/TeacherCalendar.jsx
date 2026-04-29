@@ -83,11 +83,6 @@ const TYPE_HEADER_LABEL = {
 const MAX_TOTAL_MONTHS = 36;
 const MONTHS_STEP = 2;
 
-// Mock "Set Availability" range — visualised as a blue tinted block on the
-// primary month. In the real flow this should be derived from the sidebar's
-// Set Availability tab state.
-const MOCK_AVAILABILITY_RANGE = { start: 5, end: 14 };
-
 // Lightweight popover that lists every event in a chip's bundle so the user
 // can pick which exact card to open. Shown when the chip groups 2+ events
 // of the same type, OR when Booked + Waiting share a day in mixed mode.
@@ -175,6 +170,10 @@ export default function TeacherCalendar() {
   // Number of additional months loaded beyond the navigated `currentDate`.
   // Click "Show More Months" to load 2 more (capped at MAX_TOTAL_MONTHS - 1).
   const [extraMonthsLoaded, setExtraMonthsLoaded] = useState(0);
+  // Availability ranges from the sidebar's "Set Availability" → "Date
+  // Availability" rows. Each entry is `{startDate, endDate}` (Date objects).
+  // When empty (no range picked yet) the blue overlay defaults to today.
+  const [availabilityRanges, setAvailabilityRanges] = useState([]);
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -479,6 +478,24 @@ export default function TeacherCalendar() {
   );
   const canShowMoreMonths = totalMonths < MAX_TOTAL_MONTHS;
 
+  // Effective availability ranges for the blue overlay. When the sidebar
+  // has no completed Start/End range, we fall back to "today" so the user
+  // always sees a reference highlight on the current day.
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const effectiveAvailabilityRanges = availabilityRanges.length > 0
+    ? availabilityRanges
+    : [{ startDate: todayStart, endDate: todayStart }];
+
+  const isDateInAvailabilityRange = (cellDate) =>
+    effectiveAvailabilityRanges.some((r) => {
+      if (!r || !r.startDate || !r.endDate) return false;
+      const s = new Date(r.startDate); s.setHours(0, 0, 0, 0);
+      const e = new Date(r.endDate); e.setHours(0, 0, 0, 0);
+      const c = cellDate.getTime();
+      return c >= s.getTime() && c <= e.getTime();
+    });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -517,7 +534,12 @@ export default function TeacherCalendar() {
       <div className="container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           
-          <CalendarSidebar view={view} setView={setView} onLegendFilterChange={setActiveFilters} />
+          <CalendarSidebar
+            view={view}
+            setView={setView}
+            onLegendFilterChange={setActiveFilters}
+            onAvailabilityRangesChange={setAvailabilityRanges}
+          />
 
           {/* Main Calendar Area */}
           <div className="flex-1 bg-white rounded-lg shadow-sm">
@@ -633,13 +655,15 @@ export default function TeacherCalendar() {
                           (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
                         );
                         const eventsByType = getEventsByTypeForDay(dayEvents);
-                        // Mock "Set Availability" range — only highlight on the
-                        // primary (first) month and only on real days of that month.
+                        // Highlight every cell whose full date (year+month+day)
+                        // falls inside any range from the sidebar's "Set
+                        // Availability" tab. Defaults to today when no range
+                        // has been picked yet.
+                        const cellDate = day.isCurrentMonth
+                          ? new Date(monthDate.getFullYear(), monthDate.getMonth(), day.date)
+                          : null;
                         const isAvailabilityDay =
-                          isFirstMonth &&
-                          day.isCurrentMonth &&
-                          day.date >= MOCK_AVAILABILITY_RANGE.start &&
-                          day.date <= MOCK_AVAILABILITY_RANGE.end;
+                          !!cellDate && isDateInAvailabilityRange(cellDate);
 
                         return (
                           <div
