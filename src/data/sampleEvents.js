@@ -43,6 +43,18 @@ export const sampleEvents = [
   { id: 17, date: 25, time: '14:00 - 15:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - reschedule (S)' },
   { id: 18, date: 25, time: '17:00 - 18:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00', '17:00 - 19:00'] },
 
+  // --- Sun, April 12 (4 Waiting events, mixed S/T — single-category overflow) ---
+  { id: 33, date: 12, time: '09:00 - 10:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student A.', description: 'Waiting For Confirmation (T) #1' },
+  { id: 34, date: 12, time: '11:00 - 12:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher B.', description: 'Waiting For Confirmation (S) #1' },
+  { id: 35, date: 12, time: '14:00 - 15:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student C.', description: 'Waiting For Confirmation (T) #2' },
+  { id: 36, date: 12, time: '17:00 - 18:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher D.', description: 'Waiting For Confirmation (S) #2' },
+
+  // --- Tue, April 14 (4 Booked events, mixed S/T — single-category overflow) ---
+  { id: 37, date: 14, time: '08:00 - 09:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student E.', description: 'Confirmed lesson (T) #1' },
+  { id: 38, date: 14, time: '10:00 - 11:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher F.', description: 'Confirmed lesson (S) #1' },
+  { id: 39, date: 14, time: '13:00 - 14:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student G.', description: 'Confirmed lesson (T) #2' },
+  { id: 40, date: 14, time: '16:00 - 17:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher H.', description: 'Confirmed lesson (S) #2' },
+
   // --- Mon, April 27 (mixed FUTURE: Booked + Waiting + Availability + Synced) ---
   { id: 19, date: 27, time: '08:00 - 09:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 2, description: 'Available for booking (T)' },
   { id: 20, date: 27, time: '09:00 - 10:00', type: 'availability', role: 'S', color: 'bg-green-500', description: 'Other availability (S)' },

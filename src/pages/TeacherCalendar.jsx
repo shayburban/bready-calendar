@@ -87,6 +87,13 @@ const TYPE_HEADER_LABEL = {
 // "Select <headerLabel> event" template (used by the mixed picker).
 function EventPickerPopover({ chip, headerLabel, header, items, onSelect }) {
   const [open, setOpen] = useState(false);
+  // Always render rows in start-time order (earliest first), regardless of
+  // how the caller assembled `items`.
+  const sortedItems = [...items].sort((a, b) =>
+    ((a.time || '').split(' - ')[0]).localeCompare(
+      (b.time || '').split(' - ')[0]
+    )
+  );
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{chip}</PopoverTrigger>
@@ -95,7 +102,7 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect }) {
           {header || `Select ${headerLabel} event`}
         </div>
         <div className="py-1">
-          {items.map((e) => {
+          {sortedItems.map((e) => {
             const rowDotColor = TYPE_DOT_COLOR[e.type] || 'bg-gray-400';
             return (
               <button
