@@ -83,6 +83,11 @@ const TYPE_HEADER_LABEL = {
 const MAX_TOTAL_MONTHS = 36;
 const MONTHS_STEP = 2;
 
+// Mock "Set Availability" range — visualised as a blue tinted block on the
+// primary month. In the real flow this should be derived from the sidebar's
+// Set Availability tab state.
+const MOCK_AVAILABILITY_RANGE = { start: 5, end: 14 };
+
 // Lightweight popover that lists every event in a chip's bundle so the user
 // can pick which exact card to open. Shown when the chip groups 2+ events
 // of the same type, OR when Booked + Waiting share a day in mixed mode.
@@ -628,6 +633,13 @@ export default function TeacherCalendar() {
                           (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
                         );
                         const eventsByType = getEventsByTypeForDay(dayEvents);
+                        // Mock "Set Availability" range — only highlight on the
+                        // primary (first) month and only on real days of that month.
+                        const isAvailabilityDay =
+                          isFirstMonth &&
+                          day.isCurrentMonth &&
+                          day.date >= MOCK_AVAILABILITY_RANGE.start &&
+                          day.date <= MOCK_AVAILABILITY_RANGE.end;
 
                         return (
                           <div
@@ -636,6 +648,7 @@ export default function TeacherCalendar() {
                               min-h-[120px] border-r border-b p-2 relative group
                               ${!day.isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''}
                               ${day.isToday ? 'bg-blue-50' : ''}
+                              ${isAvailabilityDay ? 'bg-blue-50 ring-1 ring-inset ring-blue-600 z-[1]' : ''}
                             `}
                           >
                             {/* Date Number */}
