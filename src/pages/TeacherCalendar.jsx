@@ -174,6 +174,11 @@ export default function TeacherCalendar() {
   // Availability" rows. Each entry is `{startDate, endDate}` (Date objects).
   // When empty (no range picked yet) the blue overlay defaults to today.
   const [availabilityRanges, setAvailabilityRanges] = useState([]);
+  // Local drag override for the primary blue range. While the user holds
+  // a left/right handle and drags across cells, this takes precedence over
+  // `availabilityRanges`. Reset to null when the sidebar emits a new range.
+  const [draggedRange, setDraggedRange] = useState(null);
+  const [dragMode, setDragMode] = useState(null); // 'start' | 'end' | null
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -496,6 +501,73 @@ export default function TeacherCalendar() {
       return c >= s.getTime() && c <= e.getTime();
     });
 
+  // The primary range is the first one — the only one we expose drag
+  // handles for in this mock. Multi-row availability still highlights
+  // every range, but only the primary's edges are draggable.
+  const primaryRange = effectiveAvailabilityRanges[0] || null;
+  const isPrimaryStartDay = (cellDate) => {
+    if (!cellDate || !primaryRange) return false;
+    const s = new Date(primaryRange.startDate); s.setHours(0, 0, 0, 0);
+    return s.getTime() === cellDate.getTime();
+  };
+  const isPrimaryEndDay = (cellDate) => {
+    if (!cellDate || !primaryRange) return false;
+    const e = new Date(primaryRange.endDate); e.setHours(0, 0, 0, 0);
+    return e.getTime() === cellDate.getTime();
+  };
+
+  const startDrag = (mode) => {
+    if (!primaryRange) return;
+    setDraggedRange({
+      startDate: new Date(primaryRange.startDate),
+      endDate: new Date(primaryRange.endDate),
+    });
+    setDragMode(mode);
+  };
+
+  // Reset any drag override whenever the sidebar emits a fresh range.
+  useEffect(() => {
+    setDraggedRange(null);
+  }, [availabilityRanges]);
+
+  // Document-level drag listeners; active only while a handle is held.
+  useEffect(() => {
+    if (!dragMode) return;
+    const handleMove = (e) => {
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      if (!target) return;
+      const cell = target.closest && target.closest('[data-cell-date]');
+      if (!cell) return;
+      const ts = parseInt(cell.dataset.cellDate, 10);
+      if (Number.isNaN(ts)) return;
+      const cur = new Date(ts); cur.setHours(0, 0, 0, 0);
+      setDraggedRange((prev) => {
+        if (!prev) return prev;
+        const startMs = (() => {
+          const d = new Date(prev.startDate); d.setHours(0, 0, 0, 0); return d.getTime();
+        })();
+        const endMs = (() => {
+          const d = new Date(prev.endDate); d.setHours(0, 0, 0, 0); return d.getTime();
+        })();
+        if (dragMode === 'start') {
+          if (cur.getTime() > endMs) return prev;
+          if (cur.getTime() === startMs) return prev;
+          return { ...prev, startDate: cur };
+        }
+        if (cur.getTime() < startMs) return prev;
+        if (cur.getTime() === endMs) return prev;
+        return { ...prev, endDate: cur };
+      });
+    };
+    const handleUp = () => setDragMode(null);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+  }, [dragMode]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -664,17 +736,41 @@ export default function TeacherCalendar() {
                           : null;
                         const isAvailabilityDay =
                           !!cellDate && isDateInAvailabilityRange(cellDate);
+                        const showStartHandle = isPrimaryStartDay(cellDate);
+                        const showEndHandle = isPrimaryEndDay(cellDate);
 
                         return (
                           <div
                             key={index}
+                            data-cell-date={cellDate ? cellDate.getTime() : undefined}
                             className={`
                               min-h-[120px] border-r border-b p-2 relative group
                               ${!day.isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''}
                               ${day.isToday ? 'bg-blue-50' : ''}
                               ${isAvailabilityDay ? 'bg-blue-50 ring-1 ring-inset ring-blue-600 z-[1]' : ''}
+                              ${dragMode ? 'select-none' : ''}
                             `}
                           >
+                            {showStartHandle && (
+                              <button
+                                type="button"
+                                title="Drag to change start date"
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startDrag('start'); }}
+                                className="absolute -left-2 top-1/2 -translate-y-1/2 z-20 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-ew-resize shadow hover:bg-blue-700"
+                              >
+                                <ChevronLeft className="w-3 h-3" />
+                              </button>
+                            )}
+                            {showEndHandle && (
+                              <button
+                                type="button"
+                                title="Drag to change end date"
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startDrag('end'); }}
+                                className="absolute -right-2 top-1/2 -translate-y-1/2 z-20 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-ew-resize shadow hover:bg-blue-700"
+                              >
+                                <ChevronRight className="w-3 h-3" />
+                              </button>
+                            )}
                             {/* Date Number */}
                             <div className={`
                               text-sm font-medium mb-2
