@@ -49,6 +49,13 @@ export const sampleEvents = [
   { id: 35, date: 12, time: '14:00 - 15:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student C.', description: 'Waiting For Confirmation (T) #2' },
   { id: 36, date: 12, time: '17:00 - 18:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher D.', description: 'Waiting For Confirmation (S) #2' },
 
+  // --- Thu, April 16 (5 Booked events, mixed S/T + reschedule mix — single-category overflow) ---
+  { id: 41, date: 16, time: '08:00 - 09:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student I.', description: 'Confirmed lesson (T)' },
+  { id: 42, date: 16, time: '10:00 - 11:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher J.', description: 'Confirmed lesson (S)' },
+  { id: 43, date: 16, time: '12:00 - 13:00', type: 'booked', role: 'T', reschedule: true, color: 'bg-orange-500', student: 'Student K.', description: 'Reschedule proposed by teacher' },
+  { id: 44, date: 16, time: '14:00 - 15:00', type: 'booked', role: 'S', reschedule: true, color: 'bg-orange-500', teacher: 'Teacher L.', description: 'Reschedule proposed by student' },
+  { id: 45, date: 16, time: '16:00 - 17:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher M.', description: 'Confirmed lesson (S)' },
+
   // --- Tue, April 14 (4 Booked events, mixed S/T — single-category overflow) ---
   { id: 37, date: 14, time: '08:00 - 09:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student E.', description: 'Confirmed lesson (T) #1' },
   { id: 38, date: 14, time: '10:00 - 11:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher F.', description: 'Confirmed lesson (S) #1' },

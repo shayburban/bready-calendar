@@ -306,9 +306,10 @@ export default function TeacherCalendar() {
   //   picker lists only the hidden events.
   // Mixed mode (2+ types from the group present):
   //   max 2 rows total, one per type (the 2 types whose earliest event is
-  //   earliest overall), labeled "From <start>". If combined total > visible,
-  //   both rows show a shared "+X" badge and route to a shared picker over
-  //   ALL events in the group.
+  //   earliest overall), labeled "From <start>". Each chip is independent:
+  //   if its type has more than 1 event, the chip shows a "+N" badge (N =
+  //   typeCount - 1) and clicking opens a picker that contains ONLY that
+  //   type's events; otherwise the chip opens the modal directly.
   const renderEventGroup = (groupTypes, eventsByType) => {
     const activeTypes = groupTypes.filter((t) => (eventsByType[t] || []).length > 0);
     if (activeTypes.length === 0) return null;
@@ -344,15 +345,19 @@ export default function TeacherCalendar() {
         )
       );
       const visibleTypes = typesByEarliest.slice(0, 2);
-      const allItems = activeTypes.flatMap((t) => eventsByType[t]);
-      const hiddenCount = allItems.length - visibleTypes.length;
 
       return (
         <div className="space-y-1">
           {visibleTypes.map((type) => {
-            const earliestEvent = sortByStart(eventsByType[type])[0];
-            const tooltip = eventTooltip(earliestEvent);
-            const badge = hiddenCount > 0 ? `+${hiddenCount}` : null;
+            const typeEvents = eventsByType[type];
+            const earliestEvent = sortByStart(typeEvents)[0];
+            const typeCount = typeEvents.length;
+            const hiddenForType = typeCount - 1;
+            const headerLabel = TYPE_HEADER_LABEL[type] || type;
+            const tooltip = typeCount > 1
+              ? buildEventTooltip(typeEvents, type)
+              : eventTooltip(earliestEvent);
+            const badge = hiddenForType > 0 ? `+${hiddenForType}` : null;
             const chipInner = (
               <>
                 {renderDot(type)}
@@ -364,7 +369,8 @@ export default function TeacherCalendar() {
                 )}
               </>
             );
-            if (hiddenCount === 0) {
+            // typeCount === 1: chip opens that single event's modal directly.
+            if (typeCount === 1) {
               return (
                 <div
                   key={type}
@@ -376,6 +382,7 @@ export default function TeacherCalendar() {
                 </div>
               );
             }
+            // typeCount > 1: chip opens picker scoped to ONLY this type.
             const chipNode = (
               <div
                 title={tooltip}
@@ -388,8 +395,8 @@ export default function TeacherCalendar() {
               <EventPickerPopover
                 key={type}
                 chip={chipNode}
-                header="Select event"
-                items={allItems}
+                headerLabel={headerLabel}
+                items={typeEvents}
                 onSelect={openEventModal}
               />
             );
@@ -423,7 +430,7 @@ export default function TeacherCalendar() {
           <EventPickerPopover
             chip={
               <div
-                title={`+${hidden} more ${headerLabel} event${hidden > 1 ? 's' : ''}`}
+                title={buildEventTooltip(sortedEvents.slice(visibleCount), singleType)}
                 className="flex items-center justify-center bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
               >
                 +{hidden} more
