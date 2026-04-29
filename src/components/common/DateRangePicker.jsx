@@ -3,9 +3,32 @@ import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 
-const DateRangePicker = ({ onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false }) => {
-  const [startDate, setStartDate] = useState(null);
-  const [endDate, setEndDate] = useState(null);
+const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false }) => {
+  // When `value` is supplied the picker runs in controlled mode — internal
+  // state stays in sync with the prop via the useEffect below. When `value`
+  // is undefined the picker is uncontrolled (legacy behavior).
+  const [startDate, setStartDate] = useState(() =>
+    value?.startDate ? startOfDay(new Date(value.startDate)) : null
+  );
+  const [endDate, setEndDate] = useState(() =>
+    value?.endDate ? startOfDay(new Date(value.endDate)) : null
+  );
+
+  useEffect(() => {
+    if (value === undefined) return;
+    const newStart = value?.startDate ? startOfDay(new Date(value.startDate)) : null;
+    const newEnd = value?.endDate ? startOfDay(new Date(value.endDate)) : null;
+    setStartDate((prev) => {
+      if (prev && newStart && prev.getTime() === newStart.getTime()) return prev;
+      if (!prev && !newStart) return prev;
+      return newStart;
+    });
+    setEndDate((prev) => {
+      if (prev && newEnd && prev.getTime() === newEnd.getTime()) return prev;
+      if (!prev && !newEnd) return prev;
+      return newEnd;
+    });
+  }, [value]);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [selectingStart, setSelectingStart] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());

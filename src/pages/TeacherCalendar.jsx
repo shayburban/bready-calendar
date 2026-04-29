@@ -170,14 +170,17 @@ export default function TeacherCalendar() {
   // Number of additional months loaded beyond the navigated `currentDate`.
   // Click "Show More Months" to load 2 more (capped at MAX_TOTAL_MONTHS - 1).
   const [extraMonthsLoaded, setExtraMonthsLoaded] = useState(0);
-  // Availability ranges from the sidebar's "Set Availability" → "Date
-  // Availability" rows. Each entry is `{startDate, endDate}` (Date objects).
-  // When empty (no range picked yet) the blue overlay defaults to today.
+  // Extra availability ranges (rows 2..N) from the sidebar. The first row
+  // is the *primary* range and lives in `primaryRange` below — that one is
+  // bidirectionally linked with the calendar's drag handles.
   const [availabilityRanges, setAvailabilityRanges] = useState([]);
-  // Local drag override for the primary blue range. While the user holds
-  // a left/right handle and drags across cells, this takes precedence over
-  // `availabilityRanges`. Reset to null when the sidebar emits a new range.
-  const [draggedRange, setDraggedRange] = useState(null);
+  // Single source of truth for the primary blue range. Drag handles write
+  // directly here; the sidebar's first DateRangePicker is controlled by
+  // this value via the `primaryRangeValue` prop.
+  const [primaryRange, setPrimaryRange] = useState(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    return { startDate: t, endDate: t };
+  });
   const [dragMode, setDragMode] = useState(null); // 'start' | 'end' | null
 
   const openAddModalForDay = (dayNumber, monthDate) => {
@@ -483,28 +486,19 @@ export default function TeacherCalendar() {
   );
   const canShowMoreMonths = totalMonths < MAX_TOTAL_MONTHS;
 
-  // Effective availability ranges for the blue overlay. When the sidebar
-  // has no completed Start/End range, we fall back to "today" so the user
-  // always sees a reference highlight on the current day.
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
-  const effectiveAvailabilityRanges = availabilityRanges.length > 0
-    ? availabilityRanges
-    : [{ startDate: todayStart, endDate: todayStart }];
+  // Effective availability ranges for the blue overlay: primary range +
+  // any extra rows the sidebar emits. Filters out ranges missing endpoints.
+  const effectiveAvailabilityRanges = [primaryRange, ...availabilityRanges]
+    .filter((r) => r && r.startDate && r.endDate);
 
   const isDateInAvailabilityRange = (cellDate) =>
     effectiveAvailabilityRanges.some((r) => {
-      if (!r || !r.startDate || !r.endDate) return false;
       const s = new Date(r.startDate); s.setHours(0, 0, 0, 0);
       const e = new Date(r.endDate); e.setHours(0, 0, 0, 0);
       const c = cellDate.getTime();
       return c >= s.getTime() && c <= e.getTime();
     });
 
-  // The primary range is the first one — the only one we expose drag
-  // handles for in this mock. Multi-row availability still highlights
-  // every range, but only the primary's edges are draggable.
-  const primaryRange = effectiveAvailabilityRanges[0] || null;
   const isPrimaryStartDay = (cellDate) => {
     if (!cellDate || !primaryRange) return false;
     const s = new Date(primaryRange.startDate); s.setHours(0, 0, 0, 0);
@@ -516,19 +510,27 @@ export default function TeacherCalendar() {
     return e.getTime() === cellDate.getTime();
   };
 
-  const startDrag = (mode) => {
-    if (!primaryRange) return;
-    setDraggedRange({
-      startDate: new Date(primaryRange.startDate),
-      endDate: new Date(primaryRange.endDate),
+  // Bidirectional sync: sidebar-row-0 picks call this; drag handles also
+  // write here via setPrimaryRange. The guard avoids an infinite re-emit
+  // when the value-prop sync echoes the same range back from the picker.
+  const handlePrimaryRangeChange = (rangeData) => {
+    if (!rangeData?.startDate || !rangeData?.endDate) return;
+    const ns = new Date(rangeData.startDate); ns.setHours(0, 0, 0, 0);
+    const ne = new Date(rangeData.endDate); ne.setHours(0, 0, 0, 0);
+    setPrimaryRange((prev) => {
+      if (prev?.startDate && prev?.endDate) {
+        const ps = new Date(prev.startDate); ps.setHours(0, 0, 0, 0);
+        const pe = new Date(prev.endDate); pe.setHours(0, 0, 0, 0);
+        if (ps.getTime() === ns.getTime() && pe.getTime() === ne.getTime()) return prev;
+      }
+      return { startDate: ns, endDate: ne };
     });
-    setDragMode(mode);
   };
 
-  // Reset any drag override whenever the sidebar emits a fresh range.
-  useEffect(() => {
-    setDraggedRange(null);
-  }, [availabilityRanges]);
+  const startDrag = (mode) => {
+    if (!primaryRange) return;
+    setDragMode(mode);
+  };
 
   // Document-level drag listeners; active only while a handle is held.
   useEffect(() => {
@@ -541,28 +543,25 @@ export default function TeacherCalendar() {
       const ts = parseInt(cell.dataset.cellDate, 10);
       if (Number.isNaN(ts)) return;
       const cur = new Date(ts); cur.setHours(0, 0, 0, 0);
-      // Earliest allowed start date is today — the user cannot drag the
-      // left (start) handle into the past.
+      // Earliest allowed start/end is today — handles cannot enter the past.
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const todayMs = today.getTime();
-      setDraggedRange((prev) => {
+      setPrimaryRange((prev) => {
         if (!prev) return prev;
-        const startMs = (() => {
-          const d = new Date(prev.startDate); d.setHours(0, 0, 0, 0); return d.getTime();
-        })();
-        const endMs = (() => {
-          const d = new Date(prev.endDate); d.setHours(0, 0, 0, 0); return d.getTime();
-        })();
+        const ps = new Date(prev.startDate); ps.setHours(0, 0, 0, 0);
+        const pe = new Date(prev.endDate); pe.setHours(0, 0, 0, 0);
+        const startMs = ps.getTime();
+        const endMs = pe.getTime();
         if (dragMode === 'start') {
           if (cur.getTime() < todayMs) return prev;
           if (cur.getTime() > endMs) return prev;
           if (cur.getTime() === startMs) return prev;
-          return { ...prev, startDate: cur };
+          return { startDate: cur, endDate: pe };
         }
         if (cur.getTime() < startMs) return prev;
         if (cur.getTime() < todayMs) return prev;
         if (cur.getTime() === endMs) return prev;
-        return { ...prev, endDate: cur };
+        return { startDate: ps, endDate: cur };
       });
     };
     const handleUp = () => setDragMode(null);
@@ -617,6 +616,8 @@ export default function TeacherCalendar() {
             setView={setView}
             onLegendFilterChange={setActiveFilters}
             onAvailabilityRangesChange={setAvailabilityRanges}
+            primaryRangeValue={primaryRange}
+            onPrimaryRangeChange={handlePrimaryRangeChange}
           />
 
           {/* Main Calendar Area */}

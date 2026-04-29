@@ -94,7 +94,7 @@ const getInitialActiveLegendKeys = () => {
   map((category) => category.key);
 };
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('setavail');
   const [dateRanges, setDateRanges] = useState([{ id: 1 }]);
@@ -315,9 +315,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                                 {dateRanges.map((range, index) =>
               <DateRangePicker
                 key={range.id}
+                value={index === 0 ? primaryRangeValue : undefined}
                 onRemove={() => removeDateRange(range.id)}
                 onAdd={index === dateRanges.length - 1 ? addDateRange : null}
-                onRangeChange={(rangeData) => handleRowRangeChange(range.id, rangeData)}
+                onRangeChange={(rangeData) =>
+                  index === 0
+                    ? (onPrimaryRangeChange && onPrimaryRangeChange(rangeData))
+                    : handleRowRangeChange(range.id, rangeData)
+                }
                 isOnlyRow={dateRanges.length === 1} />
 
               )}
