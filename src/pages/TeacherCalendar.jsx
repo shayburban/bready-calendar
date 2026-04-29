@@ -451,12 +451,62 @@ export default function TeacherCalendar() {
                         </Button>
                       )}
 
-                      {/* Events: one chip per type, dot + time + count badge.
+                      {/* Availability + Synced render as dot-only markers at the
+                          top-right of the cell (no time, no count). Tooltip and
+                          click behavior match the chips below: hover shows the
+                          role breakdown, click opens the picker (or modal if 1).
+                          Availability sits to the left of Synced. */}
+                      {(eventsByType.availability || eventsByType.synced) && (
+                        <div className="absolute top-2 right-8 flex items-center gap-1.5 z-10">
+                          {['availability', 'synced'].map((type) => {
+                            const typeEvents = eventsByType[type];
+                            if (!typeEvents) return null;
+                            const tooltip = buildEventTooltip(typeEvents, type);
+                            const dotColor = TYPE_DOT_COLOR[type];
+                            const headerLabel = TYPE_HEADER_LABEL[type];
+
+                            if (typeEvents.length === 1) {
+                              return (
+                                <button
+                                  key={type}
+                                  type="button"
+                                  title={tooltip}
+                                  onClick={() => openEventModal(typeEvents[0])}
+                                  className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
+                                />
+                              );
+                            }
+
+                            const dotButton = (
+                              <button
+                                type="button"
+                                title={tooltip}
+                                className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
+                              />
+                            );
+
+                            return (
+                              <EventPickerPopover
+                                key={type}
+                                chip={dotButton}
+                                headerLabel={headerLabel}
+                                dotColor={dotColor}
+                                items={typeEvents}
+                                onSelect={openEventModal}
+                              />
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Other event types: one chip per type, dot + time + count badge.
                           Hover shows the role breakdown. Chips with 2+ events
                           open a popover picker so the user chooses which card
                           to open; single-event chips open the modal directly. */}
                       <div className="space-y-1">
-                        {Object.entries(eventsByType).map(([type, typeEvents]) => {
+                        {Object.entries(eventsByType)
+                          .filter(([type]) => type !== 'availability' && type !== 'synced')
+                          .map(([type, typeEvents]) => {
                           const firstEvent = typeEvents[0];
                           const total = typeEvents.length;
                           const tooltip = buildEventTooltip(typeEvents, type);
@@ -518,11 +568,6 @@ export default function TeacherCalendar() {
                           );
                         })}
                       </div>
-
-                      {/* Connection indicators */}
-                      {day.isCurrentMonth && day.date >= 16 && day.date <= 18 && (
-                        <div className="absolute top-2 right-8 w-3 h-3 bg-blue-500 rounded-full border-2 border-white"></div>
-                      )}
                     </div>
                   );
                 })}
