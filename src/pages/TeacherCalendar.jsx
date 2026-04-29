@@ -168,8 +168,9 @@ export default function TeacherCalendar() {
   // All other types are always visible regardless of this list.
   const [activeFilters, setActiveFilters] = useState(['not-reviewed', 'completed', 'cancelled']);
   // Number of additional months loaded beyond the navigated `currentDate`.
+  // Default is 1 so the page renders exactly 2 months stacked vertically.
   // Click "Show More Months" to load 2 more (capped at MAX_TOTAL_MONTHS - 1).
-  const [extraMonthsLoaded, setExtraMonthsLoaded] = useState(0);
+  const [extraMonthsLoaded, setExtraMonthsLoaded] = useState(1);
   // Extra availability ranges (rows 2..N) from the sidebar. The first row
   // is the *primary* range and lives in `primaryRange` below — that one is
   // bidirectionally linked with the calendar's drag handles.
@@ -224,7 +225,7 @@ export default function TeacherCalendar() {
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
     setCurrentDate(newDate);
-    setExtraMonthsLoaded(0);
+    setExtraMonthsLoaded(1);
   };
 
   const handleShowMoreMonths = () => {
@@ -239,6 +240,9 @@ export default function TeacherCalendar() {
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
   // Generate calendar days for the given monthDate (defaults to currentDate).
+  // Discrete-month logic: cells outside the month are blank placeholders, not
+  // ghost dates from the prev/next month. The grid is trimmed to only the
+  // weeks that contain at least one current-month date.
   const generateCalendarDays = (monthDate) => {
     const ref = monthDate || currentDate;
     const startDate = new Date(ref.getFullYear(), ref.getMonth(), 1);
@@ -247,14 +251,9 @@ export default function TeacherCalendar() {
     const daysInMonth = endDate.getDate();
     const days = [];
 
-    // Previous month days
-    const prevMonthEnd = new Date(ref.getFullYear(), ref.getMonth(), 0);
-    for (let i = startDay - 1; i >= 0; i--) {
-      days.push({
-        date: prevMonthEnd.getDate() - i,
-        isCurrentMonth: false,
-        isToday: false
-      });
+    // Leading blank cells before day 1.
+    for (let i = 0; i < startDay; i++) {
+      days.push({ isPlaceholder: true });
     }
 
     // Current month days
@@ -270,14 +269,11 @@ export default function TeacherCalendar() {
       });
     }
 
-    // Next month days to fill grid
-    const remainingDays = 42 - days.length;
-    for (let day = 1; day <= remainingDays; day++) {
-      days.push({
-        date: day,
-        isCurrentMonth: false,
-        isToday: false
-      });
+    // Trailing blank cells to round out the final partial week. We do NOT
+    // pad to 42 — extra empty rows would just be wasted whitespace.
+    const trailing = (7 - (days.length % 7)) % 7;
+    for (let i = 0; i < trailing; i++) {
+      days.push({ isPlaceholder: true });
     }
 
     return days;
@@ -727,6 +723,15 @@ export default function TeacherCalendar() {
                     {/* Calendar Days */}
                     <div className="grid grid-cols-7 gap-0 border">
                       {days.map((day, index) => {
+                        if (day.isPlaceholder) {
+                          return (
+                            <div
+                              key={index}
+                              className="min-h-[120px] border-r border-b bg-gray-50"
+                              aria-hidden="true"
+                            />
+                          );
+                        }
                         const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
                         const dayEvents = events.filter(event =>
                           event.date === day.date &&
