@@ -80,36 +80,43 @@ const TYPE_HEADER_LABEL = {
 };
 
 // Lightweight popover that lists every event in a chip's bundle so the user
-// can pick which exact card to open. Shown only when the chip groups 2+ events.
-function EventPickerPopover({ chip, headerLabel, dotColor, items, onSelect }) {
+// can pick which exact card to open. Shown when the chip groups 2+ events
+// of the same type, OR when Booked + Waiting share a day in mixed mode.
+// Each row's dot is colored from the event's own type so mixed pickers stay
+// visually differentiated. Pass `header` to override the default
+// "Select <headerLabel> event" template (used by the mixed picker).
+function EventPickerPopover({ chip, headerLabel, header, items, onSelect }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>{chip}</PopoverTrigger>
       <PopoverContent className="w-64 p-0" align="start">
         <div className="px-3 py-2 border-b font-semibold text-sm text-gray-800">
-          Select {headerLabel} event
+          {header || `Select ${headerLabel} event`}
         </div>
         <div className="py-1">
-          {items.map((e) => (
-            <button
-              key={e.id}
-              type="button"
-              onClick={() => { setOpen(false); onSelect(e); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
-            >
-              <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-              {e.role && (
-                <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
-              )}
-              <span className="text-gray-700 flex-shrink-0">From {(e.time || '').split(' - ')[0]}</span>
-              {e.reschedule && (
-                <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
-                  {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
-                </span>
-              )}
-            </button>
-          ))}
+          {items.map((e) => {
+            const rowDotColor = TYPE_DOT_COLOR[e.type] || 'bg-gray-400';
+            return (
+              <button
+                key={e.id}
+                type="button"
+                onClick={() => { setOpen(false); onSelect(e); }}
+                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
+              >
+                <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${rowDotColor}`} />
+                {e.role && (
+                  <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
+                )}
+                <span className="text-gray-700 flex-shrink-0">From {(e.time || '').split(' - ')[0]}</span>
+                {e.reschedule && (
+                  <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
+                    {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </PopoverContent>
     </Popover>
@@ -499,13 +506,95 @@ export default function TeacherCalendar() {
                         </div>
                       )}
 
+                      {/* Mixed mode: when Booked AND Waiting both fall on the same
+                          day, render them as a unified pair of "From X" rows
+                          instead of standard per-type chips. If their combined
+                          total exceeds 2, attach a shared "+X" overflow badge
+                          to each row and route both rows to a single shared
+                          picker that lists every booked + waiting event. */}
+                      {(() => {
+                        const isMixedMode = !!(eventsByType.booked && eventsByType.waiting);
+                        if (!isMixedMode) return null;
+
+                        const mixedItems = [...eventsByType.booked, ...eventsByType.waiting];
+                        const totalMixed = mixedItems.length;
+                        const mixedHidden = totalMixed > 2 ? totalMixed - 2 : 0;
+
+                        return (
+                          <div className="space-y-1">
+                            {['booked', 'waiting'].map((type) => {
+                              const typeEvents = eventsByType[type];
+                              const dotColor = TYPE_DOT_COLOR[type];
+                              const tooltip = buildEventTooltip(typeEvents, type);
+                              const earliest = [...typeEvents]
+                                .map((e) => (e.time || '').split(' - ')[0])
+                                .sort()[0] || '';
+                              const badge = mixedHidden > 0 ? `+${mixedHidden}` : null;
+
+                              const chipInner = (
+                                <>
+                                  <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
+                                  <span className="truncate flex-1 min-w-0">From {earliest}</span>
+                                  {badge && (
+                                    <span className="bg-white border border-gray-300 text-gray-600 rounded-full text-[9px] leading-none px-1 min-w-[1rem] h-4 flex items-center justify-center flex-shrink-0">
+                                      {badge}
+                                    </span>
+                                  )}
+                                </>
+                              );
+
+                              // No overflow (total = 2 means 1 of each type):
+                              // chip opens its single event directly.
+                              if (mixedHidden === 0) {
+                                return (
+                                  <div
+                                    key={type}
+                                    title={tooltip}
+                                    onClick={() => openEventModal(typeEvents[0])}
+                                    className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                                  >
+                                    {chipInner}
+                                  </div>
+                                );
+                              }
+
+                              // Overflow: both rows route to the SAME picker
+                              // (one shared list of every booked + waiting event).
+                              const chipNode = (
+                                <div
+                                  title={tooltip}
+                                  className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                                >
+                                  {chipInner}
+                                </div>
+                              );
+                              return (
+                                <EventPickerPopover
+                                  key={type}
+                                  chip={chipNode}
+                                  header="Select event"
+                                  items={mixedItems}
+                                  onSelect={openEventModal}
+                                />
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+
                       {/* Other event types: one chip per type, dot + time + count badge.
                           Hover shows the role breakdown. Chips with 2+ events
                           open a popover picker so the user chooses which card
-                          to open; single-event chips open the modal directly. */}
+                          to open; single-event chips open the modal directly.
+                          Skipped for booked/waiting when mixed mode handles them. */}
                       <div className="space-y-1">
                         {Object.entries(eventsByType)
-                          .filter(([type]) => type !== 'availability' && type !== 'synced')
+                          .filter(([type]) => {
+                            if (type === 'availability' || type === 'synced') return false;
+                            const isMixedMode = !!(eventsByType.booked && eventsByType.waiting);
+                            if (isMixedMode && (type === 'booked' || type === 'waiting')) return false;
+                            return true;
+                          })
                           .map(([type, typeEvents]) => {
                           const firstEvent = typeEvents[0];
                           const total = typeEvents.length;
