@@ -105,7 +105,7 @@ function EventPickerPopover({ chip, headerLabel, dotColor, items, onSelect }) {
               <span className="text-gray-700 flex-shrink-0">{e.time}</span>
               {e.reschedule && (
                 <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
-                  Reschedule
+                  {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
                 </span>
               )}
             </button>
