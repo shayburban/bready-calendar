@@ -102,7 +102,7 @@ function EventPickerPopover({ chip, headerLabel, dotColor, items, onSelect }) {
               {e.role && (
                 <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
               )}
-              <span className="text-gray-700 flex-shrink-0">{e.time}</span>
+              <span className="text-gray-700 flex-shrink-0">From {(e.time || '').split(' - ')[0]}</span>
               {e.reschedule && (
                 <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
                   {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
