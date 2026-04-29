@@ -541,6 +541,10 @@ export default function TeacherCalendar() {
       const ts = parseInt(cell.dataset.cellDate, 10);
       if (Number.isNaN(ts)) return;
       const cur = new Date(ts); cur.setHours(0, 0, 0, 0);
+      // Earliest allowed start date is today — the user cannot drag the
+      // left (start) handle into the past.
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const todayMs = today.getTime();
       setDraggedRange((prev) => {
         if (!prev) return prev;
         const startMs = (() => {
@@ -550,11 +554,13 @@ export default function TeacherCalendar() {
           const d = new Date(prev.endDate); d.setHours(0, 0, 0, 0); return d.getTime();
         })();
         if (dragMode === 'start') {
+          if (cur.getTime() < todayMs) return prev;
           if (cur.getTime() > endMs) return prev;
           if (cur.getTime() === startMs) return prev;
           return { ...prev, startDate: cur };
         }
         if (cur.getTime() < startMs) return prev;
+        if (cur.getTime() < todayMs) return prev;
         if (cur.getTime() === endMs) return prev;
         return { ...prev, endDate: cur };
       });
