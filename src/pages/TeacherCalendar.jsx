@@ -79,6 +79,10 @@ const TYPE_HEADER_LABEL = {
   completed: 'Completed',
 };
 
+// "Show More Months" caps total months at 36 and adds 2 per click.
+const MAX_TOTAL_MONTHS = 36;
+const MONTHS_STEP = 2;
+
 // Lightweight popover that lists every event in a chip's bundle so the user
 // can pick which exact card to open. Shown when the chip groups 2+ events
 // of the same type, OR when Booked + Waiting share a day in mixed mode.
@@ -163,10 +167,14 @@ export default function TeacherCalendar() {
   // Active legend filter — only these 3 types are toggleable from the sidebar.
   // All other types are always visible regardless of this list.
   const [activeFilters, setActiveFilters] = useState(['not-reviewed', 'completed', 'cancelled']);
+  // Number of additional months loaded beyond the navigated `currentDate`.
+  // Click "Show More Months" to load 2 more (capped at MAX_TOTAL_MONTHS - 1).
+  const [extraMonthsLoaded, setExtraMonthsLoaded] = useState(0);
 
-  const openAddModalForDay = (dayNumber) => {
-    const y = currentDate.getFullYear();
-    const m = String(currentDate.getMonth() + 1).padStart(2, '0');
+  const openAddModalForDay = (dayNumber, monthDate) => {
+    const ref = monthDate || currentDate;
+    const y = ref.getFullYear();
+    const m = String(ref.getMonth() + 1).padStart(2, '0');
     const d = String(dayNumber).padStart(2, '0');
     setSelectedAddDate(`${y}-${m}-${d}`);
     setShowAddModal(true);
@@ -204,6 +212,11 @@ export default function TeacherCalendar() {
     const newDate = new Date(currentDate);
     newDate.setMonth(currentDate.getMonth() + (direction === 'next' ? 1 : -1));
     setCurrentDate(newDate);
+    setExtraMonthsLoaded(0);
+  };
+
+  const handleShowMoreMonths = () => {
+    setExtraMonthsLoaded((prev) => Math.min(prev + MONTHS_STEP, MAX_TOTAL_MONTHS - 1));
   };
 
   const monthYear = currentDate.toLocaleDateString('en-US', {
@@ -213,16 +226,17 @@ export default function TeacherCalendar() {
 
   const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   
-  // Generate calendar days
-  const generateCalendarDays = () => {
-    const startDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-    const endDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+  // Generate calendar days for the given monthDate (defaults to currentDate).
+  const generateCalendarDays = (monthDate) => {
+    const ref = monthDate || currentDate;
+    const startDate = new Date(ref.getFullYear(), ref.getMonth(), 1);
+    const endDate = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
     const startDay = startDate.getDay();
     const daysInMonth = endDate.getDate();
     const days = [];
 
     // Previous month days
-    const prevMonthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth(), 0);
+    const prevMonthEnd = new Date(ref.getFullYear(), ref.getMonth(), 0);
     for (let i = startDay - 1; i >= 0; i--) {
       days.push({
         date: prevMonthEnd.getDate() - i,
@@ -234,9 +248,9 @@ export default function TeacherCalendar() {
     // Current month days
     const today = new Date();
     for (let day = 1; day <= daysInMonth; day++) {
-      const isToday = today.getDate() === day && 
-                     today.getMonth() === currentDate.getMonth() && 
-                     today.getFullYear() === currentDate.getFullYear();
+      const isToday = today.getDate() === day &&
+                     today.getMonth() === ref.getMonth() &&
+                     today.getFullYear() === ref.getFullYear();
       days.push({
         date: day,
         isCurrentMonth: true,
@@ -270,11 +284,14 @@ export default function TeacherCalendar() {
 
   // Open the right modal for a single picked event. The popover picker calls
   // this when a row is selected; chips with only one event call it directly.
-  const openEventModal = (event) => {
-    const eventDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), event.date);
+  // `monthDate` lets each rendered month pin events to its own year/month
+  // (defaults to the navigated currentDate for the first/primary grid).
+  const openEventModal = (event, monthDate) => {
+    const ref = monthDate || currentDate;
+    const eventDate = new Date(ref.getFullYear(), ref.getMonth(), event.date);
     const allDatesForCategory = sampleEvents
       .filter((e) => e.type === event.type && e.role === event.role)
-      .map((e) => new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString());
+      .map((e) => new Date(ref.getFullYear(), ref.getMonth(), e.date).toISOString());
     const uniqueDates = [...new Set(allDatesForCategory)];
 
     setSelectedEvent({
@@ -313,7 +330,7 @@ export default function TeacherCalendar() {
   //   if its type has more than 1 event, the chip shows a "+N" badge (N =
   //   typeCount - 1) and clicking opens a picker that contains ONLY that
   //   type's events; otherwise the chip opens the modal directly.
-  const renderEventGroup = (groupTypes, eventsByType) => {
+  const renderEventGroup = (groupTypes, eventsByType, monthDate) => {
     const activeTypes = groupTypes.filter((t) => (eventsByType[t] || []).length > 0);
     if (activeTypes.length === 0) return null;
 
@@ -380,7 +397,7 @@ export default function TeacherCalendar() {
                 <div
                   key={type}
                   title={tooltip}
-                  onClick={() => openEventModal(earliestEvent)}
+                  onClick={() => openEventModal(earliestEvent, monthDate)}
                   className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
                 >
                   {chipInner}
@@ -402,7 +419,7 @@ export default function TeacherCalendar() {
                 chip={chipNode}
                 headerLabel={headerLabel}
                 items={typeEvents}
-                onSelect={openEventModal}
+                onSelect={(e) => openEventModal(e, monthDate)}
               />
             );
           })}
@@ -424,7 +441,7 @@ export default function TeacherCalendar() {
           <div
             key={e.id}
             title={eventTooltip(e)}
-            onClick={() => openEventModal(e)}
+            onClick={() => openEventModal(e, monthDate)}
             className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
           >
             {renderDot(singleType)}
@@ -443,14 +460,19 @@ export default function TeacherCalendar() {
             }
             headerLabel={headerLabel}
             items={sortedEvents.slice(visibleCount)}
-            onSelect={openEventModal}
+            onSelect={(e) => openEventModal(e, monthDate)}
           />
         )}
       </div>
     );
   };
 
-  const days = generateCalendarDays();
+  // Build the list of months to render (currentDate + extras up to 36 total).
+  const totalMonths = Math.min(1 + extraMonthsLoaded, MAX_TOTAL_MONTHS);
+  const monthsToRender = Array.from({ length: totalMonths }, (_, i) =>
+    new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1)
+  );
+  const canShowMoreMonths = totalMonths < MAX_TOTAL_MONTHS;
 
   if (loading) {
     return (
@@ -574,121 +596,144 @@ export default function TeacherCalendar() {
 
             {/* Calendar Grid */}
             <div className="p-6">
-              {/* Weekday Headers */}
-              <div className="grid grid-cols-7 gap-0 mb-4">
-                {weekdays.map(day => (
-                  <div key={day} className="p-3 text-center text-sm font-medium text-gray-700 bg-gray-50">
-                    {day}
-                  </div>
-                ))}
-              </div>
+              {monthsToRender.map((monthDate, monthIdx) => {
+                const isFirstMonth = monthIdx === 0;
+                const monthLabel = monthDate.toLocaleDateString('en-US', {
+                  month: 'long',
+                  year: 'numeric'
+                });
+                const days = generateCalendarDays(monthDate);
 
-              {/* Calendar Days */}
-              <div className="grid grid-cols-7 gap-0 border">
-                {days.map((day, index) => {
-                  const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
-                  const dayEvents = events.filter(event =>
-                    event.date === day.date &&
-                    day.isCurrentMonth &&
-                    (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
-                  );
-                  const eventsByType = getEventsByTypeForDay(dayEvents);
-
-                  return (
-                    <div
-                      key={index}
-                      className={`
-                        min-h-[120px] border-r border-b p-2 relative group
-                        ${!day.isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''}
-                        ${day.isToday ? 'bg-blue-50' : ''}
-                      `}
-                    >
-                      {/* Date Number */}
-                      <div className={`
-                        text-sm font-medium mb-2
-                        ${day.isToday ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : ''}
-                      `}>
-                        {day.date}
-                      </div>
-
-                      {/* Add Event Button - Only visible on hover */}
-                      {day.isCurrentMonth && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          title="Add New Booking Or Availability"
-                          onClick={(e) => { e.stopPropagation(); openAddModalForDay(day.date); }}
-                          className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-400 hover:bg-gray-500 text-white rounded-full"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </Button>
-                      )}
-
-                      {/* Availability + Synced render as dot-only markers at the
-                          top-right of the cell (no time, no count). Tooltip and
-                          click behavior match the chips below: hover shows the
-                          role breakdown, click opens the picker (or modal if 1).
-                          Availability sits to the left of Synced. */}
-                      {(eventsByType.availability || eventsByType.synced) && (
-                        <div className="absolute top-2 right-8 flex items-center gap-1.5 z-10">
-                          {['availability', 'synced'].map((type) => {
-                            const typeEvents = eventsByType[type];
-                            if (!typeEvents) return null;
-                            const tooltip = buildEventTooltip(typeEvents, type);
-                            const dotColor = TYPE_DOT_COLOR[type];
-                            const headerLabel = TYPE_HEADER_LABEL[type];
-
-                            if (typeEvents.length === 1) {
-                              return (
-                                <button
-                                  key={type}
-                                  type="button"
-                                  title={tooltip}
-                                  onClick={() => openEventModal(typeEvents[0])}
-                                  className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
-                                />
-                              );
-                            }
-
-                            const dotButton = (
-                              <button
-                                type="button"
-                                title={tooltip}
-                                className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
-                              />
-                            );
-
-                            return (
-                              <EventPickerPopover
-                                key={type}
-                                chip={dotButton}
-                                headerLabel={headerLabel}
-                                items={typeEvents}
-                                onSelect={openEventModal}
-                              />
-                            );
-                          })}
+                return (
+                  <div key={monthIdx} className={isFirstMonth ? '' : 'mt-10 pt-6 border-t'}>
+                    {!isFirstMonth && (
+                      <h3 className="text-lg font-semibold text-gray-800 mb-4">{monthLabel}</h3>
+                    )}
+                    {/* Weekday Headers */}
+                    <div className="grid grid-cols-7 gap-0 mb-4">
+                      {weekdays.map(day => (
+                        <div key={day} className="p-3 text-center text-sm font-medium text-gray-700 bg-gray-50">
+                          {day}
                         </div>
-                      )}
-
-                      {/* FUTURE group: Booked + Waiting (single or mixed mode). */}
-                      {renderEventGroup(['booked', 'waiting'], eventsByType)}
-
-                      {/* PAST group: Cancellation Fees + Completed + Not Reviewed
-                          (single or mixed mode). Synced & Availability render
-                          as top-right dots above. */}
-                      {renderEventGroup(['cancelled', 'completed', 'not-reviewed'], eventsByType)}
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
 
-              {/* Show More Months Button */}
-              <div className="flex justify-center mt-6">
-                <Button variant="outline" className="text-green-600 border-green-600 hover:bg-green-50">
-                  Show More Months
-                </Button>
-              </div>
+                    {/* Calendar Days */}
+                    <div className="grid grid-cols-7 gap-0 border">
+                      {days.map((day, index) => {
+                        const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
+                        const dayEvents = events.filter(event =>
+                          event.date === day.date &&
+                          day.isCurrentMonth &&
+                          (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
+                        );
+                        const eventsByType = getEventsByTypeForDay(dayEvents);
+
+                        return (
+                          <div
+                            key={index}
+                            className={`
+                              min-h-[120px] border-r border-b p-2 relative group
+                              ${!day.isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''}
+                              ${day.isToday ? 'bg-blue-50' : ''}
+                            `}
+                          >
+                            {/* Date Number */}
+                            <div className={`
+                              text-sm font-medium mb-2
+                              ${day.isToday ? 'bg-blue-600 text-white rounded-full w-6 h-6 flex items-center justify-center' : ''}
+                            `}>
+                              {day.date}
+                            </div>
+
+                            {/* Add Event Button - Only visible on hover */}
+                            {day.isCurrentMonth && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                title="Add New Booking Or Availability"
+                                onClick={(e) => { e.stopPropagation(); openAddModalForDay(day.date, monthDate); }}
+                                className="absolute top-1 right-1 w-6 h-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity bg-gray-400 hover:bg-gray-500 text-white rounded-full"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </Button>
+                            )}
+
+                            {/* Availability + Synced render as dot-only markers at the
+                                top-right of the cell (no time, no count). Tooltip and
+                                click behavior match the chips below: hover shows the
+                                role breakdown, click opens the picker (or modal if 1).
+                                Availability sits to the left of Synced. */}
+                            {(eventsByType.availability || eventsByType.synced) && (
+                              <div className="absolute top-2 right-8 flex items-center gap-1.5 z-10">
+                                {['availability', 'synced'].map((type) => {
+                                  const typeEvents = eventsByType[type];
+                                  if (!typeEvents) return null;
+                                  const tooltip = buildEventTooltip(typeEvents, type);
+                                  const dotColor = TYPE_DOT_COLOR[type];
+                                  const headerLabel = TYPE_HEADER_LABEL[type];
+
+                                  if (typeEvents.length === 1) {
+                                    return (
+                                      <button
+                                        key={type}
+                                        type="button"
+                                        title={tooltip}
+                                        onClick={() => openEventModal(typeEvents[0], monthDate)}
+                                        className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
+                                      />
+                                    );
+                                  }
+
+                                  const dotButton = (
+                                    <button
+                                      type="button"
+                                      title={tooltip}
+                                      className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
+                                    />
+                                  );
+
+                                  return (
+                                    <EventPickerPopover
+                                      key={type}
+                                      chip={dotButton}
+                                      headerLabel={headerLabel}
+                                      items={typeEvents}
+                                      onSelect={(e) => openEventModal(e, monthDate)}
+                                    />
+                                  );
+                                })}
+                              </div>
+                            )}
+
+                            {/* FUTURE group: Booked + Waiting (single or mixed mode). */}
+                            {renderEventGroup(['booked', 'waiting'], eventsByType, monthDate)}
+
+                            {/* PAST group: Cancellation Fees + Completed + Not Reviewed
+                                (single or mixed mode). Synced & Availability render
+                                as top-right dots above. */}
+                            {renderEventGroup(['cancelled', 'completed', 'not-reviewed'], eventsByType, monthDate)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Show More Months Button — appears under the last loaded month
+                  and adds 2 more per click, capped at MAX_TOTAL_MONTHS (36). */}
+              {canShowMoreMonths && (
+                <div className="flex justify-center mt-6">
+                  <Button
+                    variant="outline"
+                    onClick={handleShowMoreMonths}
+                    className="text-green-600 border-green-600 hover:bg-green-50"
+                  >
+                    Show More Months
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
         </div>
