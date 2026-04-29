@@ -83,10 +83,14 @@ const TimeAvailabilityRow = ({ onRemove }) =>
     </div>;
 
 
+// Only these legend categories are filterable via a checkbox; the rest are
+// always visible on the calendar (no checkbox shown next to them).
+const CHECKABLE_LEGEND_KEYS = ['not-reviewed', 'completed', 'cancelled'];
+
 // Function to get initial active keys based on defaultChecked property
 const getInitialActiveLegendKeys = () => {
   return MASTER_CALENDAR_CATEGORIES.
-  filter((category) => category.defaultChecked).
+  filter((category) => CHECKABLE_LEGEND_KEYS.includes(category.key) && category.defaultChecked).
   map((category) => category.key);
 };
 
@@ -124,23 +128,26 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange })
           isHeader: true
         });
 
-        // Add all categories - show all legend items
+        // Add all categories - show all legend items. Only the 3 filterable
+        // categories carry the `checked` prop (which is what triggers the
+        // checkbox to render in LegendItem); the rest pass `checked: undefined`.
         MASTER_CALENDAR_CATEGORIES.forEach((category) => {
+          const isCheckable = CHECKABLE_LEGEND_KEYS.includes(category.key);
           generatedItems.push({
             key: category.key,
             text: category.text,
             color: category.color,
             icon: category.icon,
-            checked: category.defaultChecked, // This 'checked' property is for LegendItem's internal logic, not the controlled state directly
+            checked: isCheckable ? category.defaultChecked : undefined,
             isHeader: false
           });
         });
 
         setLegendItems(generatedItems);
 
-        // Set the initial active keys based on the categories that have defaultChecked
+        // Set the initial active keys: only the filterable categories that are defaultChecked.
         const initialActiveKeysForLegend = MASTER_CALENDAR_CATEGORIES.
-        filter((category) => category.defaultChecked).
+        filter((category) => CHECKABLE_LEGEND_KEYS.includes(category.key) && category.defaultChecked).
         map((category) => category.key);
         setActiveLegendKeys(initialActiveKeysForLegend);
 
@@ -155,6 +162,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange })
         { key: 'availability', color: 'bg-green-500', text: 'Availability', isHeader: false },
         { key: 'completed', icon: <DollarSign className="w-4 h-4" />, text: 'Completed', checked: true, isHeader: false },
         { key: 'cancelled', icon: <X className="w-4 h-4 rounded-full bg-gray-700 text-white p-0.5" />, text: 'Cancelled', checked: true, isHeader: false },
+        // (booked/availability/synced/seq-*/waiting intentionally lack a `checked` field — no checkbox rendered)
         { key: 'synced', color: 'bg-blue-500', text: 'Synced Calendar Events', isHeader: false },
         { key: 'seq-saved', color: 'bg-orange-400', text: 'Sequence Saved', isHeader: false },
         { key: 'seq-edited', color: 'bg-green-400', text: 'Sequence Edited', isHeader: false },

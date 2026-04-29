@@ -43,6 +43,7 @@ export default function TeacherCalendarWeekly() {
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showSyncedModal, setShowSyncedModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [activeFilters, setActiveFilters] = useState(['not-reviewed', 'completed', 'cancelled']);
 
   useEffect(() => {
     const fetchUserAndEvents = async () => {
@@ -126,7 +127,7 @@ export default function TeacherCalendarWeekly() {
       <div className="container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
 
-          <CalendarSidebar view={view} setView={setView} />
+          <CalendarSidebar view={view} setView={setView} onLegendFilterChange={setActiveFilters} />
 
           {/* Main Calendar Area */}
           <div className="flex-1 bg-white rounded-lg shadow-sm">
@@ -198,6 +199,7 @@ export default function TeacherCalendarWeekly() {
                 currentDate={currentDate}
                 onEventClick={handleEventClick}
                 onEmptyClick={() => setShowAddModal(true)}
+                activeFilters={activeFilters}
               />
             </div>
           </div>

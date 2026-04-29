@@ -49,7 +49,9 @@ const EventCard = ({ event, onEventClick }) => {
     );
 };
 
-export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick }) {
+const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
+
+export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick, activeFilters = ['not-reviewed', 'completed', 'cancelled'] }) {
     const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
     const getWeekDays = (date) => {
@@ -74,7 +76,10 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
             day.getFullYear() === currentDate.getFullYear();
         if (!sameMonth) return [];
 
-        const dayEvents = sampleEvents.filter((e) => e.date === day.getDate());
+        const dayEvents = sampleEvents.filter((e) =>
+            e.date === day.getDate() &&
+            (!FILTERABLE_TYPES.includes(e.type) || activeFilters.includes(e.type))
+        );
 
         // Build the same `availableDatesForCategory` that monthly produces for SyncedEventsModal etc.
         const allDatesByCategory = {};

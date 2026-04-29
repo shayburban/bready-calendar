@@ -160,6 +160,9 @@ export default function TeacherCalendar() {
   const [showSyncedModal, setShowSyncedModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAddDate, setSelectedAddDate] = useState('');
+  // Active legend filter — only these 3 types are toggleable from the sidebar.
+  // All other types are always visible regardless of this list.
+  const [activeFilters, setActiveFilters] = useState(['not-reviewed', 'completed', 'cancelled']);
 
   const openAddModalForDay = (dayNumber) => {
     const y = currentDate.getFullYear();
@@ -485,7 +488,7 @@ export default function TeacherCalendar() {
       <div className="container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           
-          <CalendarSidebar view={view} setView={setView} />
+          <CalendarSidebar view={view} setView={setView} onLegendFilterChange={setActiveFilters} />
 
           {/* Main Calendar Area */}
           <div className="flex-1 bg-white rounded-lg shadow-sm">
@@ -581,7 +584,12 @@ export default function TeacherCalendar() {
               {/* Calendar Days */}
               <div className="grid grid-cols-7 gap-0 border">
                 {days.map((day, index) => {
-                  const dayEvents = events.filter(event => event.date === day.date && day.isCurrentMonth);
+                  const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
+                  const dayEvents = events.filter(event =>
+                    event.date === day.date &&
+                    day.isCurrentMonth &&
+                    (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
+                  );
                   const eventsByType = getEventsByTypeForDay(dayEvents);
 
                   return (
