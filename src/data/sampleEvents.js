@@ -42,6 +42,24 @@ export const sampleEvents = [
   { id: 16, date: 25, time: '10:00 - 11:00', type: 'waiting', role: 'T', reschedule: true, color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule (T)' },
   { id: 17, date: 25, time: '14:00 - 15:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - reschedule (S)' },
   { id: 18, date: 25, time: '17:00 - 18:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00', '17:00 - 19:00'] },
+
+  // --- Mon, April 27 (mixed FUTURE: Booked + Waiting + Availability + Synced) ---
+  { id: 19, date: 27, time: '08:00 - 09:00', type: 'availability', role: 'T', color: 'bg-green-500', count: 2, description: 'Available for booking (T)' },
+  { id: 20, date: 27, time: '09:00 - 10:00', type: 'availability', role: 'S', color: 'bg-green-500', description: 'Other availability (S)' },
+  { id: 21, date: 27, time: '10:00 - 11:00', type: 'booked', role: 'T', color: 'bg-orange-500', student: 'Student N.', description: 'Confirmed lesson (T)' },
+  { id: 22, date: 27, time: '12:00 - 13:00', type: 'booked', role: 'S', color: 'bg-orange-500', teacher: 'Teacher N.', description: 'Confirmed lesson (S)' },
+  { id: 23, date: 27, time: '14:00 - 15:00', type: 'waiting', role: 'T', color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation (T)' },
+  { id: 24, date: 27, time: '16:00 - 17:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation (S)' },
+  { id: 25, date: 27, time: '18:00 - 19:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event' },
+
+  // --- Wed, April 8 (mixed PAST: Completed + Cancellation Fees + Not Reviewed + Synced) ---
+  { id: 26, date: 8, time: '09:00 - 10:00', type: 'completed', role: 'T', color: 'bg-gray-800', student: 'Student N.', description: 'Completed (T)' },
+  { id: 27, date: 8, time: '10:00 - 11:00', type: 'completed', role: 'S', color: 'bg-gray-800', teacher: 'Teacher N.', description: 'Completed (S)' },
+  { id: 28, date: 8, time: '12:00 - 13:00', type: 'cancelled', role: 'T', color: 'bg-gray-600', description: 'Cancellation Fees (T)' },
+  { id: 29, date: 8, time: '13:00 - 14:00', type: 'cancelled', role: 'S', color: 'bg-gray-600', description: 'Cancellation Fees (S)' },
+  { id: 30, date: 8, time: '15:00 - 16:00', type: 'not-reviewed', role: 'T', color: 'bg-red-500', student: 'Student N.', description: 'Not Reviewed (T)' },
+  { id: 31, date: 8, time: '16:00 - 17:00', type: 'not-reviewed', role: 'S', color: 'bg-red-500', teacher: 'Teacher N.', description: 'Not Reviewed (S)' },
+  { id: 32, date: 8, time: '18:00 - 19:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event' },
 ];
 
 // Maps the monthly solid bg-* color to the weekly's left-border + tinted bg style.

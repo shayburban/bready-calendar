@@ -108,7 +108,7 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect }) {
                 {e.role && (
                   <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
                 )}
-                <span className="text-gray-700 flex-shrink-0">From {(e.time || '').split(' - ')[0]}</span>
+                <span className="text-gray-700 flex-shrink-0">{e.time}</span>
                 {e.reschedule && (
                   <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
                     {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
@@ -287,6 +287,148 @@ export default function TeacherCalendar() {
     } else {
       setShowEventModal(true);
     }
+  };
+
+  // Renders a "row group" inside a day cell for related event types that share
+  // a mixed-mode layout. Used twice:
+  //   - future group: ['booked', 'waiting']
+  //   - past group:   ['cancelled', 'completed', 'not-reviewed']
+  // Single-category mode (only one type from the group present):
+  //   each event = 1 row showing the full time range. If N <= 3, show all
+  //   N rows. If N >= 4, show 2 rows + "+X more" picker (X = N - 2). The
+  //   picker lists only the hidden events.
+  // Mixed mode (2+ types from the group present):
+  //   max 2 rows total, one per type (the 2 types whose earliest event is
+  //   earliest overall), labeled "From <start>". If combined total > visible,
+  //   both rows show a shared "+X" badge and route to a shared picker over
+  //   ALL events in the group.
+  const renderEventGroup = (groupTypes, eventsByType) => {
+    const activeTypes = groupTypes.filter((t) => (eventsByType[t] || []).length > 0);
+    if (activeTypes.length === 0) return null;
+
+    const sortByStart = (arr) =>
+      [...arr].sort((a, b) =>
+        ((a.time || '').split(' - ')[0]).localeCompare(
+          (b.time || '').split(' - ')[0]
+        )
+      );
+    const startTime = (e) => (e.time || '').split(' - ')[0];
+    const eventTooltip = (e) => {
+      const labels = TYPE_ROLE_LABEL[e.type] || {};
+      const label = labels[e.role || '-'] || e.type;
+      const suffix = e.role && e.role !== '-' ? ` (${e.role})` : '';
+      return `${label}${suffix}`;
+    };
+    const renderDot = (type) => {
+      const dotColor = TYPE_DOT_COLOR[type] || 'bg-gray-400';
+      if (type === 'completed') {
+        return (
+          <span className="text-gray-800 font-bold leading-none text-[12px] w-3 flex justify-center flex-shrink-0">$</span>
+        );
+      }
+      return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />;
+    };
+
+    // ----- MIXED MODE -----
+    if (activeTypes.length > 1) {
+      const typesByEarliest = [...activeTypes].sort((a, b) =>
+        startTime(sortByStart(eventsByType[a])[0]).localeCompare(
+          startTime(sortByStart(eventsByType[b])[0])
+        )
+      );
+      const visibleTypes = typesByEarliest.slice(0, 2);
+      const allItems = activeTypes.flatMap((t) => eventsByType[t]);
+      const hiddenCount = allItems.length - visibleTypes.length;
+
+      return (
+        <div className="space-y-1">
+          {visibleTypes.map((type) => {
+            const earliestEvent = sortByStart(eventsByType[type])[0];
+            const tooltip = eventTooltip(earliestEvent);
+            const badge = hiddenCount > 0 ? `+${hiddenCount}` : null;
+            const chipInner = (
+              <>
+                {renderDot(type)}
+                <span className="truncate flex-1 min-w-0">From {startTime(earliestEvent)}</span>
+                {badge && (
+                  <span className="bg-white border border-gray-300 text-gray-600 rounded-full text-[9px] leading-none px-1 min-w-[1rem] h-4 flex items-center justify-center flex-shrink-0">
+                    {badge}
+                  </span>
+                )}
+              </>
+            );
+            if (hiddenCount === 0) {
+              return (
+                <div
+                  key={type}
+                  title={tooltip}
+                  onClick={() => openEventModal(earliestEvent)}
+                  className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  {chipInner}
+                </div>
+              );
+            }
+            const chipNode = (
+              <div
+                title={tooltip}
+                className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+              >
+                {chipInner}
+              </div>
+            );
+            return (
+              <EventPickerPopover
+                key={type}
+                chip={chipNode}
+                header="Select event"
+                items={allItems}
+                onSelect={openEventModal}
+              />
+            );
+          })}
+        </div>
+      );
+    }
+
+    // ----- SINGLE CATEGORY -----
+    const singleType = activeTypes[0];
+    const sortedEvents = sortByStart(eventsByType[singleType]);
+    const N = sortedEvents.length;
+    const visibleCount = N <= 3 ? N : 2;
+    const hidden = N <= 3 ? 0 : N - 2;
+    const headerLabel = TYPE_HEADER_LABEL[singleType] || singleType;
+
+    return (
+      <div className="space-y-1">
+        {sortedEvents.slice(0, visibleCount).map((e) => (
+          <div
+            key={e.id}
+            title={eventTooltip(e)}
+            onClick={() => openEventModal(e)}
+            className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+          >
+            {renderDot(singleType)}
+            <span className="truncate flex-1 min-w-0">{e.time}</span>
+          </div>
+        ))}
+        {hidden > 0 && (
+          <EventPickerPopover
+            chip={
+              <div
+                title={`+${hidden} more ${headerLabel} event${hidden > 1 ? 's' : ''}`}
+                className="flex items-center justify-center bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
+              >
+                +{hidden} more
+              </div>
+            }
+            headerLabel={headerLabel}
+            items={sortedEvents.slice(visibleCount)}
+            onSelect={openEventModal}
+          />
+        )}
+      </div>
+    );
   };
 
   const days = generateCalendarDays();
@@ -497,7 +639,6 @@ export default function TeacherCalendar() {
                                 key={type}
                                 chip={dotButton}
                                 headerLabel={headerLabel}
-                                dotColor={dotColor}
                                 items={typeEvents}
                                 onSelect={openEventModal}
                               />
@@ -506,210 +647,13 @@ export default function TeacherCalendar() {
                         </div>
                       )}
 
-                      {/* Booked + Waiting block. Two modes:
-                          - Single category (only booked OR only waiting): each
-                            event gets its own row (full time range), max 2
-                            visible rows. If N > 2, a third "+X more" row opens
-                            a picker listing every event of that type.
-                          - Mixed mode (both types present): exactly 2 rows —
-                            earliest booked + earliest waiting — each labeled
-                            "From <its start>". If combined total > 2, both
-                            rows get a shared "+X" overflow badge and route to
-                            a single shared picker listing every booked +
-                            waiting event for the day. */}
-                      {(() => {
-                        const bookedEvents = eventsByType.booked || [];
-                        const waitingEvents = eventsByType.waiting || [];
-                        const hasBooked = bookedEvents.length > 0;
-                        const hasWaiting = waitingEvents.length > 0;
-                        if (!hasBooked && !hasWaiting) return null;
+                      {/* FUTURE group: Booked + Waiting (single or mixed mode). */}
+                      {renderEventGroup(['booked', 'waiting'], eventsByType)}
 
-                        const isMixedMode = hasBooked && hasWaiting;
-                        const sortByStart = (arr) =>
-                          [...arr].sort((a, b) =>
-                            ((a.time || '').split(' - ')[0]).localeCompare(
-                              (b.time || '').split(' - ')[0]
-                            )
-                          );
-                        const startTime = (e) => (e.time || '').split(' - ')[0];
-                        const eventTooltip = (e) => {
-                          const labels = TYPE_ROLE_LABEL[e.type] || {};
-                          const label = labels[e.role || '-'] || e.type;
-                          const suffix = e.role && e.role !== '-' ? ` (${e.role})` : '';
-                          return `${label}${suffix}`;
-                        };
-
-                        // ----- MIXED MODE -----
-                        if (isMixedMode) {
-                          const mixedItems = [...bookedEvents, ...waitingEvents];
-                          const mixedHidden = mixedItems.length > 2 ? mixedItems.length - 2 : 0;
-                          return (
-                            <div className="space-y-1">
-                              {['booked', 'waiting'].map((type) => {
-                                const earliestEvent = sortByStart(eventsByType[type])[0];
-                                const dotColor = TYPE_DOT_COLOR[type];
-                                const tooltip = eventTooltip(earliestEvent);
-                                const badge = mixedHidden > 0 ? `+${mixedHidden}` : null;
-                                const chipInner = (
-                                  <>
-                                    <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-                                    <span className="truncate flex-1 min-w-0">From {startTime(earliestEvent)}</span>
-                                    {badge && (
-                                      <span className="bg-white border border-gray-300 text-gray-600 rounded-full text-[9px] leading-none px-1 min-w-[1rem] h-4 flex items-center justify-center flex-shrink-0">
-                                        {badge}
-                                      </span>
-                                    )}
-                                  </>
-                                );
-                                if (mixedHidden === 0) {
-                                  return (
-                                    <div
-                                      key={type}
-                                      title={tooltip}
-                                      onClick={() => openEventModal(earliestEvent)}
-                                      className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                                    >
-                                      {chipInner}
-                                    </div>
-                                  );
-                                }
-                                const chipNode = (
-                                  <div
-                                    title={tooltip}
-                                    className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                                  >
-                                    {chipInner}
-                                  </div>
-                                );
-                                return (
-                                  <EventPickerPopover
-                                    key={type}
-                                    chip={chipNode}
-                                    header="Select event"
-                                    items={mixedItems}
-                                    onSelect={openEventModal}
-                                  />
-                                );
-                              })}
-                            </div>
-                          );
-                        }
-
-                        // ----- SINGLE CATEGORY (booked-only OR waiting-only) -----
-                        const singleType = hasBooked ? 'booked' : 'waiting';
-                        const sortedEvents = sortByStart(eventsByType[singleType]);
-                        const N = sortedEvents.length;
-                        const visibleCount = N > 2 ? 2 : N;
-                        const hidden = N > 2 ? N - 2 : 0;
-                        const dotColor = TYPE_DOT_COLOR[singleType];
-                        const headerLabel = TYPE_HEADER_LABEL[singleType] || singleType;
-
-                        return (
-                          <div className="space-y-1">
-                            {sortedEvents.slice(0, visibleCount).map((e) => (
-                              <div
-                                key={e.id}
-                                title={eventTooltip(e)}
-                                onClick={() => openEventModal(e)}
-                                className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                              >
-                                <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-                                <span className="truncate flex-1 min-w-0">{e.time}</span>
-                              </div>
-                            ))}
-                            {hidden > 0 && (
-                              <EventPickerPopover
-                                chip={
-                                  <div
-                                    title={`+${hidden} more ${headerLabel} event${hidden > 1 ? 's' : ''}`}
-                                    className="flex items-center justify-center bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
-                                  >
-                                    +{hidden} more
-                                  </div>
-                                }
-                                headerLabel={headerLabel}
-                                items={sortedEvents}
-                                onSelect={openEventModal}
-                              />
-                            )}
-                          </div>
-                        );
-                      })()}
-
-                      {/* Other event types (cancelled, completed, not-reviewed):
-                          one chip per type, dot + time + count badge. Hover
-                          shows the role breakdown. Multi-event chips open the
-                          picker; single-event chips open the modal directly.
-                          Booked/waiting handled by the block above. */}
-                      <div className="space-y-1">
-                        {Object.entries(eventsByType)
-                          .filter(([type]) => {
-                            if (type === 'availability' || type === 'synced') return false;
-                            if (type === 'booked' || type === 'waiting') return false;
-                            return true;
-                          })
-                          .map(([type, typeEvents]) => {
-                          const firstEvent = typeEvents[0];
-                          const total = typeEvents.length;
-                          const tooltip = buildEventTooltip(typeEvents, type);
-                          const isCompleted = type === 'completed';
-                          const dotColor = TYPE_DOT_COLOR[type] || 'bg-gray-400';
-                          const headerLabel = TYPE_HEADER_LABEL[type] || type;
-                          let badge = null;
-                          if (total > 1) badge = `+${total}`;
-                          else if (firstEvent.count && firstEvent.count > 1) badge = `+${firstEvent.count}`;
-
-                          const chipInner = (
-                            <>
-                              {isCompleted ? (
-                                <span className="text-gray-800 font-bold leading-none text-[12px] w-3 flex justify-center">$</span>
-                              ) : (
-                                <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />
-                              )}
-                              <span className="truncate flex-1 min-w-0">{firstEvent.time}</span>
-                              {badge && (
-                                <span className="bg-white border border-gray-300 text-gray-600 rounded-full text-[9px] leading-none px-1 min-w-[1rem] h-4 flex items-center justify-center flex-shrink-0">
-                                  {badge}
-                                </span>
-                              )}
-                            </>
-                          );
-
-                          // Single event: chip is the trigger and opens the modal directly.
-                          if (total === 1) {
-                            return (
-                              <div
-                                key={type}
-                                title={tooltip}
-                                onClick={() => openEventModal(firstEvent)}
-                                className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                              >
-                                {chipInner}
-                              </div>
-                            );
-                          }
-
-                          // Multiple events: chip opens the popover picker.
-                          const chipNode = (
-                            <div
-                              title={tooltip}
-                              className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                            >
-                              {chipInner}
-                            </div>
-                          );
-                          return (
-                            <EventPickerPopover
-                              key={type}
-                              chip={chipNode}
-                              headerLabel={headerLabel}
-                              dotColor={dotColor}
-                              items={typeEvents}
-                              onSelect={openEventModal}
-                            />
-                          );
-                        })}
-                      </div>
+                      {/* PAST group: Cancellation Fees + Completed + Not Reviewed
+                          (single or mixed mode). Synced & Availability render
+                          as top-right dots above. */}
+                      {renderEventGroup(['cancelled', 'completed', 'not-reviewed'], eventsByType)}
                     </div>
                   );
                 })}
