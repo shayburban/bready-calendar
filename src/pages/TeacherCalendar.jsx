@@ -89,7 +89,7 @@ const MONTHS_STEP = 2;
 // Each row's dot is colored from the event's own type so mixed pickers stay
 // visually differentiated. Pass `header` to override the default
 // "Select <headerLabel> event" template (used by the mixed picker).
-function EventPickerPopover({ chip, headerLabel, header, items, onSelect }) {
+function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTypeLabel = false }) {
   const [open, setOpen] = useState(false);
   // Always render rows in start-time order (earliest first), regardless of
   // how the caller assembled `items`.
@@ -120,6 +120,9 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect }) {
                   <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
                 )}
                 <span className="text-gray-700 flex-shrink-0">{e.time}</span>
+                {showTypeLabel && (
+                  <span className="text-gray-500 truncate ml-1">{TYPE_HEADER_LABEL[e.type] || e.type}</span>
+                )}
                 {e.reschedule && (
                   <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
                     {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
@@ -493,6 +496,75 @@ export default function TeacherCalendar() {
             onSelect={(e) => openEventModal(e, monthDate)}
           />
         )}
+      </div>
+    );
+  };
+
+  // Unified day-event renderer: 1-3 events show normally; 4+ show first 2 +
+  // overflow row with "+N more" + colored dots, and a popover listing every
+  // hidden event (chronological) on click/tap.
+  const renderUnifiedDayEvents = (allEvents, monthDate) => {
+    if (!allEvents || allEvents.length === 0) return null;
+    const startOf = (e) => (e.time || '').split(' - ')[0];
+    const sorted = [...allEvents].sort((a, b) => startOf(a).localeCompare(startOf(b)));
+    const eventTooltip = (e) => {
+      const labels = TYPE_ROLE_LABEL[e.type] || {};
+      const label = labels[e.role || '-'] || TYPE_HEADER_LABEL[e.type] || e.type;
+      const suffix = e.role && e.role !== '-' ? ` (${e.role})` : '';
+      return `${label}${suffix}`;
+    };
+    const renderDot = (type) => {
+      const dotColor = TYPE_DOT_COLOR[type] || 'bg-gray-400';
+      if (type === 'completed') {
+        return (
+          <span className="text-gray-800 font-bold leading-none text-[12px] w-3 flex justify-center flex-shrink-0">$</span>
+        );
+      }
+      return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />;
+    };
+    const renderRow = (e) => (
+      <div
+        key={e.id}
+        title={eventTooltip(e)}
+        onClick={() => openEventModal(e, monthDate)}
+        className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+      >
+        {renderDot(e.type)}
+        <span className="truncate flex-1 min-w-0">{e.time}</span>
+      </div>
+    );
+
+    if (sorted.length <= 3) {
+      return <div className="space-y-1">{sorted.map(renderRow)}</div>;
+    }
+
+    const visible = sorted.slice(0, 2);
+    const hidden = sorted.slice(2);
+    return (
+      <div className="space-y-1">
+        {visible.map(renderRow)}
+        <EventPickerPopover
+          chip={
+            <div
+              title={`${hidden.length} more event${hidden.length === 1 ? '' : 's'}`}
+              className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
+            >
+              <span className="flex-shrink-0">+{hidden.length} more</span>
+              <span className="flex items-center gap-0.5 ml-auto flex-shrink-0">
+                {hidden.map((e, i) => (
+                  <span
+                    key={`${e.id}-${i}`}
+                    className={`inline-block w-1.5 h-1.5 rounded-full ${TYPE_DOT_COLOR[e.type] || 'bg-gray-400'}`}
+                  />
+                ))}
+              </span>
+            </div>
+          }
+          header="Hidden events"
+          items={hidden}
+          showTypeLabel
+          onSelect={(e) => openEventModal(e, monthDate)}
+        />
       </div>
     );
   };
@@ -901,60 +973,7 @@ export default function TeacherCalendar() {
                               </Button>
                             )}
 
-                            {/* Availability + Synced render as dot-only markers at the
-                                top-right of the cell (no time, no count). Tooltip and
-                                click behavior match the chips below: hover shows the
-                                role breakdown, click opens the picker (or modal if 1).
-                                Availability sits to the left of Synced. */}
-                            {(eventsByType.availability || eventsByType.synced) && (
-                              <div className="absolute top-2 right-8 flex items-center gap-1.5 z-10">
-                                {['availability', 'synced'].map((type) => {
-                                  const typeEvents = eventsByType[type];
-                                  if (!typeEvents) return null;
-                                  const tooltip = buildEventTooltip(typeEvents, type);
-                                  const dotColor = TYPE_DOT_COLOR[type];
-                                  const headerLabel = TYPE_HEADER_LABEL[type];
-
-                                  if (typeEvents.length === 1) {
-                                    return (
-                                      <button
-                                        key={type}
-                                        type="button"
-                                        title={tooltip}
-                                        onClick={() => openEventModal(typeEvents[0], monthDate)}
-                                        className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
-                                      />
-                                    );
-                                  }
-
-                                  const dotButton = (
-                                    <button
-                                      type="button"
-                                      title={tooltip}
-                                      className={`w-3 h-3 rounded-full ${dotColor} hover:ring-2 hover:ring-gray-300 transition cursor-pointer`}
-                                    />
-                                  );
-
-                                  return (
-                                    <EventPickerPopover
-                                      key={type}
-                                      chip={dotButton}
-                                      headerLabel={headerLabel}
-                                      items={typeEvents}
-                                      onSelect={(e) => openEventModal(e, monthDate)}
-                                    />
-                                  );
-                                })}
-                              </div>
-                            )}
-
-                            {/* FUTURE group: Booked + Waiting (single or mixed mode). */}
-                            {renderEventGroup(['booked', 'waiting'], eventsByType, monthDate, cellDate)}
-
-                            {/* PAST group: Cancellation Fees + Completed + Not Reviewed
-                                (single or mixed mode). Synced & Availability render
-                                as top-right dots above. */}
-                            {renderEventGroup(['cancelled', 'completed', 'not-reviewed'], eventsByType, monthDate, cellDate)}
+                            {renderUnifiedDayEvents([...dayEvents, ...savedAvailEvents], monthDate)}
                           </div>
                         );
                       })}
