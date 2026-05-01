@@ -64,38 +64,92 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
     </Button>;
 
 
-// 15-minute increments via step="900" (seconds). End time auto-snaps to start
-// when the user picks an earlier value, and gets a red border while invalid.
-// Custom Clock icon overlay was removed to dedupe with the native time input
-// icon (browsers render their own clock indicator on time inputs).
+// HH dropdown shows 00–23. MM dropdown is restricted to {00,15,30,45} so the
+// user can only ever pick a 15-minute boundary (no free-text typing).
+const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTE_OPTIONS = ['00', '15', '30', '45'];
+
+// HH:MM picker built from two Selects. When `minTime` is set, only options
+// strictly later than `minTime` are rendered — used by End Time so the user
+// physically cannot pick a time at or before Start Time.
+const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
+  const [hour = '', minute = ''] = value ? value.split(':') : [];
+
+  const isAfter = (h, m) => {
+    if (!minTime) return true;
+    return `${h}:${m}` > minTime;
+  };
+
+  const hourOptions = HOUR_OPTIONS.filter((h) => MINUTE_OPTIONS.some((m) => isAfter(h, m)));
+  const minuteOptions = hour
+    ? MINUTE_OPTIONS.filter((m) => isAfter(hour, m))
+    : MINUTE_OPTIONS;
+
+  const handleHour = (newHour) => {
+    let newMinute = minute || '00';
+    if (!isAfter(newHour, newMinute)) {
+      newMinute = MINUTE_OPTIONS.find((m) => isAfter(newHour, m)) || newMinute;
+    }
+    onChange(`${newHour}:${newMinute}`);
+  };
+
+  const handleMinute = (newMinute) => {
+    const h = hour || '00';
+    onChange(`${h}:${newMinute}`);
+  };
+
+  return (
+    <div className={`flex items-center gap-1 min-w-0 ${invalid ? 'rounded ring-1 ring-red-500' : ''}`}>
+      <Select value={hour} onValueChange={handleHour} disabled={disabled}>
+        <SelectTrigger className="h-9 px-2 min-w-0 flex-1">
+          <SelectValue placeholder="HH" />
+        </SelectTrigger>
+        <SelectContent className="max-h-60">
+          {hourOptions.map((h) => (
+            <SelectItem key={h} value={h}>{h}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <span className="text-gray-500 text-sm flex-shrink-0">:</span>
+      <Select value={minute} onValueChange={handleMinute} disabled={disabled || !hour}>
+        <SelectTrigger className="h-9 px-2 min-w-0 flex-1">
+          <SelectValue placeholder="MM" />
+        </SelectTrigger>
+        <SelectContent>
+          {minuteOptions.map((m) => (
+            <SelectItem key={m} value={m}>{m}</SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+};
+
+// Start/End time row. End-time picker filters out any option <= start (strict
+// chronological validation). If the user changes Start to something at/after
+// the current End, End is cleared so they re-pick a valid value.
 const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
-  const isInvalid = !!(row.startTime && row.endTime && row.endTime < row.startTime);
+  const isInvalid = !!(row.startTime && row.endTime && row.endTime <= row.startTime);
   return (
     <div className="flex items-center gap-1 min-w-0">
       <div className="flex-1 min-w-0">
-        <Input
-          type="time"
-          step="900"
-          className="w-full"
+        <TimeSelect
           value={row.startTime}
-          onChange={(e) => onChange({ ...row, startTime: e.target.value })}
+          onChange={(newStart) => {
+            if (row.endTime && newStart >= row.endTime) {
+              onChange({ ...row, startTime: newStart, endTime: '' });
+            } else {
+              onChange({ ...row, startTime: newStart });
+            }
+          }}
         />
       </div>
       <div className="flex-1 min-w-0">
-        <Input
-          type="time"
-          step="900"
-          min={row.startTime || undefined}
-          className={`w-full ${isInvalid ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+        <TimeSelect
           value={row.endTime}
-          onChange={(e) => {
-            const next = e.target.value;
-            if (row.startTime && next && next < row.startTime) {
-              onChange({ ...row, endTime: row.startTime });
-            } else {
-              onChange({ ...row, endTime: next });
-            }
-          }}
+          onChange={(newEnd) => onChange({ ...row, endTime: newEnd })}
+          minTime={row.startTime}
+          invalid={isInvalid}
         />
       </div>
       <Button
@@ -340,7 +394,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
     // Only times where end >= start are usable. Invalid rows are skipped.
     const validTimes = timeAvailEnabled
       ? timeRanges.filter(
-          (t) => t.startTime && t.endTime && t.startTime <= t.endTime
+          (t) => t.startTime && t.endTime && t.startTime < t.endTime
         )
       : [];
 
@@ -552,7 +606,12 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                               onCheckedChange={(c) => setTimeAvailEnabled(c === true)}
                             />
                             <label htmlFor="time-avail" className="text-sm font-medium text-gray-700">Time Availability</label>
-                            <Info className="w-4 h-4 text-gray-400" />
+                            <span
+                              className="inline-flex"
+                              title="Set specific time ranges within your selected dates when you'll be available for bookings. Add multiple ranges per day (e.g., 09:00–12:00 and 14:00–18:00). Times use 15-minute increments only (00, 15, 30, 45) and End Time must be strictly after Start Time. Uncheck this box to leave the entire day open (00:00–23:59)."
+                            >
+                              <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                            </span>
                         </div>
                         {timeAvailEnabled && (
                         <div className="space-y-2">
