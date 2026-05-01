@@ -190,6 +190,11 @@ export default function TeacherCalendar() {
   // { date: 'YYYY-MM-DD', startTime: 'HH:MM', endTime: 'HH:MM' }.
   // Renders as green availability dots on the matching calendar day.
   const [savedAvailabilitySlots, setSavedAvailabilitySlots] = useState([]);
+  // Mirror of the sidebar's "No end date" checkbox. When true the blue
+  // availability overlay extends from primaryRange.startDate all the way
+  // through the last currently-visible month (including months loaded via
+  // Show More Months) instead of stopping at primaryRange.endDate.
+  const [noEndDate, setNoEndDate] = useState(false);
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -499,9 +504,23 @@ export default function TeacherCalendar() {
   );
   const canShowMoreMonths = totalMonths < MAX_TOTAL_MONTHS;
 
+  // When "No end date" is checked, extend the primary range's end through
+  // the last day of the last currently-rendered month so the blue overlay
+  // covers everything visible (including months from Show More).
+  const lastVisibleMonth = monthsToRender[monthsToRender.length - 1];
+  const lastVisibleDay = new Date(
+    lastVisibleMonth.getFullYear(),
+    lastVisibleMonth.getMonth() + 1,
+    0
+  );
+  const primaryRangeForOverlay =
+    noEndDate && primaryRange?.startDate
+      ? { startDate: primaryRange.startDate, endDate: lastVisibleDay }
+      : primaryRange;
+
   // Effective availability ranges for the blue overlay: primary range +
   // any extra rows the sidebar emits. Filters out ranges missing endpoints.
-  const effectiveAvailabilityRanges = [primaryRange, ...availabilityRanges]
+  const effectiveAvailabilityRanges = [primaryRangeForOverlay, ...availabilityRanges]
     .filter((r) => r && r.startDate && r.endDate);
 
   const isDateInAvailabilityRange = (cellDate) => {
@@ -659,6 +678,7 @@ export default function TeacherCalendar() {
             onPrimaryRangeChange={handlePrimaryRangeChange}
             onActiveWeekdaysChange={setActiveWeekdays}
             onSaveAvailability={handleSaveAvailability}
+            onNoEndDateChange={setNoEndDate}
           />
 
           {/* Main Calendar Area */}

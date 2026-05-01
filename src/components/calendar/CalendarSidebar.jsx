@@ -66,27 +66,27 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
 
 // 15-minute increments via step="900" (seconds). End time auto-snaps to start
 // when the user picks an earlier value, and gets a red border while invalid.
+// Custom Clock icon overlay was removed to dedupe with the native time input
+// icon (browsers render their own clock indicator on time inputs).
 const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
   const isInvalid = !!(row.startTime && row.endTime && row.endTime < row.startTime);
   return (
     <div className="flex items-center gap-1 min-w-0">
-      <div className="relative flex-1 min-w-0">
-        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+      <div className="flex-1 min-w-0">
         <Input
           type="time"
           step="900"
-          className="pl-9 w-full"
+          className="w-full"
           value={row.startTime}
           onChange={(e) => onChange({ ...row, startTime: e.target.value })}
         />
       </div>
-      <div className="relative flex-1 min-w-0">
-        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+      <div className="flex-1 min-w-0">
         <Input
           type="time"
           step="900"
           min={row.startTime || undefined}
-          className={`pl-9 w-full ${isInvalid ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+          className={`w-full ${isInvalid ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
           value={row.endTime}
           onChange={(e) => {
             const next = e.target.value;
@@ -144,7 +144,7 @@ const WEEKDAY_OPTIONS = [
   { idx: 6, label: 'Sat' },
 ];
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   // Active weekday indices for the "Advanced date selection" filter. Default
@@ -269,6 +269,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
     }
   }, [activeWeekdays, onActiveWeekdaysChange]);
 
+  // Emit "no end date" flag to parent so the blue overlay can extend through
+  // the entire visible calendar (including months loaded via Show More).
+  useEffect(() => {
+    if (onNoEndDateChange) {
+      onNoEndDateChange(noEndDate);
+    }
+  }, [noEndDate, onNoEndDateChange]);
+
   const toggleWeekday = (idx, checked) => {
     setActiveWeekdays((prev) => {
       if (checked) return [...new Set([...prev, idx])].sort();
@@ -362,15 +370,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
 
     let slots;
     if (availabilityMode === 'open') {
-      if (timeAvailEnabled) {
-        // Time Availability checked: require valid times to save.
-        if (validTimes.length === 0) return;
+      // Full-day default: when Time Availability is unchecked OR no valid
+      // time rows are filled in, treat the entire day as open (00:00-23:59).
+      if (timeAvailEnabled && validTimes.length > 0) {
         slots = dateKeys.flatMap((date) =>
           validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
         );
       } else {
-        // Time Availability unchecked: save all-day (date-only) slots.
-        slots = dateKeys.map((date) => ({ date }));
+        slots = dateKeys.map((date) => ({ date, startTime: '00:00', endTime: '23:59' }));
       }
     } else {
       // Closed mode: if user specified times, target those exact slots;
@@ -459,7 +466,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                                 Open or close for booking
                                 <span
                                   className="ml-1 inline-flex"
-                                  title="When you open Availability (T), students can automatically book meetings with you without manual approval. You are obligated to attend all sessions booked during these hours."
+                                  title="When you open Availability (T), students can automatically book meetings with you without manual approval. You are obligated to attend all sessions booked during these hours. If you select the 'Closed' button, you will then select specific dates and times to close your availability."
                                 >
                                   <Info className="w-4 h-4 text-gray-400 cursor-help" />
                                 </span>
