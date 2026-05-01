@@ -345,9 +345,15 @@ export default function TeacherCalendar() {
   //   if its type has more than 1 event, the chip shows a "+N" badge (N =
   //   typeCount - 1) and clicking opens a picker that contains ONLY that
   //   type's events; otherwise the chip opens the modal directly.
-  const renderEventGroup = (groupTypes, eventsByType, monthDate) => {
+  const renderEventGroup = (groupTypes, eventsByType, monthDate, cellDate) => {
     const activeTypes = groupTypes.filter((t) => (eventsByType[t] || []).length > 0);
     if (activeTypes.length === 0) return null;
+
+    // Conditional "From" / "Since" prefix on collapsed (+N) chips for the
+    // three retrospective statuses. Past cells flip "From" → "Since".
+    const PAST_TARGET_TYPES = ['cancelled', 'completed', 'not-reviewed'];
+    const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+    const cellInPast = cellDate ? cellDate.getTime() < todayStart.getTime() : false;
 
     const sortByStart = (arr) =>
       [...arr].sort((a, b) =>
@@ -395,10 +401,14 @@ export default function TeacherCalendar() {
               ? buildEventTooltip(typeEvents, type)
               : eventTooltip(earliestEvent);
             const badge = hiddenForType > 0 ? `+${hiddenForType}` : null;
+            const datePrefix =
+              hiddenForType > 0 && PAST_TARGET_TYPES.includes(type) && cellInPast
+                ? 'Since'
+                : 'From';
             const chipInner = (
               <>
                 {renderDot(type)}
-                <span className="truncate flex-1 min-w-0">From {startTime(earliestEvent)}</span>
+                <span className="truncate flex-1 min-w-0">{datePrefix} {startTime(earliestEvent)}</span>
                 {badge && (
                   <span className="bg-white border border-gray-300 text-gray-600 rounded-full text-[9px] leading-none px-1 min-w-[1rem] h-4 flex items-center justify-center flex-shrink-0">
                     {badge}
@@ -905,12 +915,12 @@ export default function TeacherCalendar() {
                             )}
 
                             {/* FUTURE group: Booked + Waiting (single or mixed mode). */}
-                            {renderEventGroup(['booked', 'waiting'], eventsByType, monthDate)}
+                            {renderEventGroup(['booked', 'waiting'], eventsByType, monthDate, cellDate)}
 
                             {/* PAST group: Cancellation Fees + Completed + Not Reviewed
                                 (single or mixed mode). Synced & Availability render
                                 as top-right dots above. */}
-                            {renderEventGroup(['cancelled', 'completed', 'not-reviewed'], eventsByType, monthDate)}
+                            {renderEventGroup(['cancelled', 'completed', 'not-reviewed'], eventsByType, monthDate, cellDate)}
                           </div>
                         );
                       })}
