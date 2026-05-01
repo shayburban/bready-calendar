@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 
-const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false, noEndDate = false }) => {
+const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false, noEndDate = false, hideRemove = false }) => {
   // When `value` is supplied the picker runs in controlled mode — internal
   // state stays in sync with the prop via the useEffect below. When `value`
   // is undefined the picker is uncontrolled (legacy behavior).
@@ -247,14 +247,16 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
         {/* Control Buttons */}
         {showControls && (
           <div className="flex flex-col gap-1 pt-5 flex-shrink-0">
-            <Button 
-              variant="ghost" 
-              size="sm"
-              onClick={handleRemove}
-              className="h-6 w-6 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
-            >
-              <X className="w-3 h-3" />
-            </Button>
+            {!hideRemove && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRemove}
+                className="h-6 w-6 p-0 text-gray-400 hover:text-red-600 hover:bg-red-50"
+              >
+                <X className="w-3 h-3" />
+              </Button>
+            )}
             {onAdd && (
               <Button 
                 variant="ghost" 

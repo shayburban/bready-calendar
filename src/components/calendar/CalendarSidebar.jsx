@@ -580,6 +580,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                     : handleRowRangeChange(range.id, rangeData)
                 }
                 noEndDate={noEndDate}
+                hideRemove={index === 0}
                 isOnlyRow={dateRanges.length === 1} />
 
               )}
@@ -637,14 +638,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                         </div>
                         {timeAvailEnabled && (
                         <div className="space-y-2">
-                            {timeRanges.map((row) => (
+                            {timeRanges.map((row, idx) => (
             <TimeAvailabilityRow
               key={row.id}
               row={row}
               onChange={(next) => updateTimeRange(row.id, next)}
-              onRemove={() => removeTimeRange(row.id)}
+              onRemove={idx === 0 ? () => setTimeAvailEnabled(false) : () => removeTimeRange(row.id)}
               onAdd={addTimeRange}
-              canRemove={timeRanges.length > 1}
+              canRemove={true}
             />
             ))}
                         </div>
