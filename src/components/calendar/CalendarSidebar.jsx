@@ -72,8 +72,12 @@ const MINUTE_OPTIONS = ['00', '15', '30', '45'];
 // HH:MM picker built from two Selects. When `minTime` is set, only options
 // strictly later than `minTime` are rendered — used by End Time so the user
 // physically cannot pick a time at or before Start Time.
+// After the user picks an Hour, the Minute dropdown opens automatically so
+// they can complete the time without a second click on the MM trigger.
 const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
   const [hour = '', minute = ''] = value ? value.split(':') : [];
+  const [hourOpen, setHourOpen] = useState(false);
+  const [minuteOpen, setMinuteOpen] = useState(false);
 
   const isAfter = (h, m) => {
     if (!minTime) return true;
@@ -91,16 +95,27 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
       newMinute = MINUTE_OPTIONS.find((m) => isAfter(newHour, m)) || newMinute;
     }
     onChange(`${newHour}:${newMinute}`);
+    // Auto-transition: close Hour, then open Minute on the next tick so the
+    // user can pick MM without a second trigger click.
+    setHourOpen(false);
+    setTimeout(() => setMinuteOpen(true), 0);
   };
 
   const handleMinute = (newMinute) => {
     const h = hour || '00';
     onChange(`${h}:${newMinute}`);
+    setMinuteOpen(false);
   };
 
   return (
     <div className={`flex items-center gap-1 min-w-0 ${invalid ? 'rounded ring-1 ring-red-500' : ''}`}>
-      <Select value={hour} onValueChange={handleHour} disabled={disabled}>
+      <Select
+        value={hour}
+        onValueChange={handleHour}
+        open={hourOpen}
+        onOpenChange={setHourOpen}
+        disabled={disabled}
+      >
         <SelectTrigger className="h-9 px-2 min-w-0 flex-1">
           <SelectValue placeholder="HH" />
         </SelectTrigger>
@@ -111,7 +126,13 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
         </SelectContent>
       </Select>
       <span className="text-gray-500 text-sm flex-shrink-0">:</span>
-      <Select value={minute} onValueChange={handleMinute} disabled={disabled || !hour}>
+      <Select
+        value={minute}
+        onValueChange={handleMinute}
+        open={minuteOpen}
+        onOpenChange={setMinuteOpen}
+        disabled={disabled || !hour}
+      >
         <SelectTrigger className="h-9 px-2 min-w-0 flex-1">
           <SelectValue placeholder="MM" />
         </SelectTrigger>
@@ -558,6 +579,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                     ? (onPrimaryRangeChange && onPrimaryRangeChange(rangeData))
                     : handleRowRangeChange(range.id, rangeData)
                 }
+                noEndDate={noEndDate}
                 isOnlyRow={dateRanges.length === 1} />
 
               )}
@@ -632,8 +654,8 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                             <h5 className="font-bold text-gray-800">Changes will be made to the following dates & hours:</h5>
                             <div>
                                 <h6 className="font-semibold">Dates:</h6>
-                                <p>20 June 2021 – 21 Oct 2021 (every day)</p>
-                                <p>20 Nov 2021 – 21 Dec 2021 (Su, Mo, We, Th, Sa)</p>
+                                <p>20.06.21 – 21.10.21 (every day)</p>
+                                <p>20.11.21 – 21.12.21 (Su, Mo, We, Th, Sa)</p>
                             </div>
                             <div>
                                 <h6 className="font-semibold">Timings For All Dates:</h6>

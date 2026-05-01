@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Calendar as CalendarIcon, X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 
-const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false }) => {
+const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false, noEndDate = false }) => {
   // When `value` is supplied the picker runs in controlled mode — internal
   // state stays in sync with the prop via the useEffect below. When `value`
   // is undefined the picker is uncontrolled (legacy behavior).
@@ -158,19 +158,30 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
           </Button>
         </div>
 
-        {/* End Date Field */}
+        {/* End Date Field — when noEndDate is on, the field is disabled and
+            shows "∞ (Inf.)". The internal endDate state is preserved so
+            unchecking "No end date" automatically restores the prior value. */}
         <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">End Date</label>
           <Button
             variant="outline"
             onClick={() => handleInputClick(false)}
+            disabled={noEndDate}
             className={`w-full justify-start text-left font-normal h-10 px-3 ${
-              endDate ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-500'
+              noEndDate
+                ? 'bg-gray-100 text-gray-700 font-semibold cursor-not-allowed'
+                : endDate
+                ? 'bg-gray-50 font-semibold text-gray-900'
+                : 'text-gray-500'
             }`}
           >
             <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
             <span className="truncate">
-              {endDate ? format(endDate, 'dd.MM.yy') : 'Select Date'}
+              {noEndDate
+                ? '\u221E (Inf.)'
+                : endDate
+                ? format(endDate, 'dd.MM.yy')
+                : 'Select Date'}
             </span>
           </Button>
         </div>
