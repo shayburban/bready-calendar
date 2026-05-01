@@ -74,23 +74,58 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
   const today = new Date();
   const monthYear = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
+  // Two distinct flows depending on which field opened the calendar:
+  //   - Start picker (selectingStart === true): update startDate only. Clear
+  //     endDate only if the new start is after the existing end (range would
+  //     become invalid).
+  //   - End picker (selectingStart === false): update endDate only. Never
+  //     touch startDate just because the range was already complete — the
+  //     prior version's `(startDate && endDate)` short-circuit caused the
+  //     start to silently reset whenever the user re-picked an end.
   const handleDateClick = (date) => {
     const selectedDate = startOfDay(date);
 
-    if (selectingStart || !startDate || (startDate && endDate)) {
+    if (selectingStart) {
       setStartDate(selectedDate);
-      setEndDate(null);
-      setSelectingStart(false);
-    } else {
-      if (isBefore(selectedDate, startDate)) {
-        setEndDate(startDate);
-        setStartDate(selectedDate);
-      } else {
-        setEndDate(selectedDate);
+
+      if (endDate && isBefore(endDate, selectedDate)) {
+        // New start is after the existing end — the old end is no longer
+        // valid; clear it and keep the calendar open for the user to pick
+        // a fresh end.
+        setEndDate(null);
+        setSelectingStart(false);
+        return;
       }
+
+      if (!endDate) {
+        // No end yet — keep calendar open and continue with end selection.
+        setSelectingStart(false);
+        return;
+      }
+
+      // Existing end is still valid; we're done.
       setSelectingStart(true);
       setIsCalendarOpen(false);
+      return;
     }
+
+    // End picker flow.
+    if (!startDate) {
+      // No start yet — treat this click as a start pick instead.
+      setStartDate(selectedDate);
+      setSelectingStart(false);
+      return;
+    }
+
+    if (isBefore(selectedDate, startDate)) {
+      // Picked an end earlier than start — swap so the range stays valid.
+      setEndDate(startDate);
+      setStartDate(selectedDate);
+    } else {
+      setEndDate(selectedDate);
+    }
+    setSelectingStart(true);
+    setIsCalendarOpen(false);
   };
 
   const handleInputClick = (isStart) => {
