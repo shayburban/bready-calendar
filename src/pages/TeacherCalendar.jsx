@@ -612,7 +612,7 @@ export default function TeacherCalendar() {
         const endMs = pe.getTime();
         if (dragMode === 'start') {
           if (cur.getTime() < todayMs) return prev;
-          if (cur.getTime() > endMs) return prev;
+          if (!noEndDate && cur.getTime() > endMs) return prev;
           if (cur.getTime() === startMs) return prev;
           return { startDate: cur, endDate: pe };
         }
@@ -629,7 +629,21 @@ export default function TeacherCalendar() {
       document.removeEventListener('mousemove', handleMove);
       document.removeEventListener('mouseup', handleUp);
     };
-  }, [dragMode]);
+  }, [dragMode, noEndDate]);
+
+  const handleNoEndDateChange = (newValue) => {
+    setNoEndDate(newValue);
+    if (newValue) return;
+    setPrimaryRange((prev) => {
+      if (!prev || !prev.startDate || !prev.endDate) return prev;
+      const s = new Date(prev.startDate); s.setHours(0, 0, 0, 0);
+      const e = new Date(prev.endDate); e.setHours(0, 0, 0, 0);
+      if (s.getTime() > e.getTime()) {
+        return { startDate: s, endDate: s };
+      }
+      return prev;
+    });
+  };
 
   if (loading) {
     return (
@@ -678,7 +692,7 @@ export default function TeacherCalendar() {
             onPrimaryRangeChange={handlePrimaryRangeChange}
             onActiveWeekdaysChange={setActiveWeekdays}
             onSaveAvailability={handleSaveAvailability}
-            onNoEndDateChange={setNoEndDate}
+            onNoEndDateChange={handleNoEndDateChange}
           />
 
           {/* Main Calendar Area */}
