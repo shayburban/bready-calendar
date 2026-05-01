@@ -550,11 +550,11 @@ export default function TeacherCalendar() {
               className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
             >
               <span className="flex-shrink-0">+{hidden.length} more</span>
-              <span className="flex items-center gap-0.5 ml-auto flex-shrink-0">
-                {hidden.map((e, i) => (
+              <span className="flex items-center gap-1 ml-auto flex-shrink-0">
+                {Array.from(new Set(hidden.map((e) => e.type))).map((type) => (
                   <span
-                    key={`${e.id}-${i}`}
-                    className={`inline-block w-1.5 h-1.5 rounded-full ${TYPE_DOT_COLOR[e.type] || 'bg-gray-400'}`}
+                    key={type}
+                    className={`inline-block w-2 h-2 rounded-full ${TYPE_DOT_COLOR[type] || 'bg-gray-400'}`}
                   />
                 ))}
               </span>
