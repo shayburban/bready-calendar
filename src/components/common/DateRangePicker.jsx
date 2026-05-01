@@ -14,10 +14,28 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
     value?.endDate ? startOfDay(new Date(value.endDate)) : null
   );
 
+  // Last range we emitted to the parent, as "startMs-endMs". Used to dedupe
+  // both directions: we won't re-emit content we already sent, and we won't
+  // re-sync from a `value` prop that's just the parent echoing it back.
+  // Without this guard, the inline `onRangeChange` arrow in CalendarSidebar
+  // gets a fresh reference on every parent render — that triggers our emit
+  // effect, which round-trips through the parent and arrives back on `value`
+  // with a fresh object reference, which triggers the value-sync effect.
+  // If a user pick was in flight during that round-trip the two effects
+  // could ping-pong between the freshly-picked value and the prior value.
+  const lastEmittedRef = useRef(null);
+
   useEffect(() => {
     if (value === undefined) return;
     const newStart = value?.startDate ? startOfDay(new Date(value.startDate)) : null;
     const newEnd = value?.endDate ? startOfDay(new Date(value.endDate)) : null;
+
+    // Skip pure echoes of our last emit — same content, different object ref.
+    if (newStart && newEnd) {
+      const sig = `${newStart.getTime()}-${newEnd.getTime()}`;
+      if (sig === lastEmittedRef.current) return;
+    }
+
     setStartDate((prev) => {
       if (prev && newStart && prev.getTime() === newStart.getTime()) return prev;
       if (!prev && !newStart) return prev;
@@ -166,11 +184,16 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
            (isBefore(date, end) || isEqual(date, end));
   };
 
-  // Notify parent of range changes
+  // Notify parent of range changes — but only when the content actually
+  // changes. The dedup via `lastEmittedRef` prevents this effect from
+  // re-firing just because `onRangeChange` got a new function reference
+  // on a parent re-render (the typical inline-arrow case).
   useEffect(() => {
-    if (onRangeChange && startDate && endDate) {
-      onRangeChange({ startDate, endDate });
-    }
+    if (!onRangeChange || !startDate || !endDate) return;
+    const sig = `${startDate.getTime()}-${endDate.getTime()}`;
+    if (lastEmittedRef.current === sig) return;
+    lastEmittedRef.current = sig;
+    onRangeChange({ startDate, endDate });
   }, [startDate, endDate, onRangeChange]);
 
   return (
