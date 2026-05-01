@@ -211,7 +211,7 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
           >
             <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
             <span className="truncate">
-              {startDate ? format(startDate, 'dd.MM.yy') : 'Select Date'}
+              {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
             </span>
           </Button>
         </div>
@@ -239,7 +239,7 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
                 ? '\u221E (Inf.)'
                 : endDate
                 ? format(endDate, 'dd.MM.yy')
-                : 'Select Date'}
+                : 'DD.MM.YY'}
             </span>
           </Button>
         </div>
