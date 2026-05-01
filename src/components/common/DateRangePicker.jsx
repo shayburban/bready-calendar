@@ -140,9 +140,9 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1 min-w-0">
         {/* Start Date Field */}
-        <div className="flex-1 space-y-1">
+        <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">Start Date</label>
           <Button
             variant="outline"
@@ -159,7 +159,7 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
         </div>
 
         {/* End Date Field */}
-        <div className="flex-1 space-y-1">
+        <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">End Date</label>
           <Button
             variant="outline"
@@ -177,7 +177,7 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
 
         {/* Control Buttons */}
         {showControls && (
-          <div className="flex flex-col gap-1 pt-5">
+          <div className="flex flex-col gap-1 pt-5 flex-shrink-0">
             <Button 
               variant="ghost" 
               size="sm"

@@ -64,33 +64,60 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
     </Button>;
 
 
-const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) =>
-<div className="flex items-center gap-2">
-        <div className="relative flex-1">
-             <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-             <Input
-               type="time"
-               className="pl-9"
-               value={row.startTime}
-               onChange={(e) => onChange({ ...row, startTime: e.target.value })}
-             />
-        </div>
-        <div className="relative flex-1">
-             <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-             <Input
-               type="time"
-               className="pl-9"
-               value={row.endTime}
-               onChange={(e) => onChange({ ...row, endTime: e.target.value })}
-             />
-        </div>
-        <Button variant="ghost" size="icon" onClick={onRemove} disabled={!canRemove} className="text-gray-500 hover:bg-gray-100">
-            <X className="w-4 h-4" />
-        </Button>
-        <Button variant="ghost" size="icon" onClick={onAdd} className="text-gray-500 hover:bg-gray-100">
-            <Plus className="w-4 h-4" />
-        </Button>
-    </div>;
+// 15-minute increments via step="900" (seconds). End time auto-snaps to start
+// when the user picks an earlier value, and gets a red border while invalid.
+const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
+  const isInvalid = !!(row.startTime && row.endTime && row.endTime < row.startTime);
+  return (
+    <div className="flex items-center gap-1 min-w-0">
+      <div className="relative flex-1 min-w-0">
+        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+        <Input
+          type="time"
+          step="900"
+          className="pl-9 w-full"
+          value={row.startTime}
+          onChange={(e) => onChange({ ...row, startTime: e.target.value })}
+        />
+      </div>
+      <div className="relative flex-1 min-w-0">
+        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+        <Input
+          type="time"
+          step="900"
+          min={row.startTime || undefined}
+          className={`pl-9 w-full ${isInvalid ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
+          value={row.endTime}
+          onChange={(e) => {
+            const next = e.target.value;
+            if (row.startTime && next && next < row.startTime) {
+              onChange({ ...row, endTime: row.startTime });
+            } else {
+              onChange({ ...row, endTime: next });
+            }
+          }}
+        />
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onRemove}
+        disabled={!canRemove}
+        className="h-8 w-8 p-0 flex-shrink-0 text-gray-500 hover:bg-gray-100"
+      >
+        <X className="w-4 h-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onAdd}
+        className="h-8 w-8 p-0 flex-shrink-0 text-gray-500 hover:bg-gray-100"
+      >
+        <Plus className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+};
 
 
 // Only these legend categories are filterable via a checkbox; the rest are
@@ -133,6 +160,12 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
   // 'open' = save the current range as Available; 'closed' = remove any saved
   // Open slots in the current range. The toggle is committed by Save Dates.
   const [availabilityMode, setAvailabilityMode] = useState('open');
+  // When checked, the date range is treated as open-ended (we cap iteration
+  // at +12 months from the start to keep the slot generation finite).
+  const [noEndDate, setNoEndDate] = useState(false);
+  // When checked (default), Save Dates emits per-time slots; when unchecked,
+  // it emits all-day slots (no startTime/endTime).
+  const [timeAvailEnabled, setTimeAvailEnabled] = useState(true);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [user, setUser] = useState(null); // Retained state but not used in new legend logic
   const [appRoles, setAppRoles] = useState([]); // Retained state but not used in new legend logic
@@ -293,15 +326,27 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
   // the parent removes matching saved slots from its store.
   const handleSave = () => {
     const ranges = [primaryRangeValue, ...Object.values(rangesById)]
-      .filter((r) => r && r.startDate && r.endDate);
+      .filter((r) => r && r.startDate && (r.endDate || noEndDate));
     if (ranges.length === 0) return;
 
-    const validTimes = timeRanges.filter((t) => t.startTime && t.endTime);
+    // Only times where end >= start are usable. Invalid rows are skipped.
+    const validTimes = timeAvailEnabled
+      ? timeRanges.filter(
+          (t) => t.startTime && t.endTime && t.startTime <= t.endTime
+        )
+      : [];
 
     const dateKeys = [];
     ranges.forEach((range) => {
       const start = new Date(range.startDate); start.setHours(0, 0, 0, 0);
-      const end = new Date(range.endDate); end.setHours(0, 0, 0, 0);
+      let end;
+      if (noEndDate) {
+        // Cap iteration at +12 months so slot generation is finite.
+        end = new Date(start);
+        end.setMonth(end.getMonth() + 12);
+      } else {
+        end = new Date(range.endDate); end.setHours(0, 0, 0, 0);
+      }
       const cur = new Date(start);
       while (cur.getTime() <= end.getTime()) {
         if (activeWeekdays.includes(cur.getDay())) {
@@ -317,11 +362,16 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
 
     let slots;
     if (availabilityMode === 'open') {
-      // Open mode requires explicit times — that's the data we're saving.
-      if (validTimes.length === 0) return;
-      slots = dateKeys.flatMap((date) =>
-        validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
-      );
+      if (timeAvailEnabled) {
+        // Time Availability checked: require valid times to save.
+        if (validTimes.length === 0) return;
+        slots = dateKeys.flatMap((date) =>
+          validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
+        );
+      } else {
+        // Time Availability unchecked: save all-day (date-only) slots.
+        slots = dateKeys.map((date) => ({ date }));
+      }
     } else {
       // Closed mode: if user specified times, target those exact slots;
       // otherwise emit a date-only entry that wildcard-matches all slots
@@ -397,7 +447,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                     <ActionTab activeTab={activeTab} tabName="setprice" label="Set Price" setActiveTab={setActiveTab} />
                     <ActionTab activeTab={activeTab} tabName="book" label="New Booking" setActiveTab={setActiveTab} />
                     <ActionTab activeTab={activeTab} tabName="task" label="Task Manager" setActiveTab={setActiveTab} />
-                    <ActionTab activeTab={activeTab} tabName="setavail" label="Set Availability" setActiveTab={setActiveTab} />
+                    <ActionTab activeTab={activeTab} tabName="setavail" label="Set Availability (T)" setActiveTab={setActiveTab} />
                 </div>
 
                 {activeTab === 'setavail' &&
@@ -406,7 +456,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                         
                         <div>
                             <label className="text-sm font-medium text-gray-700 flex items-center">
-                                Open or close for booking <Info className="w-4 h-4 ml-1 text-gray-400" />
+                                Open or close for booking
+                                <span
+                                  className="ml-1 inline-flex"
+                                  title="When you open Availability (T), students can automatically book meetings with you without manual approval. You are obligated to attend all sessions booked during these hours."
+                                >
+                                  <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                                </span>
                             </label>
                             <div className="flex space-x-2 mt-2">
                                 <Button
@@ -446,7 +502,11 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
               )}
                             </div>
                             <div className="flex items-center space-x-2 mt-3">
-                                <Checkbox id="no-end-date" />
+                                <Checkbox
+                                  id="no-end-date"
+                                  checked={noEndDate}
+                                  onCheckedChange={(c) => setNoEndDate(c === true)}
+                                />
                                 <label htmlFor="no-end-date" className="text-sm font-medium text-gray-700">No end date</label>
                             </div>
                         </div>
@@ -476,16 +536,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                                 ))}
                               </div>
                             )}
-                             <Button variant="ghost" className="w-full justify-start p-0 text-blue-600 hover:text-blue-700 hover:bg-transparent mt-2">
-                                <ChevronDown className="w-4 h-4 mr-1" /> View Monthly Calander
-                            </Button>
                         </div>
-                        
+
                         <div className="flex items-center space-x-2">
-                            <Checkbox id="time-avail" />
+                            <Checkbox
+                              id="time-avail"
+                              checked={timeAvailEnabled}
+                              onCheckedChange={(c) => setTimeAvailEnabled(c === true)}
+                            />
                             <label htmlFor="time-avail" className="text-sm font-medium text-gray-700">Time Availability</label>
                             <Info className="w-4 h-4 text-gray-400" />
                         </div>
+                        {timeAvailEnabled && (
                         <div className="space-y-2">
                             {timeRanges.map((row) => (
             <TimeAvailabilityRow
@@ -498,6 +560,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
             />
             ))}
                         </div>
+                        )}
 
                         <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
                             <h5 className="font-bold text-gray-800">Changes will be made to the following dates & hours:</h5>
