@@ -69,15 +69,15 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
 const HOUR_OPTIONS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTE_OPTIONS = ['00', '15', '30', '45'];
 
-// HH:MM picker built from two Selects. When `minTime` is set, only options
-// strictly later than `minTime` are rendered — used by End Time so the user
-// physically cannot pick a time at or before Start Time.
-// After the user picks an Hour, the Minute dropdown opens automatically so
-// they can complete the time without a second click on the MM trigger.
+// Single-trigger HH:MM picker. The trigger button shows the current time
+// (or "Select time"). Opening the popover starts on the Hour grid; picking
+// an hour auto-advances to the Minute grid; picking a minute closes the
+// popover. Minutes are restricted to {00, 15, 30, 45}. When `minTime` is
+// set, only options strictly later than `minTime` are shown.
 const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
   const [hour = '', minute = ''] = value ? value.split(':') : [];
-  const [hourOpen, setHourOpen] = useState(false);
-  const [minuteOpen, setMinuteOpen] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState('hour');
 
   const isAfter = (h, m) => {
     if (!minTime) return true;
@@ -89,60 +89,84 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
     ? MINUTE_OPTIONS.filter((m) => isAfter(hour, m))
     : MINUTE_OPTIONS;
 
-  const handleHour = (newHour) => {
-    let newMinute = minute || '00';
-    if (!isAfter(newHour, newMinute)) {
-      newMinute = MINUTE_OPTIONS.find((m) => isAfter(newHour, m)) || newMinute;
-    }
-    onChange(`${newHour}:${newMinute}`);
-    // Auto-transition: close Hour, then open Minute on the next tick so the
-    // user can pick MM without a second trigger click.
-    setHourOpen(false);
-    setTimeout(() => setMinuteOpen(true), 0);
+  const handleOpenChange = (next) => {
+    setOpen(next);
+    if (next) setStep('hour');
   };
 
-  const handleMinute = (newMinute) => {
+  const pickHour = (h) => {
+    let m = minute || '00';
+    if (!isAfter(h, m)) {
+      m = MINUTE_OPTIONS.find((mm) => isAfter(h, mm)) || m;
+    }
+    onChange(`${h}:${m}`);
+    setStep('minute');
+  };
+
+  const pickMinute = (m) => {
     const h = hour || '00';
-    onChange(`${h}:${newMinute}`);
-    setMinuteOpen(false);
+    onChange(`${h}:${m}`);
+    setOpen(false);
   };
 
   return (
-    <div className={`flex items-center gap-1 min-w-0 ${invalid ? 'rounded ring-1 ring-red-500' : ''}`}>
-      <Select
-        value={hour}
-        onValueChange={handleHour}
-        open={hourOpen}
-        onOpenChange={setHourOpen}
-        disabled={disabled}
-      >
-        <SelectTrigger className="h-9 px-2 min-w-0 flex-1">
-          <SelectValue placeholder="HH" />
-        </SelectTrigger>
-        <SelectContent className="max-h-60">
-          {hourOptions.map((h) => (
-            <SelectItem key={h} value={h}>{h}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-      <span className="text-gray-500 text-sm flex-shrink-0">:</span>
-      <Select
-        value={minute}
-        onValueChange={handleMinute}
-        open={minuteOpen}
-        onOpenChange={setMinuteOpen}
-        disabled={disabled || !hour}
-      >
-        <SelectTrigger className="h-9 px-2 min-w-0 flex-1">
-          <SelectValue placeholder="MM" />
-        </SelectTrigger>
-        <SelectContent>
-          {minuteOptions.map((m) => (
-            <SelectItem key={m} value={m}>{m}</SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-    </div>
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={disabled}
+          className={`h-9 w-full justify-between font-normal px-2 ${invalid ? 'ring-1 ring-red-500' : ''} ${value ? 'text-gray-900' : 'text-gray-500'}`}
+        >
+          <span className="flex items-center gap-2 min-w-0 truncate">
+            <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="truncate">{value || 'Select time'}</span>
+          </span>
+          <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 ml-2 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-48 p-2" align="start">
+        <div className="text-xs font-semibold text-gray-700 mb-2 px-1">
+          {step === 'hour' ? 'Pick hour (HH)' : 'Pick minutes (MM)'}
+        </div>
+        {step === 'hour' ? (
+          <div className="grid grid-cols-4 gap-1 max-h-56 overflow-y-auto">
+            {hourOptions.map((h) => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => pickHour(h)}
+                className={`py-1 text-sm rounded ${h === hour ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-800'}`}
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-4 gap-1">
+              {minuteOptions.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => pickMinute(m)}
+                  className={`py-1 text-sm rounded ${m === minute ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 text-gray-800'}`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setStep('hour')}
+              className="mt-2 text-xs text-blue-600 hover:underline"
+            >
+              ← Back to hour
+            </button>
+          </>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 };
 
@@ -152,8 +176,9 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
 const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
   const isInvalid = !!(row.startTime && row.endTime && row.endTime <= row.startTime);
   return (
-    <div className="flex items-center gap-1 min-w-0">
-      <div className="flex-1 min-w-0">
+    <div className="flex items-end gap-1 min-w-0">
+      <div className="flex-1 min-w-0 space-y-1">
+        <label className="text-xs font-medium text-gray-700">Start Time</label>
         <TimeSelect
           value={row.startTime}
           onChange={(newStart) => {
@@ -165,7 +190,8 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
           }}
         />
       </div>
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 space-y-1">
+        <label className="text-xs font-medium text-gray-700">End Time</label>
         <TimeSelect
           value={row.endTime}
           onChange={(newEnd) => onChange({ ...row, endTime: newEnd })}
@@ -178,7 +204,7 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
         size="sm"
         onClick={onRemove}
         disabled={!canRemove}
-        className="h-8 w-8 p-0 flex-shrink-0 text-gray-500 hover:bg-gray-100"
+        className="h-9 w-8 p-0 flex-shrink-0 text-gray-500 hover:bg-gray-100"
       >
         <X className="w-4 h-4" />
       </Button>
@@ -186,7 +212,7 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
         variant="ghost"
         size="sm"
         onClick={onAdd}
-        className="h-8 w-8 p-0 flex-shrink-0 text-gray-500 hover:bg-gray-100"
+        className="h-9 w-8 p-0 flex-shrink-0 text-gray-500 hover:bg-gray-100"
       >
         <Plus className="w-4 h-4" />
       </Button>
