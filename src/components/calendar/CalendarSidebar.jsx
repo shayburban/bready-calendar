@@ -541,7 +541,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                                 Open or close for booking
                                 <span
                                   className="ml-1 inline-flex"
-                                  title="When you open Availability (T), students can automatically book meetings with you without manual approval. You are obligated to attend all sessions booked during these hours. If you select the 'Closed' button, you will then select specific dates and times to close your availability."
+                                  title={"Open/Closed Buttons: Select 'Open' to make your selected dates and times available for student bookings. Select 'Closed' to block these dates/times and make them unavailable.\n\nAvailability (T) Meaning: By opening 'Availability (T)', students can automatically book meetings without your manual approval. You are strictly obligated to attend any sessions booked during these hours."}
                                 >
                                   <Info className="w-4 h-4 text-gray-400 cursor-help" />
                                 </span>
