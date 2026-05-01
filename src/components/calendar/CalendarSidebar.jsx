@@ -119,8 +119,7 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
           className={`h-9 w-full justify-between font-normal px-2 ${invalid ? 'ring-1 ring-red-500' : ''} ${value ? 'text-gray-900' : 'text-gray-500'}`}
         >
           <span className="flex items-center gap-2 min-w-0 truncate">
-            <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-            <span className="truncate">{value || 'Select time'}</span>
+            <span className="truncate">{value || 'HH:MM'}</span>
           </span>
           <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 ml-2 opacity-60" />
         </Button>
