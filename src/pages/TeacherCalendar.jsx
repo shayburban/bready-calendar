@@ -856,7 +856,7 @@ export default function TeacherCalendar() {
                                 <ChevronLeft className="w-3 h-3" />
                               </button>
                             )}
-                            {showEndHandle && (
+                            {showEndHandle && !noEndDate && (
                               <button
                                 type="button"
                                 title="Drag to change end date"
