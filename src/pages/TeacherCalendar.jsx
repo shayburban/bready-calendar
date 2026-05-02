@@ -118,6 +118,26 @@ const mergeSlotsByDate = (slots) => {
   return [...merged, ...passthrough];
 };
 
+// v7 — subtract a closed [closedStart, closedEnd] interval from an open
+// slot. Returns 0, 1, or 2 surviving sub-slots. Used by closed-mode save
+// so a blackout like 13:30–17:30 dropped on a 00:00–23:59 open day
+// produces 00:00–13:30 and 17:30–23:59 (the original is split, not
+// merely removed when its endpoints don't match the closed payload).
+// String comparison is safe for zero-padded HH:MM.
+const subtractInterval = (open, closedStart, closedEnd) => {
+  if (closedEnd <= open.startTime || closedStart >= open.endTime) {
+    return [open];
+  }
+  const pieces = [];
+  if (closedStart > open.startTime) {
+    pieces.push({ ...open, endTime: closedStart });
+  }
+  if (closedEnd < open.endTime) {
+    pieces.push({ ...open, startTime: closedEnd });
+  }
+  return pieces;
+};
+
 // Lightweight popover that lists every event in a chip's bundle so the user
 // can pick which exact card to open. Shown when the chip groups 2+ events
 // of the same type, OR when Booked + Waiting share a day in mixed mode.
@@ -703,13 +723,26 @@ export default function TeacherCalendar() {
         slots.forEach((s) => map.set(key(s), s));
         return mergeSlotsByDate(Array.from(map.values()));
       }
-      const remaining = prev.filter((saved) =>
-        !slots.some((rm) =>
-          rm.date === saved.date &&
-          (rm.startTime === undefined ||
-            (rm.startTime === saved.startTime && rm.endTime === saved.endTime))
-        )
-      );
+      // v7 — closed mode is a subtraction mask, not just an exact-match
+      // remover. For each closed slot:
+      //   • date-only (wildcard): drop every saved slot on that date.
+      //   • timed: subtract its [start, end] from any open slot on the
+      //     same date that overlaps, splitting the open slot into up to
+      //     two pieces. So 00:00–23:59 minus 13:30–17:30 becomes
+      //     00:00–13:30 + 17:30–23:59 instead of leaving the original
+      //     untouched.
+      let remaining = [...prev];
+      slots.forEach((closedSlot) => {
+        if (closedSlot.startTime === undefined) {
+          remaining = remaining.filter((s) => s.date !== closedSlot.date);
+          return;
+        }
+        remaining = remaining.flatMap((open) => {
+          if (open.date !== closedSlot.date) return [open];
+          if (!open.startTime || !open.endTime) return [open];
+          return subtractInterval(open, closedSlot.startTime, closedSlot.endTime);
+        });
+      });
       return mergeSlotsByDate(remaining);
     });
   };

@@ -831,7 +831,11 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                           const previewTimes = mergeTimeRows(timeRanges);
                           return (
                             <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
-                              <h5 className="font-bold text-gray-800">Changes will be made to the following dates & hours:</h5>
+                              <h5 className="font-bold text-gray-800">
+                                {availabilityMode === 'closed'
+                                  ? 'Availability will be removed from the following dates & hours:'
+                                  : 'Changes will be made to the following dates & hours:'}
+                              </h5>
                               <div>
                                 <h6 className="font-semibold">Dates:</h6>
                                 {reviewRanges.length === 0 ? (
