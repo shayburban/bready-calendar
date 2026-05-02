@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import FieldInput from '@/components/common/FieldInput';
 import {
   Select,
   SelectContent,
@@ -139,7 +139,7 @@ function HoursPane() {
     <div className="space-y-4 pt-2">
       <ServiceRadios value={service} onChange={setService} />
       <div className="flex w-full max-w-xs">
-        <Input
+        <FieldInput
           value={price}
           onChange={(e) => setPrice(e.target.value)}
           className="rounded-r-none"
@@ -190,7 +190,7 @@ function PackagesPane() {
           Hrs.
         </span>
         <div className="flex flex-1 min-w-[8rem]">
-          <Input
+          <FieldInput
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             className="rounded-r-none"

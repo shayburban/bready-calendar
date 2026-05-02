@@ -116,7 +116,7 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
           type="button"
           variant="outline"
           disabled={disabled}
-          className={`h-9 w-full justify-between font-normal px-2 ${invalid ? 'ring-1 ring-red-500' : ''} ${value ? 'text-gray-900' : 'text-gray-500'}`}
+          className={`h-9 w-full justify-between px-2 border-gray-300 ${invalid ? 'ring-1 ring-red-500' : ''} ${value ? 'bg-white font-semibold text-gray-900' : 'bg-gray-50 font-normal text-gray-500'}`}
         >
           <span className="flex items-center gap-2 min-w-0 truncate">
             <span className="truncate">{value || 'HH:MM'}</span>

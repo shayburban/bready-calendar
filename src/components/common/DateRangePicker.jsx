@@ -206,8 +206,10 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
           <Button
             variant="outline"
             onClick={() => handleInputClick(true)}
-            className={`w-full justify-start text-left font-normal h-10 px-3 ${
-              startDate ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-500'
+            className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
+              startDate
+                ? 'bg-white font-semibold text-gray-900'
+                : 'bg-gray-50 font-normal text-gray-500'
             }`}
           >
             <span className="truncate">
@@ -225,12 +227,12 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
             variant="outline"
             onClick={() => handleInputClick(false)}
             disabled={noEndDate}
-            className={`w-full justify-start text-left font-normal h-10 px-3 ${
+            className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
               noEndDate
                 ? 'bg-gray-100 text-gray-700 font-semibold cursor-not-allowed'
                 : endDate
-                ? 'bg-gray-50 font-semibold text-gray-900'
-                : 'text-gray-500'
+                ? 'bg-white font-semibold text-gray-900'
+                : 'bg-gray-50 font-normal text-gray-500'
             }`}
           >
             <span className="truncate">

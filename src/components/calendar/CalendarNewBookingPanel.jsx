@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import FieldInput from '@/components/common/FieldInput';
 import { Label } from '@/components/ui/label';
 import {
   Select,
@@ -78,7 +78,7 @@ function LabeledInput({ label, placeholder, type = 'text', tip = true }) {
         {label}
         {tip && <InfoTip />}
       </label>
-      <Input type={type} placeholder={placeholder} />
+      <FieldInput type={type} placeholder={placeholder} />
     </div>
   );
 }
@@ -89,7 +89,7 @@ function DateField({ label }) {
       <Label className="text-sm mb-1 block">{label}</Label>
       <div className="relative">
         <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <Input type="date" className="pl-9" />
+        <FieldInput type="date" className="pl-9" />
       </div>
     </div>
   );
@@ -101,7 +101,7 @@ function TimeField({ label }) {
       <Label className="text-sm mb-1 block">{label}</Label>
       <div className="relative">
         <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <Input type="time" className="pl-9" />
+        <FieldInput type="time" className="pl-9" />
       </div>
     </div>
   );
@@ -468,7 +468,7 @@ function MoreSearchOptions({ label = 'Teacher Unique Number' }) {
   return (
     <DisclosureRow label="More Search Options">
       <Label className="text-sm">{label}</Label>
-      <Input placeholder="12- Shay B" />
+      <FieldInput placeholder="12- Shay B" />
     </DisclosureRow>
   );
 }

@@ -133,7 +133,7 @@ function TaskCard({ row }) {
       <p className="font-semibold mt-2 mb-1">
         Meeting subject reminder ({row.perspective || 'T'})
       </p>
-      <Input
+      <FieldInput
         value={subject}
         onChange={(e) => setSubject(e.target.value)}
         onBlur={handleSubjectBlur}
@@ -282,7 +282,7 @@ export default function CalendarTaskManagerPanel() {
               <h4 className="font-semibold text-sm">Select Task</h4>
             </div>
             <div className="p-2 space-y-2 max-h-64 overflow-auto">
-              <Input
+              <FieldInput
                 value={titleSearch}
                 onChange={(e) => setTitleSearch(e.target.value)}
                 placeholder="Search"
@@ -335,7 +335,7 @@ export default function CalendarTaskManagerPanel() {
         </Label>
         <div className="relative mt-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
+          <FieldInput
             value={studentSearch}
             onChange={(e) => setStudentSearch(e.target.value)}
             onKeyDown={addStudentFilter}
