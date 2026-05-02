@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Calendar as CalendarIcon, X, Plus } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 
 const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false, noEndDate = false, hideRemove = false }) => {
@@ -102,6 +102,7 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
   //     start to silently reset whenever the user re-picked an end.
   const handleDateClick = (date) => {
     const selectedDate = startOfDay(date);
+    if (isBefore(selectedDate, startOfDay(new Date()))) return;
 
     if (selectingStart) {
       setStartDate(selectedDate);
@@ -209,7 +210,6 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
               startDate ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-500'
             }`}
           >
-            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
             <span className="truncate">
               {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
             </span>
@@ -233,7 +233,6 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
                 : 'text-gray-500'
             }`}
           >
-            <CalendarIcon className="mr-2 h-4 w-4 flex-shrink-0" />
             <span className="truncate">
               {noEndDate
                 ? '\u221E (Inf.)'
@@ -312,6 +311,7 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
             {days.map((date, index) => {
               const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
               const isToday = isEqual(startOfDay(date), startOfDay(today));
+              const isPast = isBefore(startOfDay(date), startOfDay(today));
               const inRange = isInRange(date);
               const rangeStart = isRangeStart(date);
               const rangeEnd = isRangeEnd(date);
@@ -321,17 +321,17 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
                 <button
                   key={index}
                   onClick={() => handleDateClick(date)}
-                  onMouseEnter={() => setHoveredDate(date)}
+                  onMouseEnter={() => !isPast && setHoveredDate(date)}
                   onMouseLeave={() => setHoveredDate(null)}
+                  disabled={isPast}
                   className={`
                     h-8 w-8 text-sm rounded transition-all duration-200
-                    ${!isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                    ${isPast ? 'text-gray-300 cursor-not-allowed opacity-50' : !isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
                     ${isToday ? 'font-bold' : ''}
-                    ${rangeStart || rangeEnd ? 'bg-blue-600 text-white' : ''}
-                    ${inRange && !rangeStart && !rangeEnd ? 'bg-blue-100 text-blue-700' : ''}
-                    ${previewRange && !rangeStart && !rangeEnd ? 'bg-blue-50 text-blue-600' : ''}
-                    ${!inRange && !rangeStart && !rangeEnd && !previewRange ? 'hover:bg-gray-100' : ''}
-                    ${isCurrentMonth && !inRange && !rangeStart && !rangeEnd && !previewRange ? 'hover:bg-gray-100' : ''}
+                    ${!isPast && (rangeStart || rangeEnd) ? 'bg-blue-600 text-white' : ''}
+                    ${!isPast && inRange && !rangeStart && !rangeEnd ? 'bg-blue-100 text-blue-700' : ''}
+                    ${!isPast && previewRange && !rangeStart && !rangeEnd ? 'bg-blue-50 text-blue-600' : ''}
+                    ${!isPast && !inRange && !rangeStart && !rangeEnd && !previewRange ? 'hover:bg-gray-100' : ''}
                   `}
                 >
                   {date.getDate()}

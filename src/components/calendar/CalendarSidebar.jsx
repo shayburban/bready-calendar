@@ -244,18 +244,13 @@ const WEEKDAY_OPTIONS = [
   { idx: 6, label: 'Sat' },
 ];
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, onAvailabilityRangesChange, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   // Active weekday indices for the "Advanced date selection" filter. Default
   // all seven on so the blue range covers every day until the user narrows it.
   const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [activeTab, setActiveTab] = useState('setavail');
-  const [dateRanges, setDateRanges] = useState([{ id: 1 }]);
-  // Resolved {startDate, endDate} for each row id, only set once both ends
-  // are picked. Aggregated and emitted to parent for the blue availability
-  // overlay on the monthly calendar.
-  const [rangesById, setRangesById] = useState({});
   const [timeRanges, setTimeRanges] = useState([{ id: 1, startTime: '', endTime: '' }]);
   // 'open' = save the current range as Available; 'closed' = remove any saved
   // Open slots in the current range. The toggle is committed by Save Dates.
@@ -354,14 +349,6 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
     }
   }, [activeLegendKeys, onLegendFilterChange]);
 
-  // Emit aggregated availability ranges to parent (TeacherCalendar) so
-  // the monthly grid can render a blue overlay on the matching dates.
-  useEffect(() => {
-    if (onAvailabilityRangesChange) {
-      onAvailabilityRangesChange(Object.values(rangesById));
-    }
-  }, [rangesById, onAvailabilityRangesChange]);
-
   // Emit active weekday filter to parent so the blue range respects it.
   useEffect(() => {
     if (onActiveWeekdaysChange) {
@@ -395,25 +382,17 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
     });
   };
 
+  const allRows = [{ id: 'primary' }, ...extraRows];
   const addDateRange = () => {
-    const newId = Math.max(...dateRanges.map((r) => r.id), 0) + 1;
-    setDateRanges([...dateRanges, { id: newId }]);
+    if (onAddExtraRow) onAddExtraRow();
   };
-
   const removeDateRange = (idToRemove) => {
-    if (dateRanges.length === 1) {
-      return;
-    }
-    setDateRanges(dateRanges.filter((range) => range.id !== idToRemove));
-    setRangesById((prev) => {
-      const next = { ...prev };
-      delete next[idToRemove];
-      return next;
-    });
+    if (idToRemove === 'primary') return;
+    if (onRemoveExtraRow) onRemoveExtraRow(idToRemove);
   };
-
   const handleRowRangeChange = (id, rangeData) => {
-    setRangesById((prev) => ({ ...prev, [id]: rangeData }));
+    if (id === 'primary') return;
+    if (onUpdateExtraRow) onUpdateExtraRow(id, rangeData);
   };
 
   const updateTimeRange = (id, next) => {
@@ -433,7 +412,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
   // the parent. In 'open' mode this saves new availability; in 'closed' mode
   // the parent removes matching saved slots from its store.
   const handleSave = () => {
-    const ranges = [primaryRangeValue, ...Object.values(rangesById)]
+    const ranges = [primaryRangeValue, ...extraRows]
       .filter((r) => r && r.startDate && (r.endDate || noEndDate));
     if (ranges.length === 0) return;
 
@@ -593,22 +572,28 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, o
                         <div>
                             <label className="text-sm font-medium text-gray-700">Date Availability</label>
                             <div className="space-y-3 mt-2">
-                                {dateRanges.map((range, index) =>
-              <DateRangePicker
-                key={range.id}
-                value={index === 0 ? primaryRangeValue : undefined}
-                onRemove={() => removeDateRange(range.id)}
-                onAdd={index === dateRanges.length - 1 ? addDateRange : null}
-                onRangeChange={(rangeData) =>
-                  index === 0
-                    ? (onPrimaryRangeChange && onPrimaryRangeChange(rangeData))
-                    : handleRowRangeChange(range.id, rangeData)
-                }
-                noEndDate={noEndDate}
-                hideRemove={index === 0}
-                isOnlyRow={dateRanges.length === 1} />
-
-              )}
+                                {allRows.map((range, index) => {
+              const isPrimary = index === 0;
+              const value = isPrimary
+                ? primaryRangeValue
+                : { startDate: range.startDate, endDate: range.endDate };
+              return (
+                <DateRangePicker
+                  key={range.id}
+                  value={value}
+                  onRemove={() => removeDateRange(range.id)}
+                  onAdd={index === allRows.length - 1 ? addDateRange : null}
+                  onRangeChange={(rangeData) =>
+                    isPrimary
+                      ? (onPrimaryRangeChange && onPrimaryRangeChange(rangeData))
+                      : handleRowRangeChange(range.id, rangeData)
+                  }
+                  noEndDate={noEndDate}
+                  hideRemove={isPrimary}
+                  isOnlyRow={allRows.length === 1}
+                />
+              );
+            })}
                             </div>
                             <div className="flex items-center space-x-2 mt-3">
                                 <Checkbox

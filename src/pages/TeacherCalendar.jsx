@@ -174,10 +174,10 @@ export default function TeacherCalendar() {
   // Default is 1 so the page renders exactly 2 months stacked vertically.
   // Click "Show More Months" to load 2 more (capped at MAX_TOTAL_MONTHS - 1).
   const [extraMonthsLoaded, setExtraMonthsLoaded] = useState(1);
-  // Extra availability ranges (rows 2..N) from the sidebar. The first row
-  // is the *primary* range and lives in `primaryRange` below — that one is
-  // bidirectionally linked with the calendar's drag handles.
-  const [availabilityRanges, setAvailabilityRanges] = useState([]);
+  // Extra availability rows (rows 2..N) from the sidebar. Each row is
+  // `{ id, startDate?, endDate? }`. State is lifted here so the calendar can
+  // render blue range overlays AND draggable handles for every row.
+  const [extraRows, setExtraRows] = useState([]);
   // Single source of truth for the primary blue range. Drag handles write
   // directly here; the sidebar's first DateRangePicker is controlled by
   // this value via the `primaryRangeValue` prop.
@@ -185,7 +185,8 @@ export default function TeacherCalendar() {
     const t = new Date(); t.setHours(0, 0, 0, 0);
     return { startDate: t, endDate: t };
   });
-  const [dragMode, setDragMode] = useState(null); // 'start' | 'end' | null
+  // dragTarget = { id: 'primary' | <extraId>, mode: 'start' | 'end' } | null
+  const [dragTarget, setDragTarget] = useState(null);
   // Active weekday filter from the "Advanced date selection" sidebar dropdown.
   // Indices follow Date#getDay(): 0=Sun … 6=Sat. Default = all days included.
   const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
@@ -592,8 +593,18 @@ export default function TeacherCalendar() {
 
   // Effective availability ranges for the blue overlay: primary range +
   // any extra rows the sidebar emits. Filters out ranges missing endpoints.
-  const effectiveAvailabilityRanges = [primaryRangeForOverlay, ...availabilityRanges]
-    .filter((r) => r && r.startDate && r.endDate);
+  const extraRangesForOverlay = extraRows
+    .map((row) => {
+      if (!row.startDate) return null;
+      if (noEndDate) return { id: row.id, startDate: row.startDate, endDate: lastVisibleDay };
+      if (!row.endDate) return null;
+      return { id: row.id, startDate: row.startDate, endDate: row.endDate };
+    })
+    .filter(Boolean);
+  const effectiveAvailabilityRanges = [
+    { id: 'primary', ...(primaryRangeForOverlay || {}) },
+    ...extraRangesForOverlay,
+  ].filter((r) => r && r.startDate && r.endDate);
 
   const isDateInAvailabilityRange = (cellDate) => {
     // Apply the "Advanced date selection" weekday filter: a cell only counts
@@ -607,15 +618,36 @@ export default function TeacherCalendar() {
     });
   };
 
-  const isPrimaryStartDay = (cellDate) => {
-    if (!cellDate || !primaryRange) return false;
-    const s = new Date(primaryRange.startDate); s.setHours(0, 0, 0, 0);
-    return s.getTime() === cellDate.getTime();
+  // Returns the IDs of every range whose start day equals cellDate. The blue
+  // left handle is rendered once per matching range so multiple rows can show
+  // their own draggable endpoint on the same calendar.
+  const getStartHandleIds = (cellDate) => {
+    if (!cellDate) return [];
+    const ids = [];
+    if (primaryRange) {
+      const s = new Date(primaryRange.startDate); s.setHours(0, 0, 0, 0);
+      if (s.getTime() === cellDate.getTime()) ids.push('primary');
+    }
+    extraRows.forEach((row) => {
+      if (!row.startDate) return;
+      const s = new Date(row.startDate); s.setHours(0, 0, 0, 0);
+      if (s.getTime() === cellDate.getTime()) ids.push(row.id);
+    });
+    return ids;
   };
-  const isPrimaryEndDay = (cellDate) => {
-    if (!cellDate || !primaryRange) return false;
-    const e = new Date(primaryRange.endDate); e.setHours(0, 0, 0, 0);
-    return e.getTime() === cellDate.getTime();
+  const getEndHandleIds = (cellDate) => {
+    if (!cellDate) return [];
+    const ids = [];
+    if (primaryRange) {
+      const e = new Date(primaryRange.endDate); e.setHours(0, 0, 0, 0);
+      if (e.getTime() === cellDate.getTime()) ids.push('primary');
+    }
+    extraRows.forEach((row) => {
+      if (!row.endDate) return;
+      const e = new Date(row.endDate); e.setHours(0, 0, 0, 0);
+      if (e.getTime() === cellDate.getTime()) ids.push(row.id);
+    });
+    return ids;
   };
 
   // Bidirectional sync: sidebar-row-0 picks call this; drag handles also
@@ -657,14 +689,18 @@ export default function TeacherCalendar() {
     });
   };
 
-  const startDrag = (mode) => {
-    if (!primaryRange) return;
-    setDragMode(mode);
+  const startDrag = (id, mode) => {
+    if (id === 'primary' && !primaryRange) return;
+    setDragTarget({ id, mode });
+  };
+
+  const updateExtraRowRange = (id, range) => {
+    setExtraRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...range } : r)));
   };
 
   // Document-level drag listeners; active only while a handle is held.
   useEffect(() => {
-    if (!dragMode) return;
+    if (!dragTarget) return;
     const handleMove = (e) => {
       const target = document.elementFromPoint(e.clientX, e.clientY);
       if (!target) return;
@@ -676,13 +712,14 @@ export default function TeacherCalendar() {
       // Earliest allowed start/end is today — handles cannot enter the past.
       const today = new Date(); today.setHours(0, 0, 0, 0);
       const todayMs = today.getTime();
-      setPrimaryRange((prev) => {
-        if (!prev) return prev;
+
+      const applyDrag = (prev, mode) => {
+        if (!prev || !prev.startDate || !prev.endDate) return prev;
         const ps = new Date(prev.startDate); ps.setHours(0, 0, 0, 0);
         const pe = new Date(prev.endDate); pe.setHours(0, 0, 0, 0);
         const startMs = ps.getTime();
         const endMs = pe.getTime();
-        if (dragMode === 'start') {
+        if (mode === 'start') {
           if (cur.getTime() < todayMs) return prev;
           if (!noEndDate && cur.getTime() > endMs) return prev;
           if (cur.getTime() === startMs) return prev;
@@ -692,16 +729,28 @@ export default function TeacherCalendar() {
         if (cur.getTime() < todayMs) return prev;
         if (cur.getTime() === endMs) return prev;
         return { startDate: ps, endDate: cur };
-      });
+      };
+
+      if (dragTarget.id === 'primary') {
+        setPrimaryRange((prev) => applyDrag(prev, dragTarget.mode));
+      } else {
+        setExtraRows((prev) =>
+          prev.map((row) => {
+            if (row.id !== dragTarget.id) return row;
+            const next = applyDrag(row, dragTarget.mode);
+            return next ? { ...row, ...next } : row;
+          })
+        );
+      }
     };
-    const handleUp = () => setDragMode(null);
+    const handleUp = () => setDragTarget(null);
     document.addEventListener('mousemove', handleMove);
     document.addEventListener('mouseup', handleUp);
     return () => {
       document.removeEventListener('mousemove', handleMove);
       document.removeEventListener('mouseup', handleUp);
     };
-  }, [dragMode, noEndDate]);
+  }, [dragTarget, noEndDate]);
 
   const handleNoEndDateChange = (newValue) => {
     setNoEndDate(newValue);
@@ -759,7 +808,17 @@ export default function TeacherCalendar() {
             view={view}
             setView={setView}
             onLegendFilterChange={setActiveFilters}
-            onAvailabilityRangesChange={setAvailabilityRanges}
+            extraRows={extraRows}
+            onAddExtraRow={() =>
+              setExtraRows((prev) => [
+                ...prev,
+                { id: Math.max(0, ...prev.map((r) => r.id)) + 1 },
+              ])
+            }
+            onRemoveExtraRow={(id) =>
+              setExtraRows((prev) => prev.filter((r) => r.id !== id))
+            }
+            onUpdateExtraRow={updateExtraRowRange}
             primaryRangeValue={primaryRange}
             onPrimaryRangeChange={handlePrimaryRangeChange}
             onActiveWeekdaysChange={setActiveWeekdays}
@@ -917,8 +976,8 @@ export default function TeacherCalendar() {
                         const eventsByType = getEventsByTypeForDay([...dayEvents, ...savedAvailEvents]);
                         const isAvailabilityDay =
                           !!cellDate && isDateInAvailabilityRange(cellDate);
-                        const showStartHandle = isPrimaryStartDay(cellDate);
-                        const showEndHandle = isPrimaryEndDay(cellDate);
+                        const startHandleIds = getStartHandleIds(cellDate);
+                        const endHandleIds = getEndHandleIds(cellDate);
 
                         return (
                           <div
@@ -929,29 +988,33 @@ export default function TeacherCalendar() {
                               ${!day.isCurrentMonth ? 'bg-gray-50 text-gray-400' : ''}
                               ${day.isToday ? 'bg-blue-50' : ''}
                               ${isAvailabilityDay ? 'bg-blue-50 ring-1 ring-inset ring-blue-600 z-[1]' : ''}
-                              ${dragMode ? 'select-none' : ''}
+                              ${dragTarget ? 'select-none' : ''}
                             `}
                           >
-                            {showStartHandle && (
+                            {startHandleIds.map((id, hIdx) => (
                               <button
+                                key={`s-${id}`}
                                 type="button"
                                 title="Drag to change start date"
-                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startDrag('start'); }}
-                                className="absolute -left-2 top-1/2 -translate-y-1/2 z-20 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-ew-resize shadow hover:bg-blue-700"
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startDrag(id, 'start'); }}
+                                style={{ top: `calc(50% + ${hIdx * 1.4}rem)` }}
+                                className="absolute -left-2 -translate-y-1/2 z-20 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-ew-resize shadow hover:bg-blue-700"
                               >
                                 <ChevronLeft className="w-3 h-3" />
                               </button>
-                            )}
-                            {showEndHandle && !noEndDate && (
+                            ))}
+                            {!noEndDate && endHandleIds.map((id, hIdx) => (
                               <button
+                                key={`e-${id}`}
                                 type="button"
                                 title="Drag to change end date"
-                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startDrag('end'); }}
-                                className="absolute -right-2 top-1/2 -translate-y-1/2 z-20 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-ew-resize shadow hover:bg-blue-700"
+                                onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); startDrag(id, 'end'); }}
+                                style={{ top: `calc(50% + ${hIdx * 1.4}rem)` }}
+                                className="absolute -right-2 -translate-y-1/2 z-20 w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center cursor-ew-resize shadow hover:bg-blue-700"
                               >
                                 <ChevronRight className="w-3 h-3" />
                               </button>
-                            )}
+                            ))}
                             {/* Date Number */}
                             <div className={`
                               text-sm font-medium mb-2
