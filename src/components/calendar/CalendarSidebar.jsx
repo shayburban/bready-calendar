@@ -244,6 +244,23 @@ const WEEKDAY_OPTIONS = [
   { idx: 6, label: 'Sat' },
 ];
 
+// Two-letter weekday labels used in the Review Changes summary, in the same
+// order the user expects them to appear in parentheses (Su, Mo, Tu, We, Th, Fr, Sa).
+const WEEKDAY_SHORT_LABELS = [
+  { idx: 0, label: 'Su' },
+  { idx: 1, label: 'Mo' },
+  { idx: 2, label: 'Tu' },
+  { idx: 3, label: 'We' },
+  { idx: 4, label: 'Th' },
+  { idx: 5, label: 'Fr' },
+  { idx: 6, label: 'Sa' },
+];
+
+const formatReviewDate = (d) => {
+  if (!d) return '';
+  return format(new Date(d), 'd MMMM yyyy');
+};
+
 export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
@@ -701,18 +718,68 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         </div>
                         )}
 
-                        <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
-                            <h5 className="font-bold text-gray-800">Changes will be made to the following dates & hours:</h5>
-                            <div>
+                        {(() => {
+                          const reviewRanges = [
+                            { id: 'primary', startDate: primaryRangeValue?.startDate, endDate: primaryRangeValue?.endDate },
+                            ...extraRows.map((r) => ({ id: r.id, startDate: r.startDate, endDate: r.endDate })),
+                          ].filter((r) => r.startDate);
+                          const everyDay = activeWeekdays.length === 7;
+                          const previewTimes = mergeTimeRows(timeRanges);
+                          return (
+                            <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
+                              <h5 className="font-bold text-gray-800">Changes will be made to the following dates & hours:</h5>
+                              <div>
                                 <h6 className="font-semibold">Dates:</h6>
-                                <p>20.06.21 – 21.10.21 (every day)</p>
-                                <p>20.11.21 – 21.12.21 (Su, Mo, We, Th, Sa)</p>
-                            </div>
-                            <div>
+                                {reviewRanges.length === 0 ? (
+                                  <p className="text-gray-400 italic">No date range selected.</p>
+                                ) : (
+                                  reviewRanges.map((r) => {
+                                    const startStr = formatReviewDate(r.startDate);
+                                    const endStr = noEndDate
+                                      ? '∞'
+                                      : r.endDate
+                                      ? formatReviewDate(r.endDate)
+                                      : '—';
+                                    return (
+                                      <p key={r.id}>
+                                        <span className="text-gray-800">{startStr} – {endStr}</span>{' '}
+                                        {everyDay ? (
+                                          <span className="text-gray-800">(every day)</span>
+                                        ) : (
+                                          <span>
+                                            (
+                                            {WEEKDAY_SHORT_LABELS.map((w, i) => {
+                                              const active = activeWeekdays.includes(w.idx);
+                                              return (
+                                                <React.Fragment key={w.idx}>
+                                                  <span className={active ? 'text-gray-800' : 'text-gray-400'}>
+                                                    {w.label}
+                                                  </span>
+                                                  {i < WEEKDAY_SHORT_LABELS.length - 1 && (
+                                                    <span className="text-gray-400">, </span>
+                                                  )}
+                                                </React.Fragment>
+                                              );
+                                            })}
+                                            )
+                                          </span>
+                                        )}
+                                      </p>
+                                    );
+                                  })
+                                )}
+                              </div>
+                              <div>
                                 <h6 className="font-semibold">Timings For All Dates:</h6>
-                                <p>12:00 – 17:00, 19:00 - 22:00</p>
+                                {timeAvailEnabled && previewTimes.length > 0 ? (
+                                  <p>{previewTimes.map((t) => `${t.startTime} – ${t.endTime}`).join(', ')}</p>
+                                ) : (
+                                  <p className="text-gray-400 italic">All day (00:00 – 23:59)</p>
+                                )}
+                              </div>
                             </div>
-                        </div>
+                          );
+                        })()}
 
                         <div className="flex gap-2">
                             <Button variant="outline" className="w-full">Cancel</Button>
