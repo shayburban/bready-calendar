@@ -2,7 +2,7 @@ import React, { useState, useMemo, useSyncExternalStore } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import FieldInput from '@/components/common/FieldInput';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';

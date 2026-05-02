@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 const EMPTY_CLASSES =
   'bg-gray-50 border-gray-300 text-gray-500 placeholder:text-gray-500';
 const FILLED_CLASSES =
-  'bg-white border-gray-300 text-gray-900 font-semibold';
+  'bg-gray-50 border-gray-300 text-gray-900 font-semibold';
 
 export const fieldStateClasses = (value) =>
   value !== undefined && value !== null && value !== ''
