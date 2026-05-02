@@ -32,6 +32,12 @@ import SyncedEventsModal from '../components/calendar/SyncedEventsModal';
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import {
+  applySaveAvailability,
+  loadAvailabilitySlots,
+  persistAvailabilitySlots,
+  AVAILABILITY_STORAGE_KEY,
+} from '@/lib/availabilityStore';
 
 export default function TeacherCalendarWeekly() {
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -44,6 +50,12 @@ export default function TeacherCalendarWeekly() {
   const [showSyncedModal, setShowSyncedModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [activeFilters, setActiveFilters] = useState(['not-reviewed', 'completed', 'cancelled']);
+  // Hydrated from the same localStorage-backed store the Monthly page
+  // uses, so saving from either calendar updates a single source of
+  // truth. See @/lib/availabilityStore.
+  const [savedAvailabilitySlots, setSavedAvailabilitySlots] = useState(() =>
+    loadAvailabilitySlots()
+  );
 
   useEffect(() => {
     const fetchUserAndEvents = async () => {
@@ -58,6 +70,27 @@ export default function TeacherCalendarWeekly() {
     };
 
     fetchUserAndEvents();
+  }, []);
+
+  const handleSaveAvailability = (slots, mode) => {
+    setSavedAvailabilitySlots((prev) => {
+      const next = applySaveAvailability(prev, slots, mode);
+      persistAvailabilitySlots(next);
+      return next;
+    });
+  };
+
+  // Pick up cross-tab writes (e.g. Monthly page in another window) and
+  // also re-hydrate when the user navigates back from Monthly via the
+  // top-level view switcher (full page reload, but the storage event
+  // handler is harmless and keeps state coherent if a second tab edits).
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== AVAILABILITY_STORAGE_KEY) return;
+      setSavedAvailabilitySlots(loadAvailabilitySlots());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
   }, []);
 
   const navigateWeek = (direction) => {
@@ -127,7 +160,12 @@ export default function TeacherCalendarWeekly() {
       <div className="container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
 
-          <CalendarSidebar view={view} setView={setView} onLegendFilterChange={setActiveFilters} />
+          <CalendarSidebar
+            view={view}
+            setView={setView}
+            onLegendFilterChange={setActiveFilters}
+            onSaveAvailability={handleSaveAvailability}
+          />
 
           {/* Main Calendar Area */}
           <div className="flex-1 bg-white rounded-lg shadow-sm">

@@ -44,6 +44,12 @@ import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { sampleEvents } from '@/data/sampleEvents';
+import {
+  applySaveAvailability,
+  loadAvailabilitySlots,
+  persistAvailabilitySlots,
+  AVAILABILITY_STORAGE_KEY,
+} from '@/lib/availabilityStore';
 
 // Visual mapping for the in-calendar event chips (NOT the popup cards).
 // Matches the dot colors from the legend and the design mockup.
@@ -83,60 +89,10 @@ const TYPE_HEADER_LABEL = {
 const MAX_TOTAL_MONTHS = 36;
 const MONTHS_STEP = 2;
 
-// v6 — collapse overlapping/touching availability slots on the same date
-// to a single canonical interval. Matches the sidebar's `mergeTimeRows`
-// algorithm (sort by startTime, fold when next.start <= prev.end). This
-// runs whenever `savedAvailabilitySlots` is rebuilt so each day always
-// renders one chip per continuous range, and the saved state holds the
-// minimum number of rows. Date-only entries (closed-mode wildcards) are
-// passed through untouched.
-const mergeSlotsByDate = (slots) => {
-  const buckets = new Map();
-  const passthrough = [];
-  slots.forEach((s) => {
-    if (!s.startTime || !s.endTime) {
-      passthrough.push(s);
-      return;
-    }
-    if (!buckets.has(s.date)) buckets.set(s.date, []);
-    buckets.get(s.date).push(s);
-  });
-  const merged = [];
-  buckets.forEach((rows, date) => {
-    const sorted = [...rows].sort((a, b) =>
-      a.startTime.localeCompare(b.startTime)
-    );
-    sorted.forEach((row) => {
-      const last = merged[merged.length - 1];
-      if (last && last.date === date && row.startTime <= last.endTime) {
-        if (row.endTime > last.endTime) last.endTime = row.endTime;
-      } else {
-        merged.push({ date, startTime: row.startTime, endTime: row.endTime });
-      }
-    });
-  });
-  return [...merged, ...passthrough];
-};
-
-// v7 — subtract a closed [closedStart, closedEnd] interval from an open
-// slot. Returns 0, 1, or 2 surviving sub-slots. Used by closed-mode save
-// so a blackout like 13:30–17:30 dropped on a 00:00–23:59 open day
-// produces 00:00–13:30 and 17:30–23:59 (the original is split, not
-// merely removed when its endpoints don't match the closed payload).
-// String comparison is safe for zero-padded HH:MM.
-const subtractInterval = (open, closedStart, closedEnd) => {
-  if (closedEnd <= open.startTime || closedStart >= open.endTime) {
-    return [open];
-  }
-  const pieces = [];
-  if (closedStart > open.startTime) {
-    pieces.push({ ...open, endTime: closedStart });
-  }
-  if (closedEnd < open.endTime) {
-    pieces.push({ ...open, startTime: closedEnd });
-  }
-  return pieces;
-};
+// Slot merge / subtract / save helpers are imported from
+// @/lib/availabilityStore so the Monthly and Weekly pages share one
+// canonical reducer + localStorage-backed store. See that module for
+// the v6/v7 algorithm details.
 
 // Lightweight popover that lists every event in a chip's bundle so the user
 // can pick which exact card to open. Shown when the chip groups 2+ events
@@ -248,7 +204,10 @@ export default function TeacherCalendar() {
   // Slots saved via the Set Availability sidebar. Each entry:
   // { date: 'YYYY-MM-DD', startTime: 'HH:MM', endTime: 'HH:MM' }.
   // Renders as green availability dots on the matching calendar day.
-  const [savedAvailabilitySlots, setSavedAvailabilitySlots] = useState([]);
+  // Hydrated from localStorage so Monthly and Weekly share one store.
+  const [savedAvailabilitySlots, setSavedAvailabilitySlots] = useState(() =>
+    loadAvailabilitySlots()
+  );
   // Mirror of the sidebar's "No end date" checkbox. When true the blue
   // availability overlay extends from primaryRange.startDate all the way
   // through the last currently-visible month (including months loaded via
@@ -714,38 +673,25 @@ export default function TeacherCalendar() {
   // that date.
   const handleSaveAvailability = (slots, mode) => {
     setSavedAvailabilitySlots((prev) => {
-      if (mode === 'open') {
-        // v6 — fold incoming slots into existing per-date intervals so two
-        // overlapping windows (e.g. 09:00–11:00 + 10:00–12:00 on the same
-        // day) collapse to one canonical chip in storage and on render.
-        const key = (s) => `${s.date}|${s.startTime}|${s.endTime}`;
-        const map = new Map(prev.map((s) => [key(s), s]));
-        slots.forEach((s) => map.set(key(s), s));
-        return mergeSlotsByDate(Array.from(map.values()));
-      }
-      // v7 — closed mode is a subtraction mask, not just an exact-match
-      // remover. For each closed slot:
-      //   • date-only (wildcard): drop every saved slot on that date.
-      //   • timed: subtract its [start, end] from any open slot on the
-      //     same date that overlaps, splitting the open slot into up to
-      //     two pieces. So 00:00–23:59 minus 13:30–17:30 becomes
-      //     00:00–13:30 + 17:30–23:59 instead of leaving the original
-      //     untouched.
-      let remaining = [...prev];
-      slots.forEach((closedSlot) => {
-        if (closedSlot.startTime === undefined) {
-          remaining = remaining.filter((s) => s.date !== closedSlot.date);
-          return;
-        }
-        remaining = remaining.flatMap((open) => {
-          if (open.date !== closedSlot.date) return [open];
-          if (!open.startTime || !open.endTime) return [open];
-          return subtractInterval(open, closedSlot.startTime, closedSlot.endTime);
-        });
-      });
-      return mergeSlotsByDate(remaining);
+      const next = applySaveAvailability(prev, slots, mode);
+      persistAvailabilitySlots(next);
+      return next;
     });
   };
+
+  // Sync the in-memory slot list when another tab/window (or the Weekly
+  // page after navigating back) writes new availability to localStorage.
+  // Same-tab writes call setSavedAvailabilitySlots directly, so this only
+  // catches cross-tab updates — which is exactly what `storage` events
+  // fire for. The localStorage key is namespaced; ignore unrelated writes.
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== AVAILABILITY_STORAGE_KEY) return;
+      setSavedAvailabilitySlots(loadAvailabilitySlots());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
 
   const handlePrimaryRangeChange = (rangeData) => {
     if (!rangeData?.startDate || !rangeData?.endDate) return;
