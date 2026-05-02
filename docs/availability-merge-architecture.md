@@ -28,10 +28,21 @@ preview matches the saved state byte-for-byte.
 
 ---
 
-## 2. Algorithm — Sweep / Sort-and-Fold
+## 2. Algorithm — Snap → Sort-and-Fold
 
-Pseudocode (matches `mergeDateRanges` and `mergeTimeRows` in
-`src/components/calendar/CalendarSidebar.jsx`):
+Two stages, **order matters**:
+
+**Stage 1 — Snap to active weekdays** (v4). For every raw row, replace
+`(rawStart, rawEnd)` with `(actualStart, actualEnd)`:
+
+- `actualStart` = first date `>= rawStart` whose weekday is in
+  `activeWeekdays`
+- `actualEnd`   = last  date `<= rawEnd`   whose weekday is in
+  `activeWeekdays`
+- Drop the row entirely if the window contains no matching weekday
+- Open-ended rows (`noEndDate=true`) only snap `actualStart`
+
+**Stage 2 — Merge** the snapped survivors via sweep / sort-and-fold:
 
 ```
 function mergeIntervals(intervals):
@@ -46,6 +57,13 @@ function mergeIntervals(intervals):
       result.append(copy of iv)
   return result
 ```
+
+Snap-then-merge (not merge-then-snap): each user-entered row is its own
+sandbox for the snap step, so two rows separated by a gap that *would*
+disappear under a raw merge stay separate when their snapped survivors
+don't actually touch. The reference implementation lives in
+`snapRangeToActiveWeekdays`, `mergeSnappedRanges`, and `computeFinalRanges`
+in `src/components/calendar/CalendarSidebar.jsx`.
 
 Properties:
 
@@ -135,16 +153,23 @@ Authorization: Bearer <teacher token>
 Server-side pipeline (in this order — order matters):
 
 1. **Validate** — schema, time grid, weekday subset, dates parseable.
-2. **Merge ranges** (§2) — collapses incoming overlaps to canonical form.
-   After this step the example payload above becomes:
-   `[(2026-06-20 → 2026-10-21), (2026-11-20 → ∞)]`.
-3. **Merge time_slots** (§2) — same algorithm on `HH:MM` strings.
-4. **Reconcile with existing rows** — fetch all `AvailabilityWindow` rows
+2. **Snap each range to weekdays** (§2 stage 1) — for every incoming
+   range, advance `start_date` to the first date matching an entry in
+   `weekdays`, and retreat `end_date` to the last. Drop ranges with no
+   matching weekday. **Reject the request** if all incoming ranges drop
+   out (this matches the frontend's "Save Dates" disabled state and
+   prevents a silent no-op write).
+3. **Merge ranges** (§2 stage 2) — fold the snapped survivors. The
+   example payload above becomes:
+   `[(2026-06-20 → 2026-10-21), (2026-11-20 → ∞)]` (with `[1, 3]`
+   weekdays the snapped boundaries land on Mon/Wed).
+4. **Merge time_slots** (§2) — same fold on `HH:MM` strings.
+5. **Reconcile with existing rows** — fetch all `AvailabilityWindow` rows
    for the same `(teacher_id, mode)` whose interval intersects any
-   incoming merged range. Run the merge over the union, then `DELETE` the
+   incoming merged range. Run snap+merge over the union, then `DELETE` the
    old rows and `INSERT` the new merged rows in a single transaction.
    This guarantees property §4.1 even under retries and races.
-5. **Return** the canonical merged set so the client can replace local
+6. **Return** the canonical merged set so the client can replace local
    state without round-tripping.
 
 Response:
@@ -255,3 +280,8 @@ should receive (modulo the §5 reconciliation against existing rows).
 | Times `[09:30 – 14:30, 13:30 – 18:30, 09:45 – 11:30]` | `[09:30 – 18:30]` |
 | Times `[09:00 – 09:15, 09:30 – 09:45]` | unchanged (gap of 15 min, `start > prev.end`) |
 | Time grid `[09:07 – 10:00]` | **REJECT** — fails 15-min increment validation |
+| `[Tue 5 May – Thu 7 May]`, weekdays `[Thu]` | `[Thu 7 May – Thu 7 May]` (snap forward) |
+| `[Mon 4 May – Sat 9 May]`, weekdays `[Mon, Wed]` | `[Mon 4 May – Wed 6 May]` (snap end backward — Sat unchecked) |
+| `[Tue 5 May – Thu 7 May]`, weekdays `[Sat]` | **REJECT** — no Sat in window after snap |
+| `[Mon 4 May – Fri 8 May, Sun 10 May – Fri 15 May]`, weekdays `[Mon]` | `[Mon 4 May – Mon 4 May, Mon 11 May – Mon 11 May]` (snap-then-merge: each row collapses to one Mon, gap remains) |
+| Any range with weekdays `[]` | **REJECT** — empty weekday set is forbidden (§4.5) |

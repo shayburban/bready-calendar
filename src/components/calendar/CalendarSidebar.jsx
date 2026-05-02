@@ -450,38 +450,60 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     return merged;
   };
 
-  // Merge overlapping/adjacent date ranges (sweep-line on day-precision ms).
-  // Mirrors mergeTimeRows: sort by start; if next.start <= prev.end, extend
-  // prev.end. When `noEndDate` is true every row is treated as open-ended,
-  // so the result collapses to a single { earliestStart, end: ∞ } range.
-  // See docs/availability-merge-architecture.md for the matching backend
-  // contract — backend MUST run the same algorithm before persisting.
-  const mergeDateRanges = (rows) => {
-    const valid = rows
-      .filter((r) => r && r.startDate)
-      .map((r) => {
-        const s = new Date(r.startDate); s.setHours(0, 0, 0, 0);
-        let e;
-        if (noEndDate) {
-          e = Number.POSITIVE_INFINITY;
-        } else if (r.endDate) {
-          const ed = new Date(r.endDate); ed.setHours(0, 0, 0, 0);
-          e = ed.getTime();
-        } else {
-          return null;
-        }
-        return { startMs: s.getTime(), endMs: e };
-      })
-      .filter((r) => r && (r.endMs === Number.POSITIVE_INFINITY || r.endMs >= r.startMs));
-    if (valid.length === 0) return [];
-    valid.sort((a, b) => a.startMs - b.startMs);
+  // v4 — snap a single (rawStart, rawEnd) range to active weekdays:
+  //   actualStart = first date >= rawStart whose weekday is checked
+  //   actualEnd   = last  date <= rawEnd   whose weekday is checked
+  // Returns null when no day in the range matches an active weekday (or
+  // the inputs are invalid). Open-ended ranges only snap actualStart.
+  const snapRangeToActiveWeekdays = (rawStart, rawEnd) => {
+    if (!rawStart) return null;
+    if (activeWeekdays.length === 0) return null;
+    const start = new Date(rawStart); start.setHours(0, 0, 0, 0);
+    const isOpenEnded = noEndDate;
+    let end = null;
+    if (!isOpenEnded) {
+      if (!rawEnd) return null;
+      end = new Date(rawEnd); end.setHours(0, 0, 0, 0);
+      if (end.getTime() < start.getTime()) return null;
+    }
+    let actualStart = null;
+    const cur = new Date(start);
+    for (let i = 0; i < 7; i++) {
+      if (end && cur.getTime() > end.getTime()) break;
+      if (activeWeekdays.includes(cur.getDay())) { actualStart = new Date(cur); break; }
+      cur.setDate(cur.getDate() + 1);
+    }
+    if (!actualStart) return null;
+    if (isOpenEnded) {
+      return { startDate: actualStart, endDate: null, isOpenEnded: true };
+    }
+    let actualEnd = null;
+    const curE = new Date(end);
+    for (let i = 0; i < 7; i++) {
+      if (curE.getTime() < actualStart.getTime()) break;
+      if (activeWeekdays.includes(curE.getDay())) { actualEnd = new Date(curE); break; }
+      curE.setDate(curE.getDate() - 1);
+    }
+    if (!actualEnd) return null;
+    return { startDate: actualStart, endDate: actualEnd, isOpenEnded: false };
+  };
+
+  // Merge already-snapped ranges (sweep / sort-and-fold). Mirrors
+  // mergeTimeRows. Open-ended ranges use Infinity for the upper bound.
+  const mergeSnappedRanges = (snapped) => {
+    if (snapped.length === 0) return [];
+    const intervals = snapped.map((r) => ({
+      startMs: r.startDate.getTime(),
+      endMs: r.isOpenEnded ? Number.POSITIVE_INFINITY : r.endDate.getTime(),
+    }));
+    intervals.sort((a, b) => a.startMs - b.startMs);
     const merged = [];
-    valid.forEach((r) => {
+    intervals.forEach((iv) => {
       const last = merged[merged.length - 1];
-      if (last && r.startMs <= last.endMs) {
-        if (r.endMs > last.endMs) last.endMs = r.endMs;
+      if (last && iv.startMs <= last.endMs) {
+        if (iv.endMs > last.endMs) last.endMs = iv.endMs;
       } else {
-        merged.push({ startMs: r.startMs, endMs: r.endMs });
+        merged.push({ startMs: iv.startMs, endMs: iv.endMs });
       }
     });
     return merged.map((r) => ({
@@ -489,6 +511,19 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       endDate: r.endMs === Number.POSITIVE_INFINITY ? null : new Date(r.endMs),
       isOpenEnded: r.endMs === Number.POSITIVE_INFINITY,
     }));
+  };
+
+  // Snap-then-merge pipeline used by both Review Changes and Save Dates.
+  // Step order matters (spec v4 §2): snap each raw row first, then fold.
+  // Snapping per-row keeps each user-entered range independent — two rows
+  // separated by a gap that disappears under raw merge stay separate when
+  // their snapped survivors don't actually touch. See
+  // docs/availability-merge-architecture.md.
+  const computeFinalRanges = (rawRows) => {
+    const snapped = rawRows
+      .map((r) => snapRangeToActiveWeekdays(r.startDate, r.endDate))
+      .filter(Boolean);
+    return mergeSnappedRanges(snapped);
   };
 
   const handleSave = () => {
@@ -521,15 +556,16 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       if (!same) setTimeRanges(merged);
     }
 
-    // Merge overlapping/adjacent date ranges before expanding into per-day
-    // keys. This guarantees the slot stream we hand to the parent (and the
-    // future backend) contains no duplicates from overlapping rows. See
-    // docs/availability-merge-architecture.md.
-    const mergedRanges = mergeDateRanges(ranges);
-    if (mergedRanges.length === 0) return;
+    // Snap-then-merge (v4 + v3): each row's start/end is first snapped to
+    // its closest active weekday, then survivors are folded. Rows with no
+    // matching weekday vanish here, so the slot stream we emit cannot
+    // contain dates the user actually unchecked. See
+    // docs/availability-merge-architecture.md §2.
+    const finalRanges = computeFinalRanges(ranges);
+    if (finalRanges.length === 0) return;
 
     const dateKeys = [];
-    mergedRanges.forEach((range) => {
+    finalRanges.forEach((range) => {
       const start = new Date(range.startDate); start.setHours(0, 0, 0, 0);
       let end;
       if (range.isOpenEnded) {
@@ -576,6 +612,15 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
     if (onSaveAvailability) onSaveAvailability(slots, availabilityMode);
   };
+
+  // Reactive list of merged ranges shown in Review Changes. Also drives
+  // the Save Dates enable/disable gate — empty == nothing valid to save.
+  const reviewRangeRows = [
+    { startDate: primaryRangeValue?.startDate, endDate: primaryRangeValue?.endDate },
+    ...extraRows.map((r) => ({ startDate: r.startDate, endDate: r.endDate })),
+  ];
+  const reviewRanges = computeFinalRanges(reviewRangeRows);
+  const canSave = reviewRanges.length > 0;
 
   const handleViewChange = (newView) => {
     if (newView === 'Month') {
@@ -767,13 +812,9 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         )}
 
                         {(() => {
-                          const rawRows = [
-                            { startDate: primaryRangeValue?.startDate, endDate: primaryRangeValue?.endDate },
-                            ...extraRows.map((r) => ({ startDate: r.startDate, endDate: r.endDate })),
-                          ];
-                          // Merge overlapping/adjacent ranges so the summary
-                          // matches what gets persisted on Save.
-                          const reviewRanges = mergeDateRanges(rawRows);
+                          // reviewRanges/canSave are computed at component scope
+                          // above. They reflect the snap-then-merge pipeline so
+                          // the summary matches what gets persisted on Save.
                           const everyDay = activeWeekdays.length === 7;
                           const previewTimes = mergeTimeRows(timeRanges);
                           return (
@@ -782,7 +823,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                               <div>
                                 <h6 className="font-semibold">Dates:</h6>
                                 {reviewRanges.length === 0 ? (
-                                  <p className="text-gray-400 italic">No date range selected.</p>
+                                  <p className="text-gray-400 italic">No valid dates selected</p>
                                 ) : (
                                   reviewRanges.map((r, idx) => {
                                     const startStr = formatReviewDate(r.startDate);
@@ -832,7 +873,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
                         <div className="flex gap-2">
                             <Button variant="outline" className="w-full">Cancel</Button>
-                            <Button onClick={handleSave} className="w-full bg-green-600 hover:bg-green-700">Save Dates</Button>
+                            <Button
+                              onClick={handleSave}
+                              disabled={!canSave}
+                              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                            >
+                              Save Dates
+                            </Button>
                         </div>
 
                         <div>
