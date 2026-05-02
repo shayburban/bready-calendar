@@ -411,17 +411,57 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // Build the slot list from the selected ranges/weekdays/times and emit it to
   // the parent. In 'open' mode this saves new availability; in 'closed' mode
   // the parent removes matching saved slots from its store.
+  // Merge overlapping or adjacent time rows. Two rows merge when the second
+  // row's start <= first row's end (sorted ascending). Result keeps the
+  // earliest start and latest end of each merged group. Times are 'HH:MM'
+  // strings — lexical comparison works because they're zero-padded.
+  const mergeTimeRows = (rows) => {
+    const valid = rows.filter(
+      (t) => t.startTime && t.endTime && t.startTime < t.endTime
+    );
+    if (valid.length === 0) return [];
+    const sorted = [...valid].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    const merged = [];
+    sorted.forEach((row) => {
+      const last = merged[merged.length - 1];
+      if (last && row.startTime <= last.endTime) {
+        if (row.endTime > last.endTime) last.endTime = row.endTime;
+      } else {
+        merged.push({ startTime: row.startTime, endTime: row.endTime });
+      }
+    });
+    return merged;
+  };
+
   const handleSave = () => {
     const ranges = [primaryRangeValue, ...extraRows]
       .filter((r) => r && r.startDate && (r.endDate || noEndDate));
     if (ranges.length === 0) return;
 
-    // Only times where end >= start are usable. Invalid rows are skipped.
-    const validTimes = timeAvailEnabled
-      ? timeRanges.filter(
-          (t) => t.startTime && t.endTime && t.startTime < t.endTime
-        )
-      : [];
+    // Merge overlapping/adjacent rows so e.g. 09:30-14:30 + 13:30-18:30 +
+    // 09:45-11:30 collapses to a single 09:30-18:30 block.
+    const validTimes = timeAvailEnabled ? mergeTimeRows(timeRanges) : [];
+
+    // Reflect the merged result back into the sidebar so the user sees the
+    // collapsed rows after Save Dates. Preserve existing IDs where possible
+    // and fill in the rest with fresh ones.
+    if (timeAvailEnabled && validTimes.length > 0) {
+      const existingIds = timeRanges.map((r) => r.id);
+      let nextId = Math.max(0, ...existingIds) + 1;
+      const merged = validTimes.map((t, idx) => ({
+        id: existingIds[idx] !== undefined ? existingIds[idx] : nextId++,
+        startTime: t.startTime,
+        endTime: t.endTime,
+      }));
+      const same =
+        merged.length === timeRanges.length &&
+        merged.every(
+          (r, i) =>
+            r.startTime === timeRanges[i].startTime &&
+            r.endTime === timeRanges[i].endTime
+        );
+      if (!same) setTimeRanges(merged);
+    }
 
     const dateKeys = [];
     ranges.forEach((range) => {
