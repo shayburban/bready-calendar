@@ -421,8 +421,20 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       return [...prev, { id: newId, startTime: '', endTime: '' }];
     });
   };
+  // v5 — single deletion path for time rows. Two rules:
+  //   1. Multi-row: just drop the targeted row. React's array shift means
+  //      the second row naturally promotes to the first slot.
+  //   2. Single-row: dropping the only row uncollects Time Availability
+  //      itself (toggling the checkbox off) and resets the picker to a
+  //      fresh empty row so the next re-enable starts clean.
   const removeTimeRange = (id) => {
-    setTimeRanges((prev) => (prev.length === 1 ? prev : prev.filter((r) => r.id !== id)));
+    setTimeRanges((prev) => {
+      if (prev.length <= 1) {
+        setTimeAvailEnabled(false);
+        return [{ id: 1, startTime: '', endTime: '' }];
+      }
+      return prev.filter((r) => r.id !== id);
+    });
   };
 
   // Build the slot list from the selected ranges/weekdays/times and emit it to
@@ -798,12 +810,12 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         </div>
                         {timeAvailEnabled && (
                         <div className="space-y-2">
-                            {timeRanges.map((row, idx) => (
+                            {timeRanges.map((row) => (
             <TimeAvailabilityRow
               key={row.id}
               row={row}
               onChange={(next) => updateTimeRange(row.id, next)}
-              onRemove={idx === 0 ? () => setTimeAvailEnabled(false) : () => removeTimeRange(row.id)}
+              onRemove={() => removeTimeRange(row.id)}
               onAdd={addTimeRange}
               canRemove={true}
             />

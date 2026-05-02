@@ -83,6 +83,41 @@ const TYPE_HEADER_LABEL = {
 const MAX_TOTAL_MONTHS = 36;
 const MONTHS_STEP = 2;
 
+// v6 — collapse overlapping/touching availability slots on the same date
+// to a single canonical interval. Matches the sidebar's `mergeTimeRows`
+// algorithm (sort by startTime, fold when next.start <= prev.end). This
+// runs whenever `savedAvailabilitySlots` is rebuilt so each day always
+// renders one chip per continuous range, and the saved state holds the
+// minimum number of rows. Date-only entries (closed-mode wildcards) are
+// passed through untouched.
+const mergeSlotsByDate = (slots) => {
+  const buckets = new Map();
+  const passthrough = [];
+  slots.forEach((s) => {
+    if (!s.startTime || !s.endTime) {
+      passthrough.push(s);
+      return;
+    }
+    if (!buckets.has(s.date)) buckets.set(s.date, []);
+    buckets.get(s.date).push(s);
+  });
+  const merged = [];
+  buckets.forEach((rows, date) => {
+    const sorted = [...rows].sort((a, b) =>
+      a.startTime.localeCompare(b.startTime)
+    );
+    sorted.forEach((row) => {
+      const last = merged[merged.length - 1];
+      if (last && last.date === date && row.startTime <= last.endTime) {
+        if (row.endTime > last.endTime) last.endTime = row.endTime;
+      } else {
+        merged.push({ date, startTime: row.startTime, endTime: row.endTime });
+      }
+    });
+  });
+  return [...merged, ...passthrough];
+};
+
 // Lightweight popover that lists every event in a chip's bundle so the user
 // can pick which exact card to open. Shown when the chip groups 2+ events
 // of the same type, OR when Booked + Waiting share a day in mixed mode.
@@ -660,18 +695,22 @@ export default function TeacherCalendar() {
   const handleSaveAvailability = (slots, mode) => {
     setSavedAvailabilitySlots((prev) => {
       if (mode === 'open') {
+        // v6 — fold incoming slots into existing per-date intervals so two
+        // overlapping windows (e.g. 09:00–11:00 + 10:00–12:00 on the same
+        // day) collapse to one canonical chip in storage and on render.
         const key = (s) => `${s.date}|${s.startTime}|${s.endTime}`;
         const map = new Map(prev.map((s) => [key(s), s]));
         slots.forEach((s) => map.set(key(s), s));
-        return Array.from(map.values());
+        return mergeSlotsByDate(Array.from(map.values()));
       }
-      return prev.filter((saved) =>
+      const remaining = prev.filter((saved) =>
         !slots.some((rm) =>
           rm.date === saved.date &&
           (rm.startTime === undefined ||
             (rm.startTime === saved.startTime && rm.endTime === saved.endTime))
         )
       );
+      return mergeSlotsByDate(remaining);
     });
   };
 

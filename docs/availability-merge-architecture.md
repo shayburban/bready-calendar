@@ -126,6 +126,14 @@ Invariants the backend MUST enforce:
 4. **Range validity** — `start_date <= end_date` when `end_date` is not null.
 5. `weekdays` is a sorted, deduped subset of `[0..6]`; `[]` is forbidden
    (callers wanting all days send `[0,1,2,3,4,5,6]`).
+6. **Per-day canonicalization (v6)** — when materialized into per-date
+   slot rows (the read model consumed by the calendar UI), no date may
+   carry overlapping or touching `(start_time, end_time)` pairs. The
+   server folds incoming new slots against existing same-date rows on
+   every save so the day's stored slot count is the **minimum** required
+   to represent the open hours. Frontend mirror: `mergeSlotsByDate` in
+   `src/pages/TeacherCalendar.jsx` runs the same fold on
+   `savedAvailabilitySlots` before render.
 
 ---
 
