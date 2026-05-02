@@ -450,6 +450,47 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     return merged;
   };
 
+  // Merge overlapping/adjacent date ranges (sweep-line on day-precision ms).
+  // Mirrors mergeTimeRows: sort by start; if next.start <= prev.end, extend
+  // prev.end. When `noEndDate` is true every row is treated as open-ended,
+  // so the result collapses to a single { earliestStart, end: ∞ } range.
+  // See docs/availability-merge-architecture.md for the matching backend
+  // contract — backend MUST run the same algorithm before persisting.
+  const mergeDateRanges = (rows) => {
+    const valid = rows
+      .filter((r) => r && r.startDate)
+      .map((r) => {
+        const s = new Date(r.startDate); s.setHours(0, 0, 0, 0);
+        let e;
+        if (noEndDate) {
+          e = Number.POSITIVE_INFINITY;
+        } else if (r.endDate) {
+          const ed = new Date(r.endDate); ed.setHours(0, 0, 0, 0);
+          e = ed.getTime();
+        } else {
+          return null;
+        }
+        return { startMs: s.getTime(), endMs: e };
+      })
+      .filter((r) => r && (r.endMs === Number.POSITIVE_INFINITY || r.endMs >= r.startMs));
+    if (valid.length === 0) return [];
+    valid.sort((a, b) => a.startMs - b.startMs);
+    const merged = [];
+    valid.forEach((r) => {
+      const last = merged[merged.length - 1];
+      if (last && r.startMs <= last.endMs) {
+        if (r.endMs > last.endMs) last.endMs = r.endMs;
+      } else {
+        merged.push({ startMs: r.startMs, endMs: r.endMs });
+      }
+    });
+    return merged.map((r) => ({
+      startDate: new Date(r.startMs),
+      endDate: r.endMs === Number.POSITIVE_INFINITY ? null : new Date(r.endMs),
+      isOpenEnded: r.endMs === Number.POSITIVE_INFINITY,
+    }));
+  };
+
   const handleSave = () => {
     const ranges = [primaryRangeValue, ...extraRows]
       .filter((r) => r && r.startDate && (r.endDate || noEndDate));
@@ -480,11 +521,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       if (!same) setTimeRanges(merged);
     }
 
+    // Merge overlapping/adjacent date ranges before expanding into per-day
+    // keys. This guarantees the slot stream we hand to the parent (and the
+    // future backend) contains no duplicates from overlapping rows. See
+    // docs/availability-merge-architecture.md.
+    const mergedRanges = mergeDateRanges(ranges);
+    if (mergedRanges.length === 0) return;
+
     const dateKeys = [];
-    ranges.forEach((range) => {
+    mergedRanges.forEach((range) => {
       const start = new Date(range.startDate); start.setHours(0, 0, 0, 0);
       let end;
-      if (noEndDate) {
+      if (range.isOpenEnded) {
         // Cap iteration at +12 months so slot generation is finite.
         end = new Date(start);
         end.setMonth(end.getMonth() + 12);
@@ -719,10 +767,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         )}
 
                         {(() => {
-                          const reviewRanges = [
-                            { id: 'primary', startDate: primaryRangeValue?.startDate, endDate: primaryRangeValue?.endDate },
-                            ...extraRows.map((r) => ({ id: r.id, startDate: r.startDate, endDate: r.endDate })),
-                          ].filter((r) => r.startDate);
+                          const rawRows = [
+                            { startDate: primaryRangeValue?.startDate, endDate: primaryRangeValue?.endDate },
+                            ...extraRows.map((r) => ({ startDate: r.startDate, endDate: r.endDate })),
+                          ];
+                          // Merge overlapping/adjacent ranges so the summary
+                          // matches what gets persisted on Save.
+                          const reviewRanges = mergeDateRanges(rawRows);
                           const everyDay = activeWeekdays.length === 7;
                           const previewTimes = mergeTimeRows(timeRanges);
                           return (
@@ -733,15 +784,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                 {reviewRanges.length === 0 ? (
                                   <p className="text-gray-400 italic">No date range selected.</p>
                                 ) : (
-                                  reviewRanges.map((r) => {
+                                  reviewRanges.map((r, idx) => {
                                     const startStr = formatReviewDate(r.startDate);
-                                    const endStr = noEndDate
+                                    const endStr = r.isOpenEnded
                                       ? '∞'
-                                      : r.endDate
-                                      ? formatReviewDate(r.endDate)
-                                      : '—';
+                                      : formatReviewDate(r.endDate);
                                     return (
-                                      <p key={r.id}>
+                                      <p key={idx}>
                                         <span className="text-gray-800">{startStr} – {endStr}</span>{' '}
                                         {everyDay ? (
                                           <span className="text-gray-800">(every day)</span>
