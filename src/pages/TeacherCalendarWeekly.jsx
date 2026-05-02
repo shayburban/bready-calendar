@@ -56,6 +56,16 @@ export default function TeacherCalendarWeekly() {
   const [savedAvailabilitySlots, setSavedAvailabilitySlots] = useState(() =>
     loadAvailabilitySlots()
   );
+  // Mirror Monthly's sidebar wiring so the Set Availability (T) tab is
+  // actually controllable on Weekly too. Without these, primaryRangeValue
+  // is undefined → reviewRanges = [] → Save Dates is permanently disabled.
+  const [extraRows, setExtraRows] = useState([]);
+  const [primaryRange, setPrimaryRange] = useState(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    return { startDate: t, endDate: t };
+  });
+  const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
+  const [noEndDate, setNoEndDate] = useState(false);
 
   useEffect(() => {
     const fetchUserAndEvents = async () => {
@@ -77,6 +87,38 @@ export default function TeacherCalendarWeekly() {
       const next = applySaveAvailability(prev, slots, mode);
       persistAvailabilitySlots(next);
       return next;
+    });
+  };
+
+  const handlePrimaryRangeChange = (rangeData) => {
+    if (!rangeData?.startDate || !rangeData?.endDate) return;
+    const ns = new Date(rangeData.startDate); ns.setHours(0, 0, 0, 0);
+    const ne = new Date(rangeData.endDate); ne.setHours(0, 0, 0, 0);
+    setPrimaryRange((prev) => {
+      if (prev?.startDate && prev?.endDate) {
+        const ps = new Date(prev.startDate); ps.setHours(0, 0, 0, 0);
+        const pe = new Date(prev.endDate); pe.setHours(0, 0, 0, 0);
+        if (ps.getTime() === ns.getTime() && pe.getTime() === ne.getTime()) return prev;
+      }
+      return { startDate: ns, endDate: ne };
+    });
+  };
+
+  const updateExtraRowRange = (id, range) => {
+    setExtraRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...range } : r)));
+  };
+
+  const handleNoEndDateChange = (newValue) => {
+    setNoEndDate(newValue);
+    if (newValue) return;
+    setPrimaryRange((prev) => {
+      if (!prev || !prev.startDate || !prev.endDate) return prev;
+      const s = new Date(prev.startDate); s.setHours(0, 0, 0, 0);
+      const e = new Date(prev.endDate); e.setHours(0, 0, 0, 0);
+      if (s.getTime() > e.getTime()) {
+        return { startDate: s, endDate: s };
+      }
+      return prev;
     });
   };
 
@@ -164,7 +206,22 @@ export default function TeacherCalendarWeekly() {
             view={view}
             setView={setView}
             onLegendFilterChange={setActiveFilters}
+            extraRows={extraRows}
+            onAddExtraRow={() =>
+              setExtraRows((prev) => [
+                ...prev,
+                { id: Math.max(0, ...prev.map((r) => r.id)) + 1 },
+              ])
+            }
+            onRemoveExtraRow={(id) =>
+              setExtraRows((prev) => prev.filter((r) => r.id !== id))
+            }
+            onUpdateExtraRow={updateExtraRowRange}
+            primaryRangeValue={primaryRange}
+            onPrimaryRangeChange={handlePrimaryRangeChange}
+            onActiveWeekdaysChange={setActiveWeekdays}
             onSaveAvailability={handleSaveAvailability}
+            onNoEndDateChange={handleNoEndDateChange}
           />
 
           {/* Main Calendar Area */}
