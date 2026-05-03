@@ -3,6 +3,7 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Clock, User, DollarSign, X } from 'lucide-react';
 import { sampleEvents, weeklyColorMap, weeklyTitleMap, parseTimeRange } from '@/data/sampleEvents';
+import { computeSiblingEvents } from '@/lib/eventSiblings';
 
 const EventIcon = ({ type }) => {
     switch (type) {
@@ -184,7 +185,12 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
                             <EventCard
                                 key={event.id}
                                 event={event}
-                                onEventClick={onEventClick}
+                                onEventClick={(e) =>
+                                    onEventClick({
+                                        ...e,
+                                        siblingEvents: computeSiblingEvents(e, eventsByDayIndex[dayIndex]),
+                                    })
+                                }
                             />
                         ))}
                     </div>

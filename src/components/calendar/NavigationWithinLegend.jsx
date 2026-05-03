@@ -13,30 +13,53 @@ const TimeSlotPill = ({ time, active, onClick }) => (
     </Button>
 );
 
+// When `activeSlot` is supplied the component runs in controlled mode and
+// purely reflects the parent's selection. Otherwise it manages its own
+// active-slot state (legacy behavior, still used inside cards that don't
+// route slot changes back up to the modal).
 const NavigationWithinLegend = ({
     timeSlots = [],
     onSlotSelect,
-    maxVisible = 2
+    maxVisible = 2,
+    activeSlot: activeSlotProp,
 }) => {
+    const isControlled = activeSlotProp !== undefined;
     const [displayedSlots, setDisplayedSlots] = useState([]);
-    const [activeSlot, setActiveSlot] = useState('');
+    const [internalActiveSlot, setInternalActiveSlot] = useState('');
+    const activeSlot = isControlled ? activeSlotProp : internalActiveSlot;
 
     useEffect(() => {
         if (timeSlots.length > 0) {
             setDisplayedSlots(timeSlots.slice(0, maxVisible));
-            const initialActiveSlot = timeSlots[0];
-            setActiveSlot(initialActiveSlot);
-            if (onSlotSelect) onSlotSelect(initialActiveSlot);
+            if (!isControlled) {
+                const initialActiveSlot = timeSlots[0];
+                setInternalActiveSlot(initialActiveSlot);
+                if (onSlotSelect) onSlotSelect(initialActiveSlot);
+            }
         }
-    }, [timeSlots, maxVisible]);
+    }, [timeSlots, maxVisible, isControlled]);
+
+    // Keep the visible row anchored on the controlled activeSlot — if the
+    // parent picks a slot that's currently in overflow, promote it.
+    useEffect(() => {
+        if (!isControlled || !activeSlotProp) return;
+        if (displayedSlots.includes(activeSlotProp)) return;
+        if (!timeSlots.includes(activeSlotProp)) return;
+        const next = [activeSlotProp];
+        const rest = timeSlots.filter((s) => s !== activeSlotProp);
+        for (let i = 0; next.length < maxVisible && i < rest.length; i++) {
+            next.push(rest[i]);
+        }
+        setDisplayedSlots(next);
+    }, [activeSlotProp, isControlled, timeSlots, maxVisible, displayedSlots]);
 
     const handleSelectSlot = (slot) => {
-        setActiveSlot(slot);
+        if (!isControlled) setInternalActiveSlot(slot);
 
         if (!displayedSlots.includes(slot)) {
             const newDisplayedSlots = [slot];
             const remainingOriginalSlots = timeSlots.filter(s => s !== slot);
-            
+
             for (let i = 0; newDisplayedSlots.length < maxVisible && i < remainingOriginalSlots.length; i++) {
                 newDisplayedSlots.push(remainingOriginalSlots[i]);
             }
@@ -47,7 +70,7 @@ const NavigationWithinLegend = ({
             onSlotSelect(slot);
         }
     };
-    
+
     const overflowSlots = timeSlots.filter(slot => !displayedSlots.includes(slot));
 
     return (

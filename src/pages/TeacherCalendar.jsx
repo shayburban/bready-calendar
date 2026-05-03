@@ -45,6 +45,11 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { sampleEvents } from '@/data/sampleEvents';
 import {
+  computeSiblingEvents,
+  synthesizeSavedAvailEvent,
+  dayOfMonthFromSlot,
+} from '@/lib/eventSiblings';
+import {
   applySaveAvailability,
   loadAvailabilitySlots,
   persistAvailabilitySlots,
@@ -332,10 +337,28 @@ export default function TeacherCalendar() {
       .map((e) => new Date(ref.getFullYear(), ref.getMonth(), e.date).toISOString());
     const uniqueDates = [...new Set(allDatesForCategory)];
 
+    // Build the day's combined event list (sample + synthesized saved
+    // availability) so the modal's tab header can show sibling time slots
+    // of the same type+role on the same day.
+    const dayOfMonth = event.date;
+    const yyyy = ref.getFullYear();
+    const mm = String(ref.getMonth() + 1).padStart(2, '0');
+    const dd = String(dayOfMonth).padStart(2, '0');
+    const isoDate = `${yyyy}-${mm}-${dd}`;
+    const sampleDayEvents = sampleEvents.filter((e) => e.date === dayOfMonth);
+    const savedSynth = savedAvailabilitySlots
+      .filter((s) => s.date === isoDate && s.startTime && s.endTime)
+      .map((s, i) =>
+        synthesizeSavedAvailEvent(s, dayOfMonthFromSlot(s) ?? dayOfMonth, eventDate.toISOString(), i)
+      );
+    const allDayEvents = [...sampleDayEvents, ...savedSynth];
+    const siblingEvents = computeSiblingEvents(event, allDayEvents);
+
     setSelectedEvent({
       ...event,
       dateString: eventDate.toISOString(),
       availableDatesForCategory: uniqueDates,
+      siblingEvents,
     });
 
     if (event.type === 'synced') {
