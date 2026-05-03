@@ -77,16 +77,6 @@ export default function EventModal({ event, isOpen, onClose }) {
           </DialogTitle>
         </DialogHeader>
 
-        {allSlots.length > 1 && (
-          <div className="border-b pb-3">
-            <NavigationWithinLegend
-              timeSlots={allSlots.map((s) => s.time)}
-              activeSlot={selectedTime}
-              onSlotSelect={setSelectedTime}
-            />
-          </div>
-        )}
-
         <div className="grid gap-4 py-4">
           <div className="flex items-center gap-2">
             <Clock className="w-4 h-4 text-gray-500" />
@@ -97,6 +87,16 @@ export default function EventModal({ event, isOpen, onClose }) {
             <div className="flex items-center gap-2">
               <Calendar className="w-4 h-4 text-gray-500" />
               <span>{activeEvent.date}</span>
+            </div>
+          )}
+
+          {allSlots.length > 1 && (
+            <div className="border-b pb-3">
+              <NavigationWithinLegend
+                timeSlots={allSlots.map((s) => s.time)}
+                activeSlot={selectedTime}
+                onSlotSelect={setSelectedTime}
+              />
             </div>
           )}
 

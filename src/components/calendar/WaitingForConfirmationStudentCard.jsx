@@ -65,14 +65,16 @@ export default function WaitingForConfirmationStudentCard({ event, onClose }) {
             </Popover>
 
             <div className="flex justify-center items-center gap-2 mb-3">
-                <TabSelector
-                    tabs={timeSlots}
-                    activeTab={activeTimeSlot}
-                    onTabChange={setActiveTimeSlot}
-                    maxVisibleTabs={2}
-                    moreLabel={`+${timeSlots.length - 2} More`}
-                    variant="orange"
-                />
+                {event.slotHeader || (
+                    <TabSelector
+                        tabs={timeSlots}
+                        activeTab={activeTimeSlot}
+                        onTabChange={setActiveTimeSlot}
+                        maxVisibleTabs={2}
+                        moreLabel={`+${timeSlots.length - 2} More`}
+                        variant="orange"
+                    />
+                )}
             </div>
 
             <div className="flex justify-end items-center mb-2">

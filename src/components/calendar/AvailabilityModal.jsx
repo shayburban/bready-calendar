@@ -50,7 +50,21 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
 
   if (!event) return null;
 
-  const activeEvent = allSlots.find((s) => s.time === selectedTime) || event;
+  const baseActive = allSlots.find((s) => s.time === selectedTime) || event;
+  // Controlled chip row injected into each card at its native "below-date,
+  // above-actions" slot. Only renders when there's more than one same-day
+  // sibling for this type+role; otherwise it's null and cards fall through.
+  const slotHeader =
+    allSlots.length > 1 ? (
+      <div className="px-1 pb-1">
+        <NavigationWithinLegend
+          timeSlots={allSlots.map((s) => s.time)}
+          activeSlot={selectedTime}
+          onSlotSelect={setSelectedTime}
+        />
+      </div>
+    ) : null;
+  const activeEvent = { ...baseActive, slotHeader };
 
   const renderCard = () => {
     switch (activeEvent.type) {
@@ -95,15 +109,6 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto p-0 bg-gray-50">
-        {allSlots.length > 1 && (
-          <div className="px-4 pt-4 pb-3 border-b bg-white">
-            <NavigationWithinLegend
-              timeSlots={allSlots.map((s) => s.time)}
-              activeSlot={selectedTime}
-              onSlotSelect={setSelectedTime}
-            />
-          </div>
-        )}
         {renderCard()}
       </DialogContent>
     </Dialog>

@@ -68,10 +68,12 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
         </PopoverContent>
       </Popover>
 
-      <NavigationWithinLegend 
-        timeSlots={event.timeSlots || []}
-        onSlotSelect={setActiveTimeSlot}
-      />
+      {event.slotHeader || (
+        <NavigationWithinLegend
+          timeSlots={event.timeSlots || []}
+          onSlotSelect={setActiveTimeSlot}
+        />
+      )}
 
       <div className="flex justify-end items-center border-b pb-2">
         <Button variant="ghost" size="icon"><Pencil className="w-4 h-4" /></Button>
