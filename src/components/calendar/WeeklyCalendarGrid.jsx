@@ -51,7 +51,7 @@ const EventCard = ({ event, onEventClick }) => {
 
 const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
 
-export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick, activeFilters = ['not-reviewed', 'completed', 'cancelled'] }) {
+export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick, activeFilters = ['not-reviewed', 'completed', 'cancelled'], savedAvailabilitySlots = [] }) {
     const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
     const getWeekDays = (date) => {
@@ -71,10 +71,38 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
     // An event is shown on weekday `i` if its `date` matches that day's day-of-month
     // AND the day falls in the same month/year as `currentDate` (matches monthly view's filter).
     const eventsByDayIndex = weekDays.map((day, dayIndex) => {
+        // Saved availability slots from the shared store carry full ISO
+        // dates (YYYY-MM-DD) so they aren't gated by sameMonth — they show
+        // up wherever the rendered weekday actually matches.
+        const yyyy = day.getFullYear();
+        const mm = String(day.getMonth() + 1).padStart(2, '0');
+        const dd = String(day.getDate()).padStart(2, '0');
+        const isoDate = `${yyyy}-${mm}-${dd}`;
+        const savedAvailEvents = savedAvailabilitySlots
+            .filter((s) => s.date === isoDate && s.startTime && s.endTime)
+            .map((s, i) => {
+                const [sh, sm] = s.startTime.split(':');
+                const [eh, em] = s.endTime.split(':');
+                const startHour = parseInt(sh, 10) + parseInt(sm, 10) / 60;
+                const endHour = parseInt(eh, 10) + parseInt(em, 10) / 60;
+                return {
+                    id: `saved-avail-${s.date}-${s.startTime}-${s.endTime}-${i}`,
+                    type: 'availability',
+                    role: 'T',
+                    date: day.getDate(),
+                    time: `${s.startTime} - ${s.endTime}`,
+                    startHour,
+                    endHour,
+                    dayIndex,
+                    dateString: day.toISOString(),
+                    availableDatesForCategory: [],
+                };
+            });
+
         const sameMonth =
             day.getMonth() === currentDate.getMonth() &&
             day.getFullYear() === currentDate.getFullYear();
-        if (!sameMonth) return [];
+        if (!sameMonth) return savedAvailEvents;
 
         const dayEvents = sampleEvents.filter((e) =>
             e.date === day.getDate() &&
@@ -90,7 +118,7 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
             allDatesByCategory[key].add(iso);
         });
 
-        return dayEvents.map((e) => {
+        const enriched = dayEvents.map((e) => {
             const { startHour, endHour } = parseTimeRange(e.time);
             const dateString = new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString();
             const key = `${e.type}-${e.role || ''}`;
@@ -104,6 +132,8 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
                 availableDatesForCategory,
             };
         });
+
+        return [...enriched, ...savedAvailEvents];
     });
 
     return (

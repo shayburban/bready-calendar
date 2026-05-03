@@ -295,6 +295,7 @@ export default function TeacherCalendarWeekly() {
                 onEventClick={handleEventClick}
                 onEmptyClick={() => setShowAddModal(true)}
                 activeFilters={activeFilters}
+                savedAvailabilitySlots={savedAvailabilitySlots}
               />
             </div>
           </div>
