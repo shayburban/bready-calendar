@@ -7,12 +7,14 @@ import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, Clock, AlertTriangle, X } from 'lucide-react';
+import { format } from 'date-fns';
 import TabSelector from '../common/TabSelector';
 import { cn } from '@/lib/utils';
 
 export default function TeacherAvailabilityStudentCard({ event, onClose }) {
-    const [date, setDate] = useState(new Date(2021, 6, 19));
-    const [activeTimeSlot, setActiveTimeSlot] = useState('15:00 - 16:00');
+    const initialDate = event?.dateString ? new Date(event.dateString) : new Date(2021, 6, 19);
+    const [date, setDate] = useState(initialDate);
+    const [activeTimeSlot, setActiveTimeSlot] = useState(event?.time || '15:00 - 16:00');
     const [showWarning, setShowWarning] = useState(true);
     const [repeatOpen, setRepeatOpen] = useState(false);
     const [activeDays, setActiveDays] = useState(['M', 'T1', 'W']);
@@ -86,7 +88,7 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
 
             <div className="text-sm space-y-1 mb-3">
                 <p className="text-gray-900 font-bold underline">Aman R.</p>
-                <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
+                <p>{event?.time || activeTimeSlot} &nbsp; {format(date, 'dd.MM.yyyy')}</p>
                 <p>Delhi, India</p>
             </div>
 

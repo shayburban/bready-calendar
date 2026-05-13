@@ -26,20 +26,23 @@ const startMinutesOf = (e) => {
 };
 
 export default function AvailabilityModal({ event, isOpen, onClose }) {
-  // Combined slot list: clicked event + same-day siblings of identical
-  // type+role, sorted by start time. Time string is the slot identity.
+  // Combined slot list: clicked event always first, then same-day siblings
+  // of identical type+role sorted chronologically. Time string is the slot
+  // identity used for de-dup.
   const allSlots = useMemo(() => {
     if (!event) return [];
-    const merged = [event, ...(event.siblingEvents || [])];
-    const seen = new Set();
-    const dedup = [];
-    merged.forEach((e) => {
-      if (!e?.time || seen.has(e.time)) return;
-      seen.add(e.time);
-      dedup.push(e);
+    const siblings = (event.siblingEvents || [])
+      .filter((s) => s?.time && s.time !== event.time)
+      .slice()
+      .sort((a, b) => startMinutesOf(a) - startMinutesOf(b));
+    const seen = new Set([event.time]);
+    const dedupSiblings = [];
+    siblings.forEach((s) => {
+      if (seen.has(s.time)) return;
+      seen.add(s.time);
+      dedupSiblings.push(s);
     });
-    dedup.sort((a, b) => startMinutesOf(a) - startMinutesOf(b));
-    return dedup;
+    return [event, ...dedupSiblings];
   }, [event]);
 
   const [selectedTime, setSelectedTime] = useState(event?.time || '');
@@ -61,6 +64,7 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
           timeSlots={allSlots.map((s) => s.time)}
           activeSlot={selectedTime}
           onSlotSelect={setSelectedTime}
+          maxVisible={3}
         />
       </div>
     ) : null;
@@ -108,7 +112,7 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-sm max-h-[90vh] overflow-y-auto p-0 bg-gray-50">
+      <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 bg-gray-50">
         {renderCard()}
       </DialogContent>
     </Dialog>

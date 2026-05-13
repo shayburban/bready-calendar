@@ -4,10 +4,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { ChevronDown } from 'lucide-react';
 
 const TimeSlotPill = ({ time, active, onClick }) => (
-    <Button 
-        variant={active ? "solid" : "outline"}
+    <Button
+        variant={active ? "default" : "outline"}
         onClick={onClick}
-        className={`rounded-full h-8 px-4 transition-colors ${active ? 'bg-green-600 text-white hover:bg-green-700' : 'border-green-600 text-green-700 hover:bg-green-50'}`}
+        className={`rounded-md h-8 px-3 text-xs whitespace-nowrap transition-colors ${active ? 'bg-green-600 text-white border border-green-700 hover:bg-green-700' : 'bg-white border border-green-600 text-green-700 hover:bg-green-50'}`}
     >
         {time}
     </Button>
@@ -20,7 +20,7 @@ const TimeSlotPill = ({ time, active, onClick }) => (
 const NavigationWithinLegend = ({
     timeSlots = [],
     onSlotSelect,
-    maxVisible = 2,
+    maxVisible = 3,
     activeSlot: activeSlotProp,
 }) => {
     const isControlled = activeSlotProp !== undefined;
@@ -74,20 +74,20 @@ const NavigationWithinLegend = ({
     const overflowSlots = timeSlots.filter(slot => !displayedSlots.includes(slot));
 
     return (
-        <div className="flex justify-center items-center flex-wrap gap-2">
+        <div className="flex justify-center items-center flex-nowrap gap-2">
             {displayedSlots.map(slot => (
-                <TimeSlotPill 
+                <TimeSlotPill
                     key={slot}
                     time={slot}
                     active={slot === activeSlot}
                     onClick={() => handleSelectSlot(slot)}
                 />
             ))}
-            
+
             {overflowSlots.length > 0 && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="rounded-full h-8 px-4">
+                        <Button variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
                             +{overflowSlots.length} More <ChevronDown className="w-4 h-4 ml-1" />
                         </Button>
                     </DropdownMenuTrigger>
