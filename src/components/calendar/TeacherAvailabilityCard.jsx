@@ -94,7 +94,7 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
 
       <div className="space-y-1">
         <p className="font-bold text-gray-800 underline">Your Availability</p>
-        <p className="text-sm text-gray-600">{event.time || activeTimeSlot} &nbsp;&nbsp; {format(selectedDate, 'dd.MM.yyyy')}</p>
+        <p className="text-sm text-gray-600">{format(selectedDate, 'dd.MM.yyyy')} | {event.time || activeTimeSlot}</p>
       </div>
 
       <div className="space-y-3">
