@@ -77,6 +77,11 @@ const AdditionalItemsPopover = ({ items, onRemove, validationErrors, dependentFi
   const timeoutRef = useRef(null);
   const popoverRef = useRef(null);
 
+  const hasHiddenError = useMemo(
+    () => items.some((item) => outlineMap[item.id]),
+    [items, outlineMap]
+  );
+
   const handleToggle = useCallback((open) => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsOpen(open);
@@ -103,9 +108,11 @@ const AdditionalItemsPopover = ({ items, onRemove, validationErrors, dependentFi
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
           onClick={handleClick}
-          className="inline-flex items-center gap-2 rounded-md font-medium border border-dashed bg-background hover:bg-accent hover:text-accent-foreground text-xs px-2 py-1 w-[70px] whitespace-nowrap">
+          aria-invalid={hasHiddenError || undefined}
+          className={`inline-flex items-center gap-1 rounded-md font-medium border border-dashed bg-background hover:bg-accent hover:text-accent-foreground text-xs px-2 py-1 w-[70px] whitespace-nowrap ${hasHiddenError ? 'border-red-500 text-red-700 hover:text-red-700' : ''}`}>
 
           +{items.length} More
+          {hasHiddenError && <CircleAlert className="w-3 h-3 text-red-500" />}
         </button>
       </PopoverTrigger>
       <PopoverContent
