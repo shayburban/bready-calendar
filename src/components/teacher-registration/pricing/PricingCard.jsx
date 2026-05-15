@@ -230,26 +230,25 @@ const PricingCard = ({ service, onUpdate, config, showValidationErrors = false, 
                 <h4 className={`text-sm font-semibold mb-3 ${enabled ? 'text-gray-800' : 'text-gray-400'}`}>
                   Amount You Will Receive
                 </h4>
-                <div className="space-y-2">
+                <div className="space-y-4">
                   {/* Commission tiers */}
                   {(config?.commissionTiers ?? []).map((tier, index) => {
                     const receiveAmount = calculateReceiveAmount(price, tier.rate);
-                    const tierLabel = `${tier.minHours} - ${tier.maxHours ? `${tier.maxHours} Teaching Hrs` : '∞ Teaching Hrs'}`;
-                    
+                    const tierLabel = tier.maxHours
+                      ? `${tier.minHours} - ${tier.maxHours} Teaching Hrs`
+                      : `More Than ${tier.minHours} Teaching Hrs`;
+
                     return (
                       <div key={index}>
-                        <div className={`text-xs ${enabled ? 'text-gray-600' : 'text-gray-400'}`}>
+                        <div className={`text-sm font-semibold underline ${enabled ? 'text-gray-700' : 'text-gray-400'}`}>
                           {tierLabel}
                         </div>
-                        <div className={`text-xs ${enabled ? 'text-gray-600' : 'text-gray-400'}`}>
-                          {tier.rate}% Commission
+                        <div className={`text-sm font-semibold mt-1 ${enabled ? 'text-gray-700' : 'text-gray-400'}`}>
+                          {tier.rate}%
                         </div>
-                        <div className={`text-sm font-medium ${enabled ? 'text-blue-600' : 'text-gray-400'}`}>
-                          Receive: ${receiveAmount}
+                        <div className={`text-sm mt-1 ${enabled ? 'text-gray-700' : 'text-gray-400'}`}>
+                          Receive <span className={`font-semibold ${enabled ? 'text-blue-600' : 'text-gray-400'}`}>{receiveAmount} $</span>
                         </div>
-                        {index < (config?.commissionTiers?.length || 0) - 1 && (
-                          <div className="border-b border-gray-200 my-2"></div>
-                        )}
                       </div>
                     );
                   })}
