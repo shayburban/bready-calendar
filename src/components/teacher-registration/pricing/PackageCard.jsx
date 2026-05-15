@@ -275,10 +275,18 @@ export default function PackageCard({
   }, [computed, validate, selectedTier, updateTabState]);
 
   const handleTotalChange = useCallback((rawValue) => {
-    // Disallow negatives and strip everything except digits (no decimals allowed)
+    // Disallow negatives; allow digits and a single decimal point (max 2 decimals)
     let value = rawValue || '';
     if (value.startsWith('-')) value = value.substring(1);
-    value = value.replace(/[^\d]/g, '');
+    value = value.replace(/[^\d.]/g, '');
+    const firstDot = value.indexOf('.');
+    if (firstDot !== -1) {
+      value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
+    }
+    const parts = value.split('.');
+    if (parts[1] && parts[1].length > 2) {
+      value = parts[0] + '.' + parts[1].slice(0, 2);
+    }
 
     const { currentTabState } = computed;
 
@@ -685,7 +693,9 @@ export default function PackageCard({
                       className="mt-1 text-xs text-red-600"
                       aria-live="polite"
                     >
-                      Please enter the number of hours ({currentTier.minHours}–{currentTier.maxHours}) to match the total amount.
+                      {currentTabState.hourValidationError
+                        ? currentTabState.hourValidationError
+                        : `Please enter both hours and total amount (hours: ${currentTier.minHours}–${currentTier.maxHours}).`}
                     </div>
                   )}
                 </div>
