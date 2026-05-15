@@ -321,32 +321,40 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
     const hasInvalidEnabledPackages =
       enabledPackages.some((p) => !recomputePackageValidity(p));
 
+    // Enabled packages WITHOUT any valid size — surfaced to TeacherForm for the popup.
+    // Computed parent-side using the same DB-driven `config.packageTiers`, so the gate
+    // can't drift from the card-level validation (the previous static-PACKAGE_TIERS path
+    // disagreed if admin renamed a tier).
+    const incompletePackages = enabledPackages
+      .filter(p => !pkgHasAtLeastOneValidTier(p))
+      .map(p => ({ id: p.id, title: p.title }));
+
     // UPDATED gate: require ≥1 valid enabled package; untouched sizes don't block
     const baseIsValid =
       hasEnabledNonTrial &&
       !hasUnpricedServices &&
       isTrialPriceValid &&
-      hasAtLeastOneValidEnabledPackage && // New definition here
-      !hasInvalidEnabledPackages; // New definition here
+      hasAtLeastOneValidEnabledPackage &&
+      !hasInvalidEnabledPackages;
 
-    const isValid =
-      baseIsValid &&
-      allPackagesValid && // Combined with pruning, this is now more accurate for enabled packages
-      allPackagesValidRecalc && // Stronger primary check
-      !anyReportedTierErrors; // Also more accurate with pruning
+    // Parent recompute (`allPackagesValidRecalc`) is the single source of truth.
+    // Child-reported `allPackagesValid` / `anyReportedTierErrors` are no longer ANDed
+    // into the gate because they can lag the actual tabStates by one render after
+    // rapid toggling, which previously caused false-blocked Next clicks.
+    const isValid = baseIsValid && allPackagesValidRecalc;
 
     const details = {
-      hasEnabledNonTrial,     // << parent gate uses this
+      hasEnabledNonTrial,
       hasUnpricedServices,
-      hasUnpricedPackages,      // kept for compatibility (not used to block)
+      hasUnpricedPackages,
       isTrialPriceValid,
-      allPackagesValid, // for debugging/telemetry if needed
-      allPackagesValidRecalc, // for debugging/telemetry if needed
-      anyReportedTierErrors,
-      // NEW (ADD-ONLY)
+      allPackagesValid,           // diagnostic only — not used to gate
+      allPackagesValidRecalc,
+      anyReportedTierErrors,      // diagnostic only — not used to gate
       hasAtLeastOneValidEnabledPackage,
       hasInvalidEnabledPackages,
-      enabledPackagesCount: enabledPackages.length, // helpful to parent
+      enabledPackagesCount: enabledPackages.length,
+      incompletePackages,         // [{ id, title }] — drives the Next-gate popup
     };
 
     onValidationChange(isValid, details);

@@ -18,7 +18,6 @@ import FormValidation from './FormValidation';
 import AuthorizationGate from './AuthorizationGate';
 import ProgressBar from '../common/ProgressBar';
 import { persistenceManager } from '../common/PersistenceManager';
-import { TEACHER_PROFILE_CONFIG } from '../config/teacherProfileConfig';
 import CustomAlertModal from '../common/CustomAlertModal';
 
 // Development mode bypass
@@ -53,7 +52,6 @@ const TeacherForm = () => {
   } = useTeacher();
 
   // Access package tiers configuration
-  const { PACKAGE_TIERS } = TEACHER_PROFILE_CONFIG;
 
   // Load state from localStorage on initial mount - RESTORED: Uncommented this logic
   useEffect(() => {
@@ -294,30 +292,20 @@ const TeacherForm = () => {
     if (currentStep === 5 && currentSubStep === 1) {
       const messages = [];
 
+      // Source of truth is Step5aPricing's reported details — it validates using the
+      // DB-fetched `config.packageTiers`, so the gate can't disagree with card-level
+      // validation if the admin renames a tier (the old static-PACKAGE_TIERS path did).
+      const details = pricingValidationDetails || {};
+
       // (1) No non-trial service selected
-      const hasEnabledNonTrial = (services || []).some(s => s.enabled && !s.isTrial);
-      if (!hasEnabledNonTrial) {
+      if (details.hasEnabledNonTrial === false) {
         messages.push('Please select at least one service (not a trial lesson) to continue.');
       }
 
       // (2) Enabled packages missing at least one valid size
-      const enabledPackages = (packages || []).filter(p => p.enabled); // disabled never block
-      const tiersList = PACKAGE_TIERS || [];
-
-      const incompletePackages = enabledPackages.filter(p => {
-        if (!Array.isArray(tiersList) || tiersList.length === 0) return false;
-
-        // At least ONE tier must have BOTH fields present and valid (>0 numbers)
-        const hasAtLeastOneValidTier = tiersList.some(tier => {
-          const s = (p.tierData && p.tierData[tier.name]) || {};
-          if (!s.hours || !s.totalStr) return false;
-          const hours = parseFloat(s.hours);
-          const total = parseFloat(s.totalStr);
-          return Number.isFinite(hours) && hours > 0 && Number.isFinite(total) && total > 0;
-        });
-
-        return !hasAtLeastOneValidTier;
-      });
+      const incompletePackages = Array.isArray(details.incompletePackages)
+        ? details.incompletePackages
+        : [];
 
       if (incompletePackages.length > 0) {
         const names = incompletePackages.map(p => p.title).join(', ');
@@ -326,7 +314,7 @@ const TeacherForm = () => {
 
       if (messages.length > 0) {
         setShowValidationErrors(true); // drives red outlines on enabled invalid package cards
-        setAlertInfo({ isOpen: true, message: messages.join('\n\n') }); // REPLACED window.alert
+        setAlertInfo({ isOpen: true, message: messages.join('\n\n') });
         return; // block navigation
       }
     }
