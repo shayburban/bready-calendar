@@ -109,10 +109,14 @@ const AdditionalItemsPopover = ({ items, onRemove, validationErrors, dependentFi
           onMouseLeave={handleMouseLeave}
           onClick={handleClick}
           aria-invalid={hasHiddenError || undefined}
-          className={`inline-flex items-center gap-1 rounded-md font-medium border border-dashed bg-background hover:bg-accent hover:text-accent-foreground text-xs px-2 py-1 w-[70px] whitespace-nowrap ${hasHiddenError ? 'border-red-500 text-red-700 hover:text-red-700' : ''}`}>
+          className={
+            hasHiddenError
+              ? 'inline-flex items-center justify-center gap-1 rounded-md font-medium border border-dashed text-xs px-2 py-1 w-[78px] whitespace-nowrap border-red-500 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-500 hover:text-red-700'
+              : 'inline-flex items-center justify-center gap-1 rounded-md font-medium border border-dashed bg-background hover:bg-accent hover:text-accent-foreground text-xs px-2 py-1 w-[70px] whitespace-nowrap'
+          }>
 
           +{items.length} More
-          {hasHiddenError && <CircleAlert className="w-3 h-3 text-red-500" />}
+          {hasHiddenError && <CircleAlert className="w-3 h-3 text-red-500 flex-shrink-0" />}
         </button>
       </PopoverTrigger>
       <PopoverContent
