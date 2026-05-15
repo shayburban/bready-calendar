@@ -135,20 +135,33 @@ export default function Step5bCancellation() {
   }, [isFreeCancellationDisabled, adminConfig]);
 
   useEffect(() => {
+    const DEFAULT_COMMISSION_TIERS = [
+      { minHours: 2, maxHours: 20, rate: 24 },
+      { minHours: 21, maxHours: 50, rate: 22 },
+      { minHours: 51, maxHours: null, rate: 20 },
+    ];
     const fetchConfig = async () => {
       try {
         const configs = await AdminPricingConfig.list();
         if (configs.length > 0) {
-          setAdminConfig(configs[0]);
+          const fetched = configs[0];
+          const hasTiers = Array.isArray(fetched.commissionTiers) && fetched.commissionTiers.length > 0;
+          setAdminConfig({
+            ...fetched,
+            commissionTiers: hasTiers ? fetched.commissionTiers : DEFAULT_COMMISSION_TIERS,
+          });
           // Set default days when config is loaded
-          const defaultDays = configs[0].cancellationPolicy?.studentCancellation?.defaultFreeCancellationDays || 10;
+          const defaultDays = fetched.cancellationPolicy?.studentCancellation?.defaultFreeCancellationDays || 10;
           setCancellationFees((prev) => ({
             ...prev,
             freeCancellationDays: defaultDays
           }));
+        } else {
+          setAdminConfig({ commissionTiers: DEFAULT_COMMISSION_TIERS });
         }
       } catch (error) {
         console.error("Failed to fetch admin config:", error);
+        setAdminConfig({ commissionTiers: DEFAULT_COMMISSION_TIERS });
       } finally {
         setLoading(false);
       }
@@ -319,7 +332,7 @@ export default function Step5bCancellation() {
         <h3 className="text-xl font-semibold text-gray-800 mb-2">Fees You Will Receive</h3>
         <p className="text-sm text-gray-500 mb-4">Including commission and charges.</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          {adminConfig?.commissionTiers.map((tier, index) =>
+          {(adminConfig?.commissionTiers ?? []).map((tier, index) =>
           <CommissionTierCard key={index} tier={tier} services={services} cancellationFee={cancellationFees.percentage} />
           )}
         </div>
