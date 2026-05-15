@@ -216,16 +216,26 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
   }), [config]);
 
   useEffect(() => {
+    const DEFAULT_COMMISSION_TIERS = [
+      { minHours: 2, maxHours: 20, rate: 24 },
+      { minHours: 21, maxHours: 50, rate: 22 },
+      { minHours: 51, maxHours: null, rate: 20 },
+    ];
     const fetchConfig = async () => {
       try {
         setLoading(true);
         const configs = await AdminPricingConfig.filter({ isActive: true });
         if (configs.length > 0) {
-          setConfig(configs[0]);
+          const fetched = configs[0];
+          const hasTiers = Array.isArray(fetched.commissionTiers) && fetched.commissionTiers.length > 0;
+          setConfig({
+            ...fetched,
+            commissionTiers: hasTiers ? fetched.commissionTiers : DEFAULT_COMMISSION_TIERS,
+          });
         } else {
           // Fallback to a default if nothing is configured
           setConfig({
-            commissionTiers: [{ minHours: 0, maxHours: null, rate: 20 }],
+            commissionTiers: DEFAULT_COMMISSION_TIERS,
             trialLesson: { adminMinPercentage: 0, adminMaxPercentage: 100, commissionRate: 10 },
             packageTiers: []
           });
