@@ -4,6 +4,7 @@ import { PendingCity } from '@/api/entities';
 import { TeacherProfile } from '@/api/entities';
 import { Country } from '@/api/entities';
 import { InvokeLLM } from '@/api/integrations';
+import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -314,39 +315,16 @@ export default function AdminPendingApprovals() {
     };
 
   const handleApproveData = async (item) => {
-    try {
-        const profiles = await TeacherProfile.filter({ user_id: item.teacher_id });
-        if (profiles.length === 0) throw new Error("Teacher profile not found");
-        const profile = profiles[0];
-
-        const keyMap = {
-            subject: 'subjects',
-            specialization: 'specializations',
-            board: 'boards',
-            exam: 'exams',
-        };
-        const targetArrayKey = keyMap[item.data_type];
-        if (!targetArrayKey) throw new Error("Invalid data type");
-
-        const newData = {
-            [`${item.data_type}Name`]: item.data_value,
-            ...item.additional_info,
-            isCustom: false,
-            id: `approved_${Date.now()}`
-        };
-
-        const updatedProfile = {
-            ...profile,
-            [targetArrayKey]: [...(profile[targetArrayKey] || []), newData]
-        };
-
-        await TeacherProfile.update(profile.id, updatedProfile);
-        await PendingData.update(item.id, { status: 'approved' });
-        fetchData();
-    } catch (error) {
-        console.error("Failed to approve data:", error);
-        alert(`Error: ${error.message}`);
+    const { error } = await supabase.rpc('approve_pending_data', {
+      p_pending_id: item.id,
+      p_admin_email: 'admin',
+    });
+    if (error) {
+      console.error("Failed to approve data:", error);
+      alert(`Error: ${error.message}`);
+      return;
     }
+    fetchData();
   };
 
   const handleRejectData = async (item, reason = 'Quality standards not met') => {
@@ -365,24 +343,16 @@ export default function AdminPendingApprovals() {
   };
   
   const handleApproveCity = async (item) => {
-     try {
-        const countries = await Country.filter({ country_name: item.country_name });
-        if (countries.length === 0) throw new Error("Country not found");
-        const country = countries[0];
-        
-        const newCity = { city_name: item.city_name, timezone: item.timezone };
-        const updatedCountry = {
-            ...country,
-            cities: [...(country.cities || []), newCity]
-        };
-
-        await Country.update(country.id, updatedCountry);
-        await PendingCity.update(item.id, { status: 'approved' });
-        fetchData();
-    } catch (error) {
-        console.error("Failed to approve city:", error);
-        alert(`Error: ${error.message}`);
+    const { error } = await supabase.rpc('approve_pending_city', {
+      p_pending_id: item.id,
+      p_admin_email: 'admin',
+    });
+    if (error) {
+      console.error("Failed to approve city:", error);
+      alert(`Error: ${error.message}`);
+      return;
     }
+    fetchData();
   };
 
   const handleRejectCity = async (item, reason = 'Invalid city or location') => {
