@@ -11,11 +11,15 @@ import TabletHeader from '../header/TabletHeader';
 import MobileHeader from '../header/MobileHeader';
 import SlidingMenu from '../header/SlidingMenu';
 import EnhancedSearchPanel from '../../ai/EnhancedSearchPanel';
+import LoginModal from '../../auth/LoginModal';
+import RegisterModal from '../../auth/RegisterModal';
 import { useToast } from "@/components/ui/use-toast";
 
 export default function GuestHeader({ isViewAsMode = false }) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isLoginOpen, setIsLoginOpen] = useState(false);
+    const [isRegisterOpen, setIsRegisterOpen] = useState(false);
     const windowWidth = useWindowWidth();
     const { toast } = useToast();
 
@@ -42,14 +46,14 @@ export default function GuestHeader({ isViewAsMode = false }) {
         { 
             key: 'signup', 
             type: 'component', 
-            Component: () => <Button className="btn-pill-outline-green">Sign Up</Button>, 
+            Component: () => <Button className="btn-pill-outline-green" onClick={() => setIsRegisterOpen(true)}>Sign Up</Button>,
             priority: 7, 
             position: 'right' 
         },
         { 
             key: 'login', 
             type: 'component', 
-            Component: () => <Button className="btn-signup">Login</Button>, 
+            Component: () => <Button className="btn-signup" onClick={() => setIsLoginOpen(true)}>Login</Button>,
             priority: 6, 
             position: 'right' 
         },
@@ -113,10 +117,21 @@ export default function GuestHeader({ isViewAsMode = false }) {
                 menuSide={isDesktop ? 'right' : 'left'}
             />
 
-            <EnhancedSearchPanel 
+            <EnhancedSearchPanel
                 isOpen={isSearchOpen}
                 onClose={() => setIsSearchOpen(false)}
                 onSearch={handleSearch}
+            />
+
+            <LoginModal
+                isOpen={isLoginOpen}
+                onOpenChange={setIsLoginOpen}
+                onRegisterOpen={() => setIsRegisterOpen(true)}
+            />
+            <RegisterModal
+                isOpen={isRegisterOpen}
+                onOpenChange={setIsRegisterOpen}
+                onLoginOpen={() => setIsLoginOpen(true)}
             />
         </>
     );

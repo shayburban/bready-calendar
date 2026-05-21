@@ -56,8 +56,8 @@ export const useResponsiveNavigation = ({
             }
         }
 
-        setVisibleItems(visible);
-        setOverflowItems(overflow);
+        setVisibleItems(prev => sameKeys(prev, visible) ? prev : visible);
+        setOverflowItems(prev => sameKeys(prev, overflow) ? prev : overflow);
     }, [containerWidth, items, reservedWidth, alwaysVisibleItems]);
 
     useEffect(() => {
@@ -86,6 +86,17 @@ export const useResponsiveNavigation = ({
         containerWidth
     };
 };
+
+// Two item lists are equivalent when they reference the same keys in order.
+// Used to skip redundant setState calls that would otherwise loop forever
+// (callers pass a freshly-built items array on every render).
+function sameKeys(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i].key !== b[i].key) return false;
+    }
+    return true;
+}
 
 // Utility function for debouncing
 function debounce(func, wait) {

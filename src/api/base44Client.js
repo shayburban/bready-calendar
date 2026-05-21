@@ -19,6 +19,7 @@ const PRESET_USERS = {
   teacher: { id: 'u-sarah', email: 'sarah@example.com', full_name: 'Sarah Johnson', role: 'teacher', country_code: 'US' },
   student: { id: 'u-student1', email: 'alex@example.com', full_name: 'Alex Kim', role: 'student', country_code: 'US' },
   parent: { id: 'u-parent1', email: 'parent@example.com', full_name: 'David Goldberg', role: 'parent', country_code: 'IL' },
+  guest: { id: 'guest', email: '', full_name: 'Guest', role: 'guest', country_code: 'US' },
 };
 
 const applyUidOverride = (preset, uid, seedUsers) => {
