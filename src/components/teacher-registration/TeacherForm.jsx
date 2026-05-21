@@ -302,7 +302,17 @@ const TeacherForm = () => {
         messages.push('Please select at least one service (not a trial lesson) to continue.');
       }
 
-      // (2) Enabled packages missing at least one valid size
+      // (2) Selected services missing an hourly rate
+      if (details.hasUnpricedServices === true) {
+        messages.push('Please set hourly rates for all selected services.');
+      }
+
+      // (3) Trial lesson pricing invalid
+      if (details.isTrialPriceValid === false) {
+        messages.push('Please configure trial lesson pricing correctly.');
+      }
+
+      // (4) Enabled packages missing at least one valid size
       const incompletePackages = Array.isArray(details.incompletePackages)
         ? details.incompletePackages
         : [];
@@ -310,6 +320,12 @@ const TeacherForm = () => {
       if (incompletePackages.length > 0) {
         const names = incompletePackages.map(p => p.title).join(', ');
         messages.push(`Please complete at least one package size for: ${names}, or disable these packages by clicking the checkmark.`);
+      }
+
+      // (5) Enabled packages with tier-level size errors (hours range /
+      // monotonicity / service-rate). Distinct from "incomplete" (4) above.
+      if (details.anyReportedTierErrors === true) {
+        messages.push('Some enabled packages have size errors. Please fix them.');
       }
 
       if (messages.length > 0) {

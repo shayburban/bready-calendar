@@ -36,7 +36,7 @@ export default function CustomAlertModal({ isOpen, onClose, title, message }) {
           <CardContent>
             <div className="bg-red-50 p-4 rounded-md">
               {messages.map((msg, index) => (
-                <p key={index} className="text-red-800 font-medium mb-3 last:mb-0">
+                <p key={index} className="text-red-800 font-medium mb-4 last:mb-0">
                   {hasMultipleMessages ? `${index + 1}. ${msg}` : msg}
                 </p>
               ))}

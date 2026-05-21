@@ -486,6 +486,22 @@ export default function PackageCard({
     }
   }, [enabled, tiers, tabStates, validate, updateTabState, onUpdate, id]);
 
+  // Req 1: if the parent service's hourly rate is removed (serviceHourly <= 0),
+  // drop any total amounts this package still holds — they depended on it.
+  // Runs once (totals become empty) so it can't loop; hours are left intact.
+  useEffect(() => {
+    if (!hasItems(tiers) || serviceHourly > 0) return;
+    let cleared = false;
+    tiers.forEach((t) => {
+      const s = tabStates[t.name] || {};
+      if ((s.totalStr ?? '') !== '') {
+        updateTabState(t.name, { totalStr: '', totalValidationError: '', totalRequired: false });
+        cleared = true;
+      }
+    });
+    if (cleared && price) onUpdate(id, 'price', '');
+  }, [serviceHourly, tiers, tabStates, updateTabState, price, id, onUpdate]);
+
   const { currentTier, currentTabState, commissionRate, hourlyRate } = computed;
   // sync pkg.price (hourly) with selected tier validity; parent logic unchanged
   useEffect(() => {
@@ -773,28 +789,39 @@ export default function PackageCard({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Total amount
                   </label>
-                  <div
-                    className={`flex ${totalDisabled ? 'cursor-not-allowed' : ''}`}
-                    title={totalDisabled ? totalDisabledMsg : undefined}
-                  >
-                    <Input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="Type price"
-                      value={currentTabState.totalStr || ''}
-                      onChange={(e) => handleTotalChange(e.target.value)}
-                      onFocus={handleTotalFocus}
-                      onBlur={handleTotalBlur}
-                      disabled={totalDisabled}
-                      title={totalDisabled ? totalDisabledMsg : undefined}
-                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${totalDisabled ? 'pointer-events-none' : ''} ${
-                        (currentTabState.totalValidationError || currentTabState.totalRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-                      }`}
-                    />
-                    <span className="inline-flex items-center px-3 text-sm text-gray-600 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md">
-                      {currency}
-                    </span>
-                  </div>
+                  {(() => {
+                    const field = (
+                      <div className={`flex ${totalDisabled ? 'cursor-not-allowed' : ''}`}>
+                        <Input
+                          type="text"
+                          inputMode="numeric"
+                          placeholder="Type price"
+                          value={currentTabState.totalStr || ''}
+                          onChange={(e) => handleTotalChange(e.target.value)}
+                          onFocus={handleTotalFocus}
+                          onBlur={handleTotalBlur}
+                          disabled={totalDisabled}
+                          className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${totalDisabled ? 'pointer-events-none' : ''} ${
+                            (currentTabState.totalValidationError || currentTabState.totalRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                          }`}
+                        />
+                        <span className="inline-flex items-center px-3 text-sm text-gray-600 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md">
+                          {currency}
+                        </span>
+                      </div>
+                    );
+                    // Req 2: when locked, an instant (no-delay) tooltip explains why.
+                    return totalDisabled ? (
+                      <TooltipProvider delayDuration={0}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>{field}</TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{totalDisabledMsg}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : field;
+                  })()}
                   {showValidationErrors && currentTabState.totalValidationError && (
                     <p className="text-xs text-red-500 mt-1">{currentTabState.totalValidationError}</p>
                   )}
