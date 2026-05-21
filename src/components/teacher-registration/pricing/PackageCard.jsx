@@ -168,43 +168,73 @@ export default function PackageCard({
     [tabStates, validate]
   );
 
-  // --- ADD-ONLY: compute monotonicity per tier and store a small error flag/message
+  // --- Monotonicity: base >= first tier (non-strict, UNCHANGED), then each
+  // larger package must be STRICTLY cheaper per hour than the nearest preceding
+  // priced tier. A skipped middle tier (e.g. Medium left empty) compares the
+  // later tier directly to the earlier one (Rule 4). Errors reuse the existing
+  // monotonicityError/monotonicityMsg state, so every downstream gate
+  // (computePackageValidity, red tab buttons, cross-tab warning) applies as-is.
   useEffect(() => {
     if (!enabled || !hasItems(tiers)) return;
 
-    // cap for index 0 = serviceHourly (if >0), else Infinity; for others = previous tier hourly (if >0), else Infinity
-    const capFor = (idx) => {
-      if (idx === 0) return (typeof serviceHourly === 'number' && serviceHourly > 0) ? +serviceHourly : Infinity;
-      const prev = perTierHourly[tiers[idx - 1].name] || 0;
-      return prev > 0 ? prev : Infinity;
+    // A tier's rate counts only when both hours & total are > 0 AND it has no
+    // local field error — so monotonicity never piles on top of a range/required
+    // error (matches the previous behavior).
+    const rateOf = (name) => {
+      const s = tabStates[name] || {};
+      const hasLocalErr = !!(s.hourValidationError || s.totalValidationError || s.hoursRequired || s.totalRequired);
+      if (hasLocalErr) return null;
+      const r = perTierHourly[name] || 0;
+      return r > 0 ? r : null;
     };
 
+    const base = (typeof serviceHourly === 'number' && serviceHourly > 0) ? +serviceHourly : null;
+
+    // First assignment wins, matching the rule execution order (base -> S -> M -> L).
+    const msgByTier = {};
+    const setMsg = (name, msg) => { if (!msgByTier[name]) msgByTier[name] = msg; };
+
     tiers.forEach((t, idx) => {
-      const s = tabStates[t.name] || {};
-      const hasLocalErr = !!(s.hourValidationError || s.totalValidationError || s.hoursRequired || s.totalRequired);
-      const hourly = perTierHourly[t.name] || 0;
+      const myRate = rateOf(t.name);
+      if (myRate == null) return;
 
-      let monotonicityError = false;
-      let monotonicityMsg = '';
-
-      if (!hasLocalErr && hourly > 0) {
-        const cap = capFor(idx);
-        if (hourly > cap) {
-          monotonicityError = true;
-          monotonicityMsg =
-            idx === 0
-              ? `Hourly rate $${money(hourly)}/Hr cannot exceed service rate $${cap === Infinity ? '∞' : money(cap)}/Hr.`
-              : `Hourly rate $${money(hourly)}/Hr cannot exceed ${tiers[idx - 1].name} rate $${cap === Infinity ? '∞' : money(cap)}/Hr.`;
+      if (idx === 0) {
+        // Rule 1 (UNCHANGED): first tier may not exceed the base service rate.
+        if (base != null && myRate > base) {
+          setMsg(t.name, `Hourly rate $${money(myRate)}/Hr cannot exceed service rate $${money(base)}/Hr.`);
         }
+        return;
       }
 
-      // Update the tab state with monotonicity info
-      // Only update if state actually changed to prevent unnecessary re-renders
-      if (!!s.monotonicityError !== monotonicityError || s.monotonicityMsg !== monotonicityMsg) {
-        updateTabState(t.name, {
-          monotonicityError,
-          monotonicityMsg
-        });
+      // Nearest preceding priced tier (skips empty/invalid tiers -> Rule 4 edge case).
+      let prevIdx = -1;
+      for (let j = idx - 1; j >= 0; j--) {
+        if (rateOf(tiers[j].name) != null) { prevIdx = j; break; }
+      }
+      if (prevIdx === -1) return;
+
+      const prevName = tiers[prevIdx].name;
+      const prevRate = rateOf(prevName);
+
+      // STRICT decreasing: a larger package must be cheaper per hour than a smaller one.
+      if (myRate >= prevRate) {
+        setMsg(t.name, `${t.name} package hourly rate ($${money(myRate)}/hr) must be strictly less than the ${prevName} package rate ($${money(prevRate)}/hr).`);
+        // Reciprocal message on the earlier tier, but only when the two are
+        // adjacent (Small<->Medium, Medium<->Large). The skipped-tier edge case
+        // flags only the later tier, per spec.
+        if (prevIdx === idx - 1) {
+          setMsg(prevName, `${prevName} package hourly rate ($${money(prevRate)}/hr) must be strictly greater than the ${t.name} package rate ($${money(myRate)}/hr).`);
+        }
+      }
+    });
+
+    // Commit per tier, only when changed (prevents render loops, as before).
+    tiers.forEach((t) => {
+      const msg = msgByTier[t.name] || '';
+      const hasErr = !!msg;
+      const s = tabStates[t.name] || {};
+      if (!!s.monotonicityError !== hasErr || s.monotonicityMsg !== msg) {
+        updateTabState(t.name, { monotonicityError: hasErr, monotonicityMsg: msg });
       }
     });
   }, [enabled, tiers, tabStates, perTierHourly, serviceHourly, updateTabState]);
