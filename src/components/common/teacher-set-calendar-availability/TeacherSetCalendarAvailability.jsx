@@ -12,6 +12,28 @@ const timeToMinutes = (t) => {
   return h * 60 + m;
 };
 
+// Collapse overlapping/adjacent slots on the same day into continuous
+// windows (sort by start, fold when next.start <= current.end). Mirrors the
+// mergeTimeRows fold used by the "Set Availability (T)" tab so the summary
+// reads e.g. 01:00-03:00 + 00:30-04:00 + 00:00-23:30 as a single 00:00-23:30.
+const mergeRanges = (ranges) => {
+  const valid = (ranges || []).filter(
+    (r) => r.start && r.end && timeToMinutes(r.end) > timeToMinutes(r.start)
+  );
+  if (valid.length === 0) return [];
+  const sorted = [...valid].sort((a, b) => timeToMinutes(a.start) - timeToMinutes(b.start));
+  const merged = [];
+  sorted.forEach((r) => {
+    const last = merged[merged.length - 1];
+    if (last && timeToMinutes(r.start) <= timeToMinutes(last.end)) {
+      if (timeToMinutes(r.end) > timeToMinutes(last.end)) last.end = r.end;
+    } else {
+      merged.push({ start: r.start, end: r.end });
+    }
+  });
+  return merged;
+};
+
 const TeacherSetCalendarAvailability = () => {
   const { availability, dispatchAvailability } = useTeacher();
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -20,12 +42,7 @@ const TeacherSetCalendarAvailability = () => {
   // the teacher actually selected. Drives the summary box below (the weekly
   // equivalent of the "Set Availability (T)" tab's dates & hours review).
   const selectedDays = daysOfWeek
-    .map((day) => ({
-      day,
-      ranges: (availability.slots[day] || []).filter(
-        (s) => s.start && s.end && timeToMinutes(s.end) > timeToMinutes(s.start)
-      ),
-    }))
+    .map((day) => ({ day, ranges: mergeRanges(availability.slots[day]) }))
     .filter((d) => d.ranges.length > 0);
 
   const handleSlotChange = (day, slotId, updatedSlot) => {
@@ -100,8 +117,8 @@ const TeacherSetCalendarAvailability = () => {
               <ul className="list-disc list-inside space-y-2 text-yellow-800 font-medium">
                 <li>The times you select here become your live Teacher Availability, allowing students to instantly book lessons.</li>
                 <li>You can edit these hours anytime in your Teacher Calendar.</li>
+                <li>Removing a time slot immediately stops new bookings for that time.</li>
               </ul>
-              <p className="text-yellow-800 font-medium">Removing a time slot immediately stops new bookings for that time.</p>
             </div>
           </div>
         </div>

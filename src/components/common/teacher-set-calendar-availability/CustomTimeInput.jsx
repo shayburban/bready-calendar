@@ -17,6 +17,7 @@ const CustomTimeInput = ({
   const dropdownRef = useRef(null);
   const hourRef = useRef(null);
   const minuteRef = useRef(null);
+  const optionsRef = useRef(null);
 
   useEffect(() => {
     if (value) {
@@ -46,6 +47,18 @@ const CustomTimeInput = ({
   useEffect(() => {
     if (openSignal) setIsOpen(true);
   }, [openSignal]);
+
+  // On open, scroll the options so the first selectable increment (e.g. the
+  // first time chronologically after the chosen start) sits at the top.
+  useEffect(() => {
+    if (!isOpen) return;
+    const container = optionsRef.current;
+    if (!container) return;
+    const firstEnabled = container.querySelector('[data-time][data-disabled="false"]');
+    if (firstEnabled) {
+      container.scrollTop = Math.max(0, firstEnabled.offsetTop - container.offsetTop);
+    }
+  }, [isOpen]);
 
   // Auto-focus to minutes field when hour is complete (2 digits)
   useEffect(() => {
@@ -209,11 +222,12 @@ const CustomTimeInput = ({
           </div>
 
           {/* Dropdown Options */}
-          <div className="max-h-48 overflow-y-auto">
+          <div className="max-h-48 overflow-y-auto" ref={optionsRef}>
             {options.map((option) =>
           <div
             key={`time-${option.value}`}
             data-time={option.value}
+            data-disabled={option.disabled ? 'true' : 'false'}
             className={`px-3 py-2 cursor-pointer hover:bg-gray-100 text-sm ${
             option.disabled ? 'text-gray-400 cursor-pointer bg-gray-50' : ''}`
             }
