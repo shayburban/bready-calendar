@@ -1,11 +1,32 @@
 import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import DayScheduleRow from './DayScheduleRow';
 import { useTeacher } from '@/components/teacher-registration/TeacherContext';
 
+// Mirrors DayScheduleRow's validity check: a slot only counts once both ends
+// are set and end is strictly after start (times are 24h "HH:MM").
+const timeToMinutes = (t) => {
+  if (!t || !t.includes(':')) return 0;
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+};
+
 const TeacherSetCalendarAvailability = () => {
   const { availability, dispatchAvailability } = useTeacher();
   const daysOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+  // The same slot data the rows above use, distilled to the days/time-blocks
+  // the teacher actually selected. Drives the summary box below (the weekly
+  // equivalent of the "Set Availability (T)" tab's dates & hours review).
+  const selectedDays = daysOfWeek
+    .map((day) => ({
+      day,
+      ranges: (availability.slots[day] || []).filter(
+        (s) => s.start && s.end && timeToMinutes(s.end) > timeToMinutes(s.start)
+      ),
+    }))
+    .filter((d) => d.ranges.length > 0);
 
   const handleSlotChange = (day, slotId, updatedSlot) => {
     dispatchAvailability({
@@ -50,6 +71,41 @@ const TeacherSetCalendarAvailability = () => {
             isToggled={availability.slots[day] && availability.slots[day].length > 0}
           />
         ))}
+
+        {/* Availability summary + warning — sits at the very end of the
+            hours/days selection, mirroring the "Set Availability (T)" tab's
+            review box and Step 5b's yellow alert styling. */}
+        <div className="mt-6 space-y-4">
+          <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
+            <h5 className="font-bold text-gray-800">Changes will be made to the following dates & hours:</h5>
+            <div>
+              <h6 className="font-semibold">Days & Timings:</h6>
+              {selectedDays.length === 0 ? (
+                <p className="text-gray-400 italic">No availability selected yet</p>
+              ) : (
+                selectedDays.map(({ day, ranges }) => (
+                  <p key={day}>
+                    <span className="text-gray-800 font-medium">{day}:</span>{' '}
+                    {ranges.map((r) => `${r.start} – ${r.end}`).join(', ')}
+                  </p>
+                ))
+              )}
+            </div>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div className="space-y-2">
+              <p className="text-yellow-800 font-bold">Understanding Your Teacher Availability (T) Update</p>
+              <p className="text-yellow-800 font-medium">
+                The specific days and hours you have selected above will be immediately injected into your Teacher Availability (T) schedule. "Teacher Availability" represents the live time slots where students can instantly book lessons with you.
+              </p>
+              <p className="text-yellow-800 font-medium">
+                <span className="font-bold">Please note:</span> When you later open Set Availability (T) in your Teacher Calendar, these days and hours will already be in place. Any changes you make there override what you set here, and removing a slot immediately stops students from being able to book that time.
+              </p>
+            </div>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
