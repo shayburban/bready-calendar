@@ -141,6 +141,7 @@ const QRTab = ({ onRegisterOpen }) => (
 export default function LoginModal({ isOpen, onOpenChange, onRegisterOpen }) {
 
     const handleLogin = async () => {
+        sessionStorage.setItem('bready_pending_login', '1');
         const { error } = await supabase.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo: window.location.origin },

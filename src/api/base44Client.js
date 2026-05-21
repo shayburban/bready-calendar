@@ -230,6 +230,7 @@ export const base44 = {
       return clone(MOCK_USER);
     },
     login: async () => {
+      sessionStorage.setItem('bready_pending_login', '1');
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin },
