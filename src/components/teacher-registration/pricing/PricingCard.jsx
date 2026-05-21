@@ -178,7 +178,7 @@ const PricingCard = ({ service, onUpdate, config, showValidationErrors = false, 
                       }
                     }}
                     onClick={(e) => e.stopPropagation()} // Stop propagation to prevent label's onClickCapture from firing
-                    className={`relative focus:z-10 rounded-r-none ${
+                    className={`relative focus:z-10 rounded-r-none bg-gray-50 ${
                       hasError
                         ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
                         : ''

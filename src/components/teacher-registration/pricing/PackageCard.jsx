@@ -47,6 +47,11 @@ export default function PackageCard({
 }) {
   const { id, serviceId, title, enabled, price, selectedTier = tiers?.[0]?.name || '', tooltip, currency = 'USD' } = pkg;
 
+  // Req 2: the Total amount field is locked until the parent service has a
+  // price (serviceHourly > 0); hovering the locked field explains why.
+  const totalDisabled = !(serviceHourly > 0);
+  const totalDisabledMsg = 'Enter a price for this service in its pricing card above before adding a package total.';
+
   // Initialize all tab states at once with hydration from pkg.tierData
   const [tabStates, setTabStates] = useState(() => {
     const initState = {
@@ -168,12 +173,12 @@ export default function PackageCard({
     [tabStates, validate]
   );
 
-  // --- Monotonicity: base >= first tier (non-strict, UNCHANGED), then each
-  // larger package must be STRICTLY cheaper per hour than the nearest preceding
-  // priced tier. A skipped middle tier (e.g. Medium left empty) compares the
-  // later tier directly to the earlier one (Rule 4). Errors reuse the existing
-  // monotonicityError/monotonicityMsg state, so every downstream gate
-  // (computePackageValidity, red tab buttons, cross-tab warning) applies as-is.
+  // --- Monotonicity: (1) every package size must be STRICTLY cheaper per hour
+  // than the service's own rate; (2) each larger tier must be STRICTLY cheaper
+  // than the nearest preceding priced tier (a skipped middle tier compares to
+  // the earlier one). Errors reuse the existing monotonicityError/monotonicityMsg
+  // state, so every downstream gate (computePackageValidity, red tab buttons,
+  // cross-tab warning) applies as-is.
   useEffect(() => {
     if (!enabled || !hasItems(tiers)) return;
 
@@ -190,21 +195,25 @@ export default function PackageCard({
 
     const base = (typeof serviceHourly === 'number' && serviceHourly > 0) ? +serviceHourly : null;
 
-    // First assignment wins, matching the rule execution order (base -> S -> M -> L).
+    // First assignment wins, matching the rule execution order (service -> S -> M -> L).
     const msgByTier = {};
     const setMsg = (name, msg) => { if (!msgByTier[name]) msgByTier[name] = msg; };
+    // Tiers failing the service-rate check (req 3) — their message takes priority.
+    const serviceViolation = new Set();
 
     tiers.forEach((t, idx) => {
       const myRate = rateOf(t.name);
       if (myRate == null) return;
 
-      if (idx === 0) {
-        // Rule 1 (UNCHANGED): first tier may not exceed the base service rate.
-        if (base != null && myRate > base) {
-          setMsg(t.name, `Hourly rate $${money(myRate)}/Hr cannot exceed service rate $${money(base)}/Hr.`);
-        }
+      // Req 3: every package size must be STRICTLY cheaper per hour than the
+      // service's own rate. Highest priority — overrides the inter-tier message.
+      if (base != null && myRate >= base) {
+        setMsg(t.name, `${t.name} package hourly rate ($${money(myRate)}/hr) must be smaller than the service hourly rate ($${money(base)}/hr).`);
+        serviceViolation.add(t.name);
         return;
       }
+
+      if (idx === 0) return; // first tier is only bounded by the service rate (above)
 
       // Nearest preceding priced tier (skips empty/invalid tiers -> Rule 4 edge case).
       let prevIdx = -1;
@@ -231,7 +240,7 @@ export default function PackageCard({
     // Medium tier shows a dynamic allowable-range helper instead of the generic
     // strict message (valid band is Large < Medium < Small), computed from the
     // other tabs. Only when Medium actually errs and Small (upper bound) is set.
-    if (msgByTier['Medium']) {
+    if (msgByTier['Medium'] && !serviceViolation.has('Medium')) {
       const smallRate = rateOf('Small');
       const largeRate = rateOf('Large');
       if (smallRate != null && largeRate != null) {
@@ -764,7 +773,10 @@ export default function PackageCard({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Total amount
                   </label>
-                  <div className="flex">
+                  <div
+                    className={`flex ${totalDisabled ? 'cursor-not-allowed' : ''}`}
+                    title={totalDisabled ? totalDisabledMsg : undefined}
+                  >
                     <Input
                       type="text"
                       inputMode="numeric"
@@ -773,7 +785,9 @@ export default function PackageCard({
                       onChange={(e) => handleTotalChange(e.target.value)}
                       onFocus={handleTotalFocus}
                       onBlur={handleTotalBlur}
-                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${
+                      disabled={totalDisabled}
+                      title={totalDisabled ? totalDisabledMsg : undefined}
+                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${totalDisabled ? 'pointer-events-none' : ''} ${
                         (currentTabState.totalValidationError || currentTabState.totalRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
                       }`}
                     />
