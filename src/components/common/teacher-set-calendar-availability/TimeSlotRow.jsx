@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { X, Plus } from 'lucide-react';
 import CustomTimeInput from './CustomTimeInput';
 import { generateTimeOptions } from './time-options';
@@ -11,8 +11,15 @@ const TimeSlotRow = ({
   onAddSlot,
   allSlotsForValidation
 }) => {
+  // Bumped each time a start time is picked, so the end-time dropdown in the
+  // same row opens automatically for quick selection.
+  const [endOpenSignal, setEndOpenSignal] = useState(0);
+
   const handleTimeChange = (field, value) => {
     onSlotChange(slot.id, { ...slot, [field]: value });
+    if (field === 'start' && value) {
+      setEndOpenSignal((n) => n + 1);
+    }
   };
 
   const isIncomplete = (slot.start && !slot.end) || (!slot.start && slot.end);
@@ -41,6 +48,7 @@ const TimeSlotRow = ({
           hasError={isIncomplete && !slot.end}
           pairedValue={slot.start}
           isStartTime={false}
+          openSignal={endOpenSignal}
         />
       </div>
       <button

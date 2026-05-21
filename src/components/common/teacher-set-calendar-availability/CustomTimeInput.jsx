@@ -8,7 +8,8 @@ const CustomTimeInput = ({
   onChange,
   placeholder = "HH:MM",
   validationRule,
-  hasError
+  hasError,
+  openSignal = 0
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [hour, setHour] = useState('');
@@ -39,6 +40,12 @@ const CustomTimeInput = ({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, []);
+
+  // Open automatically when the parent bumps `openSignal` — used to pop the
+  // end-time dropdown right after a start time is chosen in the same row.
+  useEffect(() => {
+    if (openSignal) setIsOpen(true);
+  }, [openSignal]);
 
   // Auto-focus to minutes field when hour is complete (2 digits)
   useEffect(() => {

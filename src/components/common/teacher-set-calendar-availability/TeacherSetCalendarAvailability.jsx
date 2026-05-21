@@ -96,13 +96,12 @@ const TeacherSetCalendarAvailability = () => {
           <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
             <div className="space-y-2">
-              <p className="text-yellow-800 font-bold">Understanding Your Teacher Availability (T) Update</p>
-              <p className="text-yellow-800 font-medium">
-                The specific days and hours you have selected above will be immediately injected into your Teacher Availability (T) schedule. "Teacher Availability" represents the live time slots where students can instantly book lessons with you.
-              </p>
-              <p className="text-yellow-800 font-medium">
-                <span className="font-bold">Please note:</span> When you later open Set Availability (T) in your Teacher Calendar, these days and hours will already be in place. Any changes you make there override what you set here, and removing a slot immediately stops students from being able to book that time.
-              </p>
+              <p className="text-yellow-800 font-bold">Setting Your Availability as a teacher (T)</p>
+              <ul className="list-disc list-inside space-y-2 text-yellow-800 font-medium">
+                <li>The times you select here become your live Teacher Availability, allowing students to instantly book lessons.</li>
+                <li>You can edit these hours anytime in your Teacher Calendar.</li>
+              </ul>
+              <p className="text-yellow-800 font-medium">Removing a time slot immediately stops new bookings for that time.</p>
             </div>
           </div>
         </div>
