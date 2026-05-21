@@ -5,6 +5,8 @@
 // Dev-only role switch: `?role=student&uid=u-student1` (or teacher/parent/admin).
 // The id must match a seeded user so dashboards scoped to that user render data.
 // Persisted to localStorage so it survives navigation within the SPA.
+import { supabase } from './supabaseClient';
+
 const DEFAULT_MOCK_USER = {
   id: 'demo-user',
   email: 'demo@local',
@@ -199,12 +201,47 @@ const integrationsCore = new Proxy({}, {
 
 const userEntity = makeEntity('User');
 
+// Maps a Supabase auth user into the shape the app expects from User.me().
+// Role comes from the JWT app_metadata claim (seeded by the 0006 trigger);
+// defaults to the non-privileged 'student' if absent.
+const mapSupabaseUser = (u) => {
+  const role = u.app_metadata?.role || 'student';
+  return {
+    id: u.id,
+    email: u.email,
+    full_name: u.user_metadata?.full_name || u.user_metadata?.name || u.email,
+    role,
+    roles: [role],
+    country_code: 'US',
+    ai_searches_today: 0,
+  };
+};
+
 export const base44 = {
   entities,
   auth: {
-    me: () => Promise.resolve(clone(MOCK_USER)),
-    login: () => Promise.resolve(clone(MOCK_USER)),
-    logout: () => Promise.resolve(),
+    me: async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) return mapSupabaseUser(session.user);
+      } catch {
+        // fall through to the dev mock
+      }
+      return clone(MOCK_USER);
+    },
+    login: async () => {
+      await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin },
+      });
+    },
+    logout: async () => {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // ignore — already signed out
+      }
+    },
     updateMyUserData: (patch) => {
       Object.assign(MOCK_USER, patch);
       return Promise.resolve(clone(MOCK_USER));
