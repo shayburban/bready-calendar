@@ -229,6 +229,13 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
       { minHours: 21, maxHours: 50, rate: 22 },
       { minHours: 51, maxHours: null, rate: 20 },
     ];
+    // Default package sizes so the Small/Medium/Large tier buttons always
+    // render even before an admin configures packageTiers. Admin config wins.
+    const DEFAULT_PACKAGE_TIERS = [
+      { name: 'Small', minHours: 5, maxHours: 9 },
+      { name: 'Medium', minHours: 10, maxHours: 19 },
+      { name: 'Large', minHours: 20, maxHours: 50 },
+    ];
     const fetchConfig = async () => {
       try {
         setLoading(true);
@@ -236,16 +243,18 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
         if (configs.length > 0) {
           const fetched = configs[0];
           const hasTiers = Array.isArray(fetched.commissionTiers) && fetched.commissionTiers.length > 0;
+          const hasPkgTiers = Array.isArray(fetched.packageTiers) && fetched.packageTiers.length > 0;
           setConfig({
             ...fetched,
             commissionTiers: hasTiers ? fetched.commissionTiers : DEFAULT_COMMISSION_TIERS,
+            packageTiers: hasPkgTiers ? fetched.packageTiers : DEFAULT_PACKAGE_TIERS,
           });
         } else {
           // Fallback to a default if nothing is configured
           setConfig({
             commissionTiers: DEFAULT_COMMISSION_TIERS,
             trialLesson: { adminMinPercentage: 0, adminMaxPercentage: 100, commissionRate: 10 },
-            packageTiers: []
+            packageTiers: DEFAULT_PACKAGE_TIERS
           });
         }
       } catch (error) {
