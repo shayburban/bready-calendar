@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User } from '@/api/entities';
+import { supabase } from '@/api/supabaseClient';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -141,12 +141,16 @@ const QRTab = ({ onRegisterOpen }) => (
 export default function LoginModal({ isOpen, onOpenChange, onRegisterOpen }) {
 
     const handleLogin = async () => {
-        try {
-            await User.login();
-        } catch (error) {
-            console.error("Login failed:", error);
-            // Optionally, show an error message to the user
+        const { error } = await supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo: window.location.origin },
+        });
+        if (error) {
+            console.error("Google login failed:", error);
+            alert(`Login failed: ${error.message}`);
         }
+        // On success the browser redirects to Google; the session is picked
+        // up automatically on return (supabase-js detectSessionInUrl).
     };
     
     const handleSwitchToRegister = () => {
