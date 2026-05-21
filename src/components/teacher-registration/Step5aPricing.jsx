@@ -614,7 +614,7 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
               placeholder="Enter custom service name"
               value={customServiceName}
               onChange={handleCustomServiceNameChange}
-              className="flex-1"
+              className="flex-1 bg-white"
             />
             <Button
               onClick={handleAddCustomService}

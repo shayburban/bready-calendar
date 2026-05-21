@@ -228,6 +228,19 @@ export default function PackageCard({
       }
     });
 
+    // Medium tier shows a dynamic allowable-range helper instead of the generic
+    // strict message (valid band is Large < Medium < Small), computed from the
+    // other tabs. Only when Medium actually errs and Small (upper bound) is set.
+    if (msgByTier['Medium']) {
+      const smallRate = rateOf('Small');
+      const largeRate = rateOf('Large');
+      if (smallRate != null && largeRate != null) {
+        msgByTier['Medium'] = `Medium hourly rate must be between $${money(largeRate)} and $${money(smallRate)}. (Change Small or Large packages to alter this range).`;
+      } else if (smallRate != null) {
+        msgByTier['Medium'] = `Medium hourly rate must be less than $${money(smallRate)}. (Change the Small package to alter this range).`;
+      }
+    }
+
     // Commit per tier, only when changed (prevents render loops, as before).
     tiers.forEach((t) => {
       const msg = msgByTier[t.name] || '';
@@ -291,7 +304,7 @@ export default function PackageCard({
     if (numericPrice > 0 && value && !hourValidationError) {
       const numHours = parseNum(value);
       if (numHours > 0) {
-        const newTotal = money(numHours * numericPrice);
+        const newTotal = String(Math.round(numHours * numericPrice)); // whole-number total
         Object.assign(updates, {
           totalStr: newTotal,
           totalRequired: false,
@@ -306,18 +319,8 @@ export default function PackageCard({
   }, [computed, validate, selectedTier, updateTabState]);
 
   const handleTotalChange = useCallback((rawValue) => {
-    // Disallow negatives; allow digits and a single decimal point (max 2 decimals)
-    let value = rawValue || '';
-    if (value.startsWith('-')) value = value.substring(1);
-    value = value.replace(/[^\d.]/g, '');
-    const firstDot = value.indexOf('.');
-    if (firstDot !== -1) {
-      value = value.slice(0, firstDot + 1) + value.slice(firstDot + 1).replace(/\./g, '');
-    }
-    const parts = value.split('.');
-    if (parts[1] && parts[1].length > 2) {
-      value = parts[0] + '.' + parts[1].slice(0, 2);
-    }
+    // Whole numbers only — strip everything except digits (no decimals/signs).
+    const value = (rawValue || '').replace(/\D/g, '');
 
     const { currentTabState } = computed;
 
@@ -338,7 +341,7 @@ export default function PackageCard({
     const raw = (computed.currentTabState.totalStr ?? '').trim();
     const isEmpty = raw === '' || raw === '.' || raw === '-';
     updateTabState(selectedTier, {
-      totalStr: isEmpty ? '' : money(parseNum(raw)), // keep placeholder if user cleared the field
+      totalStr: isEmpty ? '' : String(parseNum(raw)), // whole number, no decimal formatting
       isTypingTotal: false
     });
     // commit hourly to pkg.price on blur if valid
@@ -731,7 +734,7 @@ export default function PackageCard({
                       placeholder={currentTier.minHours && currentTier.maxHours ? `Type ${currentTier.minHours} to ${currentTier.maxHours}` : 'Type hours'}
                       value={currentTabState.hours}
                       onChange={(e) => handleHoursChange(e.target.value)}
-                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full ${
+                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${
                         (currentTabState.hourValidationError || currentTabState.hoursRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
                       }`}
                       aria-describedby={
@@ -764,13 +767,13 @@ export default function PackageCard({
                   <div className="flex">
                     <Input
                       type="text"
-                      inputMode="decimal"
+                      inputMode="numeric"
                       placeholder="Type price"
                       value={currentTabState.totalStr || ''}
                       onChange={(e) => handleTotalChange(e.target.value)}
                       onFocus={handleTotalFocus}
                       onBlur={handleTotalBlur}
-                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full ${
+                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${
                         (currentTabState.totalValidationError || currentTabState.totalRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
                       }`}
                     />
