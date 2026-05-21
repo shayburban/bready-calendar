@@ -41,6 +41,7 @@ const createValidators = () => ({
 export default function PackageCard({
   pkg, onUpdate, onDelete, tiers, commissionTiers = [], showValidationErrors = false, onValidationChange,
   serviceHourly = 0,
+  isParentServiceEnabled = true,
   // --- ADD-ONLY:
   forceOutlineError = false,
 }) {
@@ -581,7 +582,13 @@ export default function PackageCard({
         <input
           type="checkbox"
           checked={enabled}
-          onChange={(e) => onUpdate(id, 'enabled', e.target.checked)}
+          disabled={!isParentServiceEnabled}
+          onChange={(e) => {
+            // One-way dependency: a package can't be enabled while its base
+            // service is disabled. Disabling is always allowed.
+            if (e.target.checked && !isParentServiceEnabled) return;
+            onUpdate(id, 'enabled', e.target.checked);
+          }}
           className="sr-only"
         />
         <div
@@ -631,11 +638,13 @@ export default function PackageCard({
                   </svg>
                 </button>
               )}
-              <div data-role="pkg-toggle" className={`w-6 h-6 rounded-full flex items-center justify-center cursor-pointer
+              <div data-role="pkg-toggle" title={!isParentServiceEnabled ? 'Enable the matching service first' : undefined} className={`w-6 h-6 rounded-full flex items-center justify-center
                 transition-transform transition-colors duration-200
-                ${enabled
-                  ? 'bg-blue-500 hover:scale-105 hover:ring-2 hover:ring-blue-300'
-                  : 'border border-gray-300 hover:border-blue-400 hover:bg-gray-100 hover:scale-105 hover:ring-2 hover:ring-blue-200'
+                ${!isParentServiceEnabled
+                  ? 'border border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed'
+                  : enabled
+                    ? 'bg-blue-500 cursor-pointer hover:scale-105 hover:ring-2 hover:ring-blue-300'
+                    : 'border border-gray-300 cursor-pointer hover:border-blue-400 hover:bg-gray-100 hover:scale-105 hover:ring-2 hover:ring-blue-200'
                 }`}>
                 {enabled && <Check className="w-4 h-4 text-white" />}
               </div>
@@ -817,7 +826,9 @@ export default function PackageCard({
               <div>
                 <p className="mb-2">Package disabled</p>
                 <p className="text-sm text-gray-400">
-                  Click the circle icon in the top-right corner to activate this package
+                  {isParentServiceEnabled
+                    ? 'Click the circle icon in the top-right corner to activate this package'
+                    : 'Enable its matching service above before activating this package'}
                 </p>
               </div>
             </div>

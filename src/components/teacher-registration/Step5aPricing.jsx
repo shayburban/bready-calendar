@@ -167,6 +167,14 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
     return m;
   }, [services]);
 
+  // Map service id → enabled, so a package can be gated on its base service:
+  // a PackageCard can't be enabled while its linked service is disabled.
+  const serviceEnabledById = React.useMemo(() => {
+    const m = {};
+    (services || []).forEach(s => { m[s.id] = !!s.enabled; });
+    return m;
+  }, [services]);
+
   const recomputePackageValidity = React.useCallback((pkg) => {
     if (!pkg?.enabled) return true; // Disabled packages are always "valid" from a form submission perspective
     const tiersList = config?.packageTiers || [];
@@ -627,6 +635,7 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
               showValidationErrors={showValidationErrors}
               onValidationChange={handlePackageValidation}
               serviceHourly={serviceHourlyById[pkg.serviceId] || 0}
+              isParentServiceEnabled={pkg.serviceId ? (serviceEnabledById[pkg.serviceId] ?? true) : true}
               // --- ADD-ONLY:
               forceOutlineError={isPkgInvalidForOutline(pkg)}
             />

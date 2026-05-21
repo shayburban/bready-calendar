@@ -52,9 +52,9 @@ export const TeacherProvider = ({ children }) => {
     { id: 'technicalInterview', title: 'Technical Interview', enabled: true, price: null, tooltip: "Help students prepare for technical interviews." }
   ]);
   const [packages, setPackages] = useState([
-    { id: 'consultingPkg', title: 'Consulting Package', enabled: true, price: null },
-    { id: 'onlineClassPkg', title: 'Online Class Package', enabled: true, price: null },
-    { id: 'technicalInterviewPkg', title: 'Tech Interview Package', enabled: true, price: null, tooltip: "Package deal for interview preparation." }
+    { id: 'consultingPkg', serviceId: 'consulting', title: 'Consulting Package', enabled: true, price: null },
+    { id: 'onlineClassPkg', serviceId: 'onlineClass', title: 'Online Class Package', enabled: true, price: null },
+    { id: 'technicalInterviewPkg', serviceId: 'technicalInterview', title: 'Tech Interview Package', enabled: true, price: null, tooltip: "Package deal for interview preparation." }
   ]);
 
   const [isAgeConfirmed, setIsAgeConfirmed] = useState(false); 
