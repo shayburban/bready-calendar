@@ -614,13 +614,31 @@ export default function PackageCard({
                 </TooltipProvider>
               )}
             </div>
-            <div data-role="pkg-toggle" className={`w-6 h-6 rounded-full flex items-center justify-center cursor-pointer
-              transition-transform transition-colors duration-200
-              ${enabled
-                ? 'bg-blue-500 hover:scale-105 hover:ring-2 hover:ring-blue-300'
-                : 'border border-gray-300 hover:border-blue-400 hover:bg-gray-100 hover:scale-105 hover:ring-2 hover:ring-blue-200'
-              }`}>
-              {enabled && <Check className="w-4 h-4 text-white" />}
+            <div className="flex items-center space-x-2">
+              {pkg.isCustom && (
+                <button
+                  type="button"
+                  aria-label="Delete package"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (onDelete) onDelete(id);
+                  }}
+                  className="w-6 h-6 rounded-full flex items-center justify-center bg-red-100 hover:bg-red-200 transition-colors cursor-pointer"
+                >
+                  <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+              <div data-role="pkg-toggle" className={`w-6 h-6 rounded-full flex items-center justify-center cursor-pointer
+                transition-transform transition-colors duration-200
+                ${enabled
+                  ? 'bg-blue-500 hover:scale-105 hover:ring-2 hover:ring-blue-300'
+                  : 'border border-gray-300 hover:border-blue-400 hover:bg-gray-100 hover:scale-105 hover:ring-2 hover:ring-blue-200'
+                }`}>
+                {enabled && <Check className="w-4 h-4 text-white" />}
+              </div>
             </div>
           </div>
 
