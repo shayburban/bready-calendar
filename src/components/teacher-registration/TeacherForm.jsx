@@ -304,7 +304,7 @@ const TeacherForm = () => {
 
       // (2) Selected services missing an hourly rate
       if (details.hasUnpricedServices === true) {
-        messages.push('Please set hourly rates for all selected services.');
+        messages.push('Please set hourly rates for all selected services or disable these packages by clicking the checkmark.');
       }
 
       // (3) Trial lesson pricing invalid

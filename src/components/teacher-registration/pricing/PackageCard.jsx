@@ -751,27 +751,43 @@ export default function PackageCard({
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Number of hours
                   </label>
-                  <div className="flex">
-                    <Input
-                      id={`hours-${id}-${currentTier.name}`}
-                      type="text"
-                      inputMode="numeric"
-                      placeholder={currentTier.minHours && currentTier.maxHours ? `Type ${currentTier.minHours} to ${currentTier.maxHours}` : 'Type hours'}
-                      value={currentTabState.hours}
-                      onChange={(e) => handleHoursChange(e.target.value)}
-                      className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${
-                        (currentTabState.hourValidationError || currentTabState.hoursRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
-                      }`}
-                      aria-describedby={
-                        (enabled && (currentTabState.hoursRequired || currentTabState.hourValidationError))
-                        ? `hours-error-${id}-${currentTier.name}`
-                        : undefined
-                      }
-                    />
-                    <span className="inline-flex items-center px-3 text-sm text-gray-600 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md">
-                      Hr
-                    </span>
-                  </div>
+                  {(() => {
+                    const field = (
+                      <div className={`flex ${totalDisabled ? 'cursor-not-allowed' : ''}`}>
+                        <Input
+                          id={`hours-${id}-${currentTier.name}`}
+                          type="text"
+                          inputMode="numeric"
+                          placeholder={currentTier.minHours && currentTier.maxHours ? `Type ${currentTier.minHours} to ${currentTier.maxHours}` : 'Type hours'}
+                          value={currentTabState.hours}
+                          onChange={(e) => handleHoursChange(e.target.value)}
+                          disabled={totalDisabled}
+                          className={`relative focus:z-10 rounded-r-none min-w-0 w-full bg-gray-50 ${totalDisabled ? 'pointer-events-none' : ''} ${
+                            (currentTabState.hourValidationError || currentTabState.hoursRequired) ? 'border-red-500 focus:border-red-500 focus:ring-red-500' : ''
+                          }`}
+                          aria-describedby={
+                            (enabled && (currentTabState.hoursRequired || currentTabState.hourValidationError))
+                            ? `hours-error-${id}-${currentTier.name}`
+                            : undefined
+                          }
+                        />
+                        <span className="inline-flex items-center px-3 text-sm text-gray-600 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md">
+                          Hr
+                        </span>
+                      </div>
+                    );
+                    // Req: lock hours until the service is priced, with the same instant tooltip.
+                    return totalDisabled ? (
+                      <TooltipProvider delayDuration={0}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>{field}</TooltipTrigger>
+                          <TooltipContent>
+                            <p className="max-w-xs">{totalDisabledMsg}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : field;
+                  })()}
                    {enabled && (currentTabState.hoursRequired || currentTabState.hourValidationError) && (
                     <div
                       id={`hours-error-${id}-${currentTier.name}`}
