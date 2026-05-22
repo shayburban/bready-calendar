@@ -180,16 +180,21 @@ const TeacherForm = () => {
             if (details.isTrialPriceValid === false) {
               newErrors.trial = 'Please configure trial lesson pricing correctly.';
             }
-            if (enabledPkgCount > 0 && hasOtherTabErrors) {
-              newErrors.packageTabs = 'Some package sizes in the current card have errors. Please fix ALL size tabs before continuing.';
+            // Bad-data sizes (range / total / cross-field / monotonicity / service-rate),
+            // named with their package + size. Sourced from details.invalidPackages, which
+            // is built from the per-tier red-highlight signal — so a purely EMPTY enabled
+            // package has no flagged tier and is NOT reported here (it is covered by the
+            // "add at least one" message below). Gate (pricingHasErrors) is unchanged.
+            const invalidPackages = Array.isArray(details.invalidPackages) ? details.invalidPackages : [];
+            if (enabledPkgCount > 0 && invalidPackages.length > 0) {
+              const invalidList = invalidPackages
+                .map(p => (p.tiers && p.tiers.length) ? `${p.title} (${p.tiers.join(', ')})` : p.title)
+                .join(', ');
+              newErrors.packageTabs = `${invalidList} have invalid values. Check the red highlights to fix them, or disable these packages.`;
             }
             if (enabledPkgCount > 0 && !hasAtLeastOneValidEnabledPackage) {
               newErrors.packages = (newErrors.packages ? newErrors.packages + ' ' : '') +
                 'Please add at least one correctly priced package size.';
-            }
-            if (enabledPkgCount > 0 && hasInvalidEnabledPackages) {
-              newErrors.packageTabs = (newErrors.packageTabs ? newErrors.packageTabs + ' ' : '') +
-                'Some enabled packages have size errors. Please fix them.';
             }
           }
 
@@ -322,10 +327,15 @@ const TeacherForm = () => {
         messages.push(`Please complete at least one package size for: ${names}, or disable these packages by clicking the checkmark.`);
       }
 
-      // (5) Enabled packages with tier-level size errors (hours range /
-      // monotonicity / service-rate). Distinct from "incomplete" (4) above.
-      if (details.anyReportedTierErrors === true) {
-        messages.push('Some enabled packages have size errors. Please fix them.');
+      // (5) Enabled packages with genuinely invalid tier data (hours range / total /
+      // monotonicity / service-rate), named with their package + size. Distinct from
+      // "incomplete" (4) above; a purely empty package is reported by (4), not here.
+      const invalidPackages = Array.isArray(details.invalidPackages) ? details.invalidPackages : [];
+      if (invalidPackages.length > 0) {
+        const invalidList = invalidPackages
+          .map(p => (p.tiers && p.tiers.length) ? `${p.title} (${p.tiers.join(', ')})` : p.title)
+          .join(', ');
+        messages.push(`${invalidList} have invalid values. Check the red highlights to fix them, or disable these packages.`);
       }
 
       if (messages.length > 0) {

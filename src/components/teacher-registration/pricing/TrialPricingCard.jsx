@@ -42,7 +42,7 @@ const blockBadKeys = (e) => {
   // Tooltip content preference: service.tooltip → default recommended example
   const trialTooltipText =
     tooltip ||
-    'Recommended: set 40–60% of your lowest hourly rate. Example: if your lowest service is $15/hr and you set 60%, students pay $9; with a 10% commission you receive $8.10.';
+    'Free trials drive the fastest growth by removing friction and signaling confidence.\n• Quick Momentum: New teachers secure their first sessions and reviews faster.\n• Compounding Value: Early ratings drive future bookings, far outweighing short-term paid trial revenue.\n\nIf the teacher prefers a paid trial, set 40–60% of your lowest hourly rate.  Why:  low enough to stay attractive, high enough to value your time.\n\nExample: if your lowest service is $15/hr and you set 60%, students pay $9; with a 10% commission you receive $8.10.';
 
   // Use clamped numeric percentage for all math
     const pct = clampPct(Number.isFinite(trialPercentage) ? trialPercentage : 0);
@@ -99,7 +99,7 @@ const blockBadKeys = (e) => {
                   </button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p className="max-w-xs">{trialTooltipText}</p>
+                  <p className="max-w-xs whitespace-pre-line">{trialTooltipText}</p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>

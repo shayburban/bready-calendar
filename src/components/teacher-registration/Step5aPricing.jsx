@@ -356,6 +356,19 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
       .filter(p => !pkgHasAtLeastOneValidTier(p))
       .map(p => ({ id: p.id, title: p.title }));
 
+    // ADD-ONLY: enabled packages that have a genuinely invalid size, plus WHICH sizes.
+    // Sourced from packageTierErrorsMap — the same per-tier signal that paints the red
+    // tab highlights — so monotonicity / service-rate breaks are included AND a purely
+    // empty/untouched package (no flagged tier) is excluded here (it is reported by
+    // incompletePackages instead). Used only to build clearer error copy, not to gate.
+    const invalidPackages = enabledPackages
+      .map((p) => {
+        const byTier = packageTierErrorsMap[p.id] || {};
+        const tiersWithErrors = Object.keys(byTier).filter((name) => byTier[name]);
+        return tiersWithErrors.length ? { id: p.id, title: p.title, tiers: tiersWithErrors } : null;
+      })
+      .filter(Boolean);
+
     // UPDATED gate: require ≥1 valid enabled package; untouched sizes don't block
     const baseIsValid =
       hasEnabledNonTrial &&
@@ -382,6 +395,7 @@ export default function Step5aPricing({ showValidationErrors = false, onValidati
       hasInvalidEnabledPackages,
       enabledPackagesCount: enabledPackages.length,
       incompletePackages,         // [{ id, title }] — drives the Next-gate popup
+      invalidPackages,            // [{ id, title, tiers:[names] }] — bad-data sizes (red highlights)
     };
 
     onValidationChange(isValid, details);

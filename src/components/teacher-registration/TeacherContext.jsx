@@ -47,9 +47,9 @@ export const TeacherProvider = ({ children }) => {
   // State for pricing and packages - now centralized
   const [services, setServices] = useState([
     { id: 'trial', title: 'Trial', enabled: true, isTrial: true, trialPercentage: 0, isAlwaysEnabled: true },
-    { id: 'consulting', title: 'Consulting', enabled: true, price: null, tooltip: "One-on-one consulting sessions" },
-    { id: 'onlineClass', title: 'Online Class', enabled: true, price: null, tooltip: "Interactive online classes" },
-    { id: 'technicalInterview', title: 'Technical Interview', enabled: true, price: null, tooltip: "Help students prepare for technical interviews." }
+    { id: 'consulting', title: 'Consulting', enabled: true, price: null, tooltip: "Private 1-on-1 advisory sessions — career guidance, project or portfolio review, study planning, or expert Q&A. No fixed curriculum." },
+    { id: 'onlineClass', title: 'Online Class', enabled: true, price: null, tooltip: "Your standard live lesson over video — teach a subject or skill with explanation, examples, and practice. Scheduled, real-time." },
+    { id: 'technicalInterview', title: 'Technical Interview', enabled: true, price: null, tooltip: "Mock technical interviews with realistic questions and live feedback to get students job-ready." }
   ]);
   const [packages, setPackages] = useState([
     { id: 'consultingPkg', serviceId: 'consulting', title: 'Consulting Package', enabled: false, price: null },
