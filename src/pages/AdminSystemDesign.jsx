@@ -45,6 +45,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import PreviewFrame from '../components/admin/design/PreviewFrame';
 import ElementGroupEditor from '../components/admin/design/ElementGroupEditor';
 import InteractivePagePreview from '../components/admin/design/InteractivePagePreview';
+import GlobalTokensEditor from '../components/admin/design/GlobalTokensEditor';
 import { ROLE_OPTIONS, PAGE_OPTIONS } from '../components/admin/design/constants/previewOptions';
 
 export default function AdminSystemDesign() {
@@ -361,6 +362,11 @@ export default function AdminSystemDesign() {
   };
 
   const designTabs = [
+    {
+      label: 'Live Tokens',
+      value: 'live-tokens',
+      icon: <Paintbrush className="w-4 h-4" />,
+    },
     {
       label: 'Global Design',
       value: 'global-design',
@@ -1004,6 +1010,11 @@ export default function AdminSystemDesign() {
               Changes will immediately affect the live website.
             </p>
           </div>
+        )}
+
+        {/* Live Tokens Tab — Phase 1 Design Bridge (drives the real live site) */}
+        {activeTab === 'live-tokens' && (
+          <GlobalTokensEditor />
         )}
 
         {/* Global Design Tab */}
