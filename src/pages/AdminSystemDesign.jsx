@@ -500,6 +500,24 @@ export default function AdminSystemDesign() {
       return;
     }
 
+    // ADD-ONLY: validate the free-text override value (PRD: invalid hex / invalid JSON).
+    // Only checks values that clearly attempt hex (#…) or JSON ({ / [), so valid named/
+    // rgb()/var() colors and plain values are unaffected.
+    const overrideValue = (newOverride.value || '').trim();
+    const hexRe = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
+    if (overrideValue.startsWith('#') && !hexRe.test(overrideValue)) {
+      alert(`"${overrideValue}" is not a valid hex color. Use formats like #1a2b3c or #abc.`);
+      return;
+    }
+    if (overrideValue.startsWith('{') || overrideValue.startsWith('[')) {
+      try {
+        JSON.parse(overrideValue);
+      } catch (e) {
+        alert('The override value looks like JSON but is not valid. Please correct the JSON structure.');
+        return;
+      }
+    }
+
     try {
       await DesignOverride.create({
         ...newOverride,

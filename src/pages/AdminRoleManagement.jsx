@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { AppRole } from '@/api/entities';
+import { User } from '@/api/entities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -352,12 +353,23 @@ export default function AdminRoleManagement() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (role) => {
+  const handleDelete = async (role) => {
     if (isRoleLocked(role)) return;
     const childRoles = roles.filter(r => r.parent_role_id === role.role_id);
     if (childRoles.length > 0) {
       alert(`Cannot delete "${role.display_name}" because it has child perspectives. Please delete the perspectives first.`);
       return;
+    }
+    // ADD-ONLY: self-protection — don't delete a role that users are still assigned to (PRD).
+    // Best-effort: if the assignment check is unavailable, fall through to the existing flow.
+    try {
+      const holders = await User.filter({ role: role.role_id });
+      if (Array.isArray(holders) && holders.length > 0) {
+        alert(`Cannot delete "${role.display_name}" because ${holders.length} user(s) are still assigned to it. Please reassign those users to another role first.`);
+        return;
+      }
+    } catch (e) {
+      // assignment check unavailable — proceed with the normal delete confirmation
     }
     setRoleToDelete(role);
     

@@ -115,6 +115,8 @@ export default function AdminAnalytics() {
   const [analyticsResults, setAnalyticsResults] = useState(null);
   const [aiResults, setAiResults] = useState(null);
   const [isRunningAI, setIsRunningAI] = useState(false);
+  // ADD-ONLY: user-facing analytics fetch error
+  const [fetchError, setFetchError] = useState('');
   
   // AI confirmation dialogs
   const [showFirstAlert, setShowFirstAlert] = useState(false);
@@ -140,6 +142,7 @@ export default function AdminAnalytics() {
 
   const fetchBookingData = async () => {
     setLoading(true);
+    setFetchError('');
     try {
       let bookings = await Booking.list('-created_date', 1000);
       
@@ -161,6 +164,7 @@ export default function AdminAnalytics() {
       calculateStandardAnalytics(bookings);
     } catch (error) {
       console.error('Failed to fetch booking data:', error);
+      setFetchError('Could not load analytics data. Please check your filters and try again.');
     } finally {
       setLoading(false);
     }
@@ -480,6 +484,12 @@ export default function AdminAnalytics() {
 
           {/* Standard Mode Content */}
           <TabsContent value="standard" className="space-y-6">
+            {fetchError && (
+              <p className="text-sm text-red-600">{fetchError}</p>
+            )}
+            {!fetchError && analyticsResults && analyticsResults.overview && analyticsResults.overview.totalSessions === 0 && (
+              <p className="text-sm text-gray-500">No data available for this period.</p>
+            )}
             {analyticsResults && (
               <>
                 {/* Overview Cards */}

@@ -314,7 +314,26 @@ export default function AdminPendingApprovals() {
         setColumns(items);
     };
 
+  // ADD-ONLY: concurrency guard. Re-check the item's current status on the server before
+  // acting, so a second admin can't re-process an item the first already handled (PRD).
+  // Best-effort: if the status check itself is unavailable, proceed (don't block valid actions).
+  const ensureStillPending = async (Entity, item, label) => {
+    try {
+      const fresh = await Entity.get(item.id);
+      const status = fresh?.status;
+      if (status && status !== 'pending') {
+        alert(`This ${label} was already processed (status: ${status}). The list has been refreshed.`);
+        fetchData();
+        return false;
+      }
+    } catch (e) {
+      // status check unavailable — fall through to the normal action
+    }
+    return true;
+  };
+
   const handleApproveData = async (item) => {
+    if (!(await ensureStillPending(PendingData, item, 'item'))) return;
     const { error } = await supabase.rpc('approve_pending_data', {
       p_pending_id: item.id,
       p_admin_email: 'admin',
@@ -328,8 +347,9 @@ export default function AdminPendingApprovals() {
   };
 
   const handleRejectData = async (item, reason = 'Quality standards not met') => {
+    if (!(await ensureStillPending(PendingData, item, 'item'))) return;
     try {
-        await PendingData.update(item.id, { 
+        await PendingData.update(item.id, {
             status: 'rejected',
             rejection_reason: reason,
             rejected_by: 'admin',
@@ -341,8 +361,9 @@ export default function AdminPendingApprovals() {
         alert(`Error: ${error.message}`);
     }
   };
-  
+
   const handleApproveCity = async (item) => {
+    if (!(await ensureStillPending(PendingCity, item, 'city'))) return;
     const { error } = await supabase.rpc('approve_pending_city', {
       p_pending_id: item.id,
       p_admin_email: 'admin',
@@ -356,8 +377,9 @@ export default function AdminPendingApprovals() {
   };
 
   const handleRejectCity = async (item, reason = 'Invalid city or location') => {
+    if (!(await ensureStillPending(PendingCity, item, 'city'))) return;
     try {
-        await PendingCity.update(item.id, { 
+        await PendingCity.update(item.id, {
             status: 'rejected',
             rejection_reason: reason,
             rejected_by: 'admin',

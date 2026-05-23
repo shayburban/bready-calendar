@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '@/api/entities';
 import { AdminImpersonationLog } from '@/api/entities';
+import { AdminAction } from '@/api/entities';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,9 @@ export default function AdminDashboard() {
   const [viewAsMode, setViewAsMode] = useState(null);
   const [impersonateUserId, setImpersonateUserId] = useState('');
   const [impersonateError, setImpersonateError] = useState('');
+  // ADD-ONLY: recent admin activity log (null = loading, [] = empty, array = items)
+  const [recentActions, setRecentActions] = useState(null);
+  const [recentActionsFailed, setRecentActionsFailed] = useState(false);
   const [analytics, setAnalytics] = useState({
     totalUsers: 1247,
     totalTeachers: 156,
@@ -117,17 +121,51 @@ export default function AdminDashboard() {
     fetchUser();
   }, []);
 
-  const handleViewAsUser = (role) => {
+  // ADD-ONLY: load recent admin activity for the dashboard log (independent of fetchUser)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await AdminAction.list();
+        if (cancelled) return;
+        const arr = Array.isArray(list) ? list : [];
+        const sorted = [...arr].sort(
+          (a, b) => new Date(b.created_date || 0) - new Date(a.created_date || 0)
+        );
+        setRecentActions(sorted.slice(0, 10));
+      } catch (e) {
+        if (!cancelled) {
+          setRecentActions([]);
+          setRecentActionsFailed(true);
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleViewAsUser = async (role) => {
     setViewAsMode(role);
     localStorage.setItem('adminViewAsMode', JSON.stringify({
       active: true,
       role: role,
       adminId: user.id
     }));
-    
+
+    // ADD-ONLY: audit-log the "view as role" action (PRD). Best-effort — never block the flow.
+    try {
+      await AdminAction.create({
+        action_type: 'view_as_role',
+        target_type: 'user',
+        target_id: user.id,
+        details: { viewed_role: role }
+      });
+    } catch (e) {
+      console.error('Failed to log view_as_role action:', e);
+    }
+
     // Trigger custom event to update global banner
     window.dispatchEvent(new CustomEvent('adminBannerStateChange'));
-    
+
     const targetPath = role === 'teacher' ? 'TeacherDashboard' : role === 'student' ? 'StudentDashboard' : 'Home';
     window.location.href = `/${targetPath}`;
   };
@@ -211,6 +249,34 @@ export default function AdminDashboard() {
                       Impersonate User
                     </Button>
                   </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="mb-8">
+              <h2 className="text-xl font-bold text-gray-900 mb-6">Recent Admin Activity</h2>
+              <Card>
+                <CardContent className="pt-6">
+                  {recentActions === null ? (
+                    <p className="text-sm text-gray-500">Loading recent activity…</p>
+                  ) : recentActionsFailed ? (
+                    <p className="text-sm text-gray-500">Could not load recent admin activity. Please try again later.</p>
+                  ) : recentActions.length === 0 ? (
+                    <p className="text-sm text-gray-500">No recent admin activity.</p>
+                  ) : (
+                    <ul className="divide-y divide-gray-100">
+                      {recentActions.map((a, i) => (
+                        <li key={a.id || i} className="py-2 text-sm text-gray-700 flex items-center justify-between gap-4">
+                          <span className="truncate">
+                            {(a.action_type || 'action')}{a.target_type ? ` · ${a.target_type}` : ''}{a.admin_email ? ` · ${a.admin_email}` : ''}
+                          </span>
+                          <span className="text-gray-400 whitespace-nowrap">
+                            {a.created_date ? new Date(a.created_date).toLocaleString() : ''}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </CardContent>
               </Card>
             </div>

@@ -228,13 +228,83 @@ export default function AdminConfigurationManagement() {
     return changes;
   };
 
+  // ADD-ONLY: structural validation per section (PRD). Returns an array of human-readable
+  // errors (empty = valid). Used as a pre-save guard; valid configs save exactly as before.
+  const validatePricingSection = (sectionKey) => {
+    const errors = [];
+    const num = (v) => (v === '' || v === null || v === undefined ? NaN : Number(v));
+
+    if (sectionKey === 'commissionTiers') {
+      const tiers = config.commissionTiers || [];
+      tiers.forEach((t, i) => {
+        const isLast = i === tiers.length - 1;
+        const min = num(t.minHours);
+        const max = (t.maxHours === null || t.maxHours === '' || t.maxHours === undefined) ? Infinity : num(t.maxHours);
+        const rate = num(t.rate);
+        if (Number.isNaN(min)) errors.push(`Tier ${i + 1}: min hours must be a number.`);
+        if (!isLast && Number.isNaN(max)) errors.push(`Tier ${i + 1}: max hours must be a number (only the last tier may be open-ended).`);
+        if (!Number.isNaN(min) && Number.isFinite(max) && min >= max) errors.push(`Tier ${i + 1}: min hours (${min}) must be less than max hours (${max}).`);
+        if (Number.isNaN(rate) || rate < 0 || rate > 100) errors.push(`Tier ${i + 1}: commission rate must be between 0 and 100.`);
+      });
+      const sorted = tiers
+        .map((t) => ({ min: num(t.minHours), max: (t.maxHours === null || t.maxHours === '' || t.maxHours === undefined) ? Infinity : num(t.maxHours) }))
+        .filter((t) => !Number.isNaN(t.min))
+        .sort((a, b) => a.min - b.min);
+      for (let k = 1; k < sorted.length; k++) {
+        const prev = sorted[k - 1];
+        const cur = sorted[k];
+        if (Number.isFinite(prev.max)) {
+          if (cur.min <= prev.max) errors.push(`Commission tiers overlap: a tier starting at ${cur.min}h overlaps the previous tier ending at ${prev.max}h.`);
+          else if (cur.min > prev.max + 1) errors.push(`Commission tiers have a gap between ${prev.max}h and ${cur.min}h — ranges must be contiguous.`);
+        }
+      }
+    }
+
+    if (sectionKey === 'trialLesson') {
+      const t = config.trialLesson || {};
+      const min = num(t.adminMinPercentage);
+      const max = num(t.adminMaxPercentage);
+      const comm = num(t.commissionRate);
+      if (Number.isNaN(min) || min < 0 || min > 100) errors.push('Trial min percentage must be between 0 and 100.');
+      if (Number.isNaN(max) || max < 0 || max > 100) errors.push('Trial max percentage must be between 0 and 100.');
+      if (!Number.isNaN(min) && !Number.isNaN(max) && min >= max) errors.push('Trial min percentage must be less than max percentage.');
+      if (Number.isNaN(comm) || comm < 0 || comm > 100) errors.push('Trial commission rate must be between 0 and 100.');
+    }
+
+    if (sectionKey === 'packageTiers') {
+      const pkgs = config.packageTiers || [];
+      const seen = new Set();
+      pkgs.forEach((p, i) => {
+        const name = (p.name || '').trim();
+        const min = num(p.minHours);
+        const max = num(p.maxHours);
+        if (!name) errors.push(`Package ${i + 1}: name is required.`);
+        else {
+          const key = name.toLowerCase();
+          if (seen.has(key)) errors.push(`Package names must be unique: "${name}" is used more than once.`);
+          seen.add(key);
+        }
+        if (Number.isNaN(min) || Number.isNaN(max)) errors.push(`Package ${name || i + 1}: min and max hours must be numbers.`);
+        else if (min >= max) errors.push(`Package ${name || i + 1}: min hours (${min}) must be less than max hours (${max}).`);
+      });
+    }
+
+    return errors;
+  };
+
   const handleSectionSave = async (sectionKey, sectionName) => {
+    // ADD-ONLY: block the save (before the confirm dialog) when the section is invalid.
+    const validationErrors = validatePricingSection(sectionKey);
+    if (validationErrors.length > 0) {
+      alert(`Please fix the following before saving ${sectionName}:\n\n• ${validationErrors.join('\n• ')}`);
+      return;
+    }
     const changes = getSectionChanges(sectionKey);
-    setConfirmDialog({ 
-      open: true, 
+    setConfirmDialog({
+      open: true,
       section: sectionKey,
       sectionName: sectionName,
-      changes: changes 
+      changes: changes
     });
   };
 

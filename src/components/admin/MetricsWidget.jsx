@@ -45,7 +45,7 @@ const MetricsWidget = ({
         <div className="flex items-end justify-between">
           <div>
             <div className="text-2xl font-bold text-gray-900">
-              {value}
+              {(value === null || value === undefined || value === '') ? 'N/A' : value}
             </div>
             {description && (
               <p className="text-xs text-gray-600 mt-1">
