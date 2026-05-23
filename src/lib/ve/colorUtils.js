@@ -80,3 +80,12 @@ export function hslTripletToHex(triplet) {
   const toHex = (x) => clamp(Math.round(x * 255), 0, 255).toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
+
+/** "rgb(r, g, b)" / "rgba(r,g,b,a)" -> "#rrggbb". Returns null if unparseable. */
+export function rgbToHex(rgb) {
+  if (typeof rgb !== 'string') return null;
+  const m = rgb.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (!m) return null;
+  const toHex = (x) => clamp(parseInt(x, 10), 0, 255).toString(16).padStart(2, '0');
+  return `#${toHex(m[1])}${toHex(m[2])}${toHex(m[3])}`;
+}

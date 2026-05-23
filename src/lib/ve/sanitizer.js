@@ -91,3 +91,36 @@ export function sanitizeTokenValue({ kind, value, cssSupports, knownVeNames, sel
 
   return { ok: false, reason: `unknown token kind: ${kind}` };
 }
+
+// Properties the editor must never set (layout/stacking/behavior hazards).
+// Hard-excluded regardless of capabilities (Part 6.3).
+export const EXCLUDED_PROPERTIES = new Set([
+  'position', 'inset', 'top', 'right', 'bottom', 'left', 'z-index', 'transform',
+  'transition', 'animation', 'pointer-events', 'content', 'cursor', 'float',
+]);
+
+/**
+ * Sanitize a single CSS declaration for a per-element override.
+ * Same hard gate as tokens, plus property allow-listing / exclusions.
+ * @returns {{ok:true, property:string, value:string} | {ok:false, reason:string}}
+ */
+export function sanitizeDeclaration({ property, value, cssSupports, allowedProperties }) {
+  const prop = String(property == null ? '' : property).trim().toLowerCase();
+  if (prop === '') return { ok: false, reason: 'empty property' };
+  if (EXCLUDED_PROPERTIES.has(prop)) return { ok: false, reason: `property "${prop}" is not editable` };
+  if (allowedProperties && !allowedProperties.has(prop)) {
+    return { ok: false, reason: `property "${prop}" is not in this element's capabilities` };
+  }
+
+  const v = String(value == null ? '' : value).trim();
+  if (v === '') return { ok: false, reason: 'empty value' };
+
+  const injection = scanForInjection(v);
+  if (injection) return { ok: false, reason: injection };
+
+  const supports = typeof cssSupports === 'function' ? cssSupports : null;
+  if (supports && !supports(prop, v)) {
+    return { ok: false, reason: `"${v}" is not a valid value for ${prop}` };
+  }
+  return { ok: true, property: prop, value: v };
+}

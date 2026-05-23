@@ -46,6 +46,7 @@ import PreviewFrame from '../components/admin/design/PreviewFrame';
 import ElementGroupEditor from '../components/admin/design/ElementGroupEditor';
 import InteractivePagePreview from '../components/admin/design/InteractivePagePreview';
 import GlobalTokensEditor from '../components/admin/design/GlobalTokensEditor';
+import VisualEditor from '../components/admin/design/visual-editor/VisualEditor';
 import { ROLE_OPTIONS, PAGE_OPTIONS } from '../components/admin/design/constants/previewOptions';
 
 export default function AdminSystemDesign() {
@@ -1748,7 +1749,10 @@ export default function AdminSystemDesign() {
         {/* Preview Tab */}
         {activeTab === 'preview' && (
           <div className="space-y-8">
-            {/* Interactive Page Preview */}
+            {/* Live Visual Editor (Phase 4) — click-to-edit on the real pages */}
+            <VisualEditor />
+
+            {/* Interactive Page Preview (legacy sandbox preview, kept for reference) */}
             <InteractivePagePreview
               systemConfig={systemConfig}
               designOverrides={designOverrides}

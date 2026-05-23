@@ -24,10 +24,10 @@ export default function HeroSection() {
             <img src="https://images.unsplash.com/photo-1516979187457-637abb4f9353?q=80&w=2070&auto=format&fit=crop" alt="Banner" className="w-full h-[500px] object-cover" />
             <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center">
                 <div className="text-center p-4">
-                    <h1 className="text-4xl md:text-6xl font-bold mb-2">Find The Perfect Online Teacher</h1>
-                    <h3 className="text-xl md:text-2xl font-light text-gray-200 mb-8">To Receive The Best Solution</h3>
+                    <h1 data-edit-id="Home:heading:hero-title" data-edit-capabilities="text" className="text-4xl md:text-6xl font-bold mb-2">Find The Perfect Online Teacher</h1>
+                    <h3 data-edit-id="Home:heading:hero-subtitle" data-edit-capabilities="text" className="text-xl md:text-2xl font-light text-gray-200 mb-8">To Receive The Best Solution</h3>
                     
-                    <div className="bg-white rounded-lg shadow-lg p-2 max-w-2xl mx-auto flex items-center gap-2">
+                    <div data-edit-id="Home:box:hero-search" data-edit-capabilities="box" className="bg-white rounded-lg shadow-lg p-2 max-w-2xl mx-auto flex items-center gap-2">
                         <Input 
                             type="text" 
                             placeholder="Search a subject or keyword" 
@@ -50,7 +50,7 @@ export default function HeroSection() {
                     </div>
 
                     <div className="mt-6 flex items-center justify-center gap-4 flex-wrap">
-                        <span className="text-gray-300">Our Services:</span>
+                        <span data-edit-id="Home:label:services-label" data-edit-capabilities="text" className="text-gray-300">Our Services:</span>
                         <ServiceTag name="Online Class" href="FindTutors" tooltip="Private online lessons with video." />
                         <ServiceTag name="Consulting" href="FindTutors" tooltip="Consult with a teacher about your problem." />
                         <ServiceTag name="Technical Interview" href="FindTutors" tooltip="Prepare for a job interview in a professional way." />
