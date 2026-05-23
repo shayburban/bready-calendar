@@ -406,28 +406,37 @@ export default function AdminSystemDesign() {
         // Merge existing config with loaded config to preserve defaults for new fields
         setSystemConfig(prevConfig => {
           // Deep merge components to ensure new nested properties are not lost
-          const loadedConfig = configs[0].config;
+          // Safety net: a stored/seeded config may have no `.config` at all, or a `config`
+          // that lacks the `components` tree (or some of its nested objects). Default every
+          // level to {} before spreading so the deep merge can never read a property of
+          // `undefined`. When the data is complete, each `(x || {})` is a no-op, so the
+          // merged result is identical to a direct spread — behavior is unchanged.
+          const loadedConfig = configs[0].config || {};
+          const pc = prevConfig.components || {};
+          const lc = loadedConfig.components || {};
+          const pcButtons = pc.buttons || {};
+          const lcButtons = lc.buttons || {};
           return {
             ...prevConfig,
             ...loadedConfig,
             components: {
-              ...prevConfig.components,
-              ...loadedConfig.components,
-              inputs: { ...prevConfig.components.inputs, ...loadedConfig.components.inputs },
-              dropdowns: { ...prevConfig.components.dropdowns, ...loadedConfig.components.dropdowns },
-              tooltips: { ...prevConfig.components.tooltips, ...loadedConfig.components.tooltips },
+              ...pc,
+              ...lc,
+              inputs: { ...(pc.inputs || {}), ...(lc.inputs || {}) },
+              dropdowns: { ...(pc.dropdowns || {}), ...(lc.dropdowns || {}) },
+              tooltips: { ...(pc.tooltips || {}), ...(lc.tooltips || {}) },
               buttons: {
-                ...prevConfig.components.buttons,
-                ...loadedConfig.components.buttons,
+                ...pcButtons,
+                ...lcButtons,
                 variants: {
-                  ...prevConfig.components.buttons.variants,
-                  ...loadedConfig.components.buttons.variants
+                  ...(pcButtons.variants || {}),
+                  ...(lcButtons.variants || {})
                 },
                 // NEW: Merge activeState and inactiveState
-                activeState: { ...prevConfig.components.buttons.activeState, ...(loadedConfig.components.buttons?.activeState || {}) },
-                inactiveState: { ...prevConfig.components.buttons.inactiveState, ...(loadedConfig.components.buttons?.inactiveState || {}) }
+                activeState: { ...(pcButtons.activeState || {}), ...(lcButtons.activeState || {}) },
+                inactiveState: { ...(pcButtons.inactiveState || {}), ...(lcButtons.inactiveState || {}) }
               },
-              cards: { ...prevConfig.components.cards, ...loadedConfig.components.cards },
+              cards: { ...(pc.cards || {}), ...(lc.cards || {}) },
             }
           };
         });
