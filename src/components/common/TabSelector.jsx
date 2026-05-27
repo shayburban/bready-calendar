@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
@@ -28,6 +28,20 @@ export default function TabSelector({ tabs, activeTab, onTabChange, maxVisibleTa
   const hiddenTabs = tabs.slice(maxVisibleTabs);
   const [popoverOpen, setPopoverOpen] = useState(false);
 
+  // The "+x More" overflow opens immediately on HOVER (onMouseEnter), not only
+  // on click. A short close delay lets the pointer travel from the trigger onto
+  // the (portaled) popover content without it snapping shut. Click still toggles
+  // the menu via the same controlled `popoverOpen` state, so existing behavior
+  // and item selection remain unchanged.
+  const hoverCloseTimer = useRef(null);
+  const openOnHover = () => {
+    if (hoverCloseTimer.current) clearTimeout(hoverCloseTimer.current);
+    setPopoverOpen(true);
+  };
+  const closeOnHoverOut = () => {
+    hoverCloseTimer.current = setTimeout(() => setPopoverOpen(false), 120);
+  };
+
   const handleSelect = (value) => {
     onTabChange(value);
     setPopoverOpen(false);
@@ -56,13 +70,15 @@ export default function TabSelector({ tabs, activeTab, onTabChange, maxVisibleTa
             <Button
               variant="outline"
               size="sm"
+              onMouseEnter={openOnHover}
+              onMouseLeave={closeOnHoverOut}
               className={cn(tabVariants({ variant }), 'border-input bg-transparent flex items-center gap-1', isActiveTabHidden && 'bg-orange-200 border-orange-400 text-orange-900')}
             >
               {isActiveTabHidden ? tabs.find(t => t.value === activeTab).label : moreLabel}
               <ChevronDown className="w-4 h-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="p-2 w-auto" align="end">
+          <PopoverContent className="p-2 w-auto" align="end" onMouseEnter={openOnHover} onMouseLeave={closeOnHoverOut}>
             <div className="flex flex-col space-y-1">
               {hiddenTabs.map(tab => (
                 <Button
