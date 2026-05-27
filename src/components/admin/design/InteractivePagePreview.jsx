@@ -13,7 +13,8 @@ import {
   AlertTriangle,
   Shield,
   Play,
-  Settings
+  Settings,
+  LogOut
 } from 'lucide-react';
 import { ROLE_OPTIONS, PAGE_OPTIONS, PAGE_LOADERS } from './constants/previewOptions';
 
@@ -119,7 +120,7 @@ const PreviewLoader = () => (
   </Card>
 );
 
-const SandboxOverlay = ({ onEditRequest, role, page }) => (
+const SandboxOverlay = ({ onEditRequest, onExitPreview, role, page }) => (
   <div className="fixed inset-0 z-50 pointer-events-none">
     <div className="absolute top-4 left-4 right-4 pointer-events-auto">
       <div className="bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center justify-between">
@@ -130,8 +131,8 @@ const SandboxOverlay = ({ onEditRequest, role, page }) => (
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             variant="secondary"
             onClick={onEditRequest}
             className="bg-white text-blue-600 hover:bg-gray-100"
@@ -139,13 +140,22 @@ const SandboxOverlay = ({ onEditRequest, role, page }) => (
             <Edit className="w-4 h-4 mr-1" />
             Switch to Edit Mode
           </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onExitPreview}
+            className="bg-white text-gray-700 hover:bg-gray-100"
+          >
+            <LogOut className="w-4 h-4 mr-1" />
+            Exit Preview
+          </Button>
         </div>
       </div>
     </div>
   </div>
 );
 
-const EditModeOverlay = ({ onExitEdit, role, page }) => (
+const EditModeOverlay = ({ onExitEdit, onExitPreview, role, page }) => (
   <div className="fixed inset-0 z-50 pointer-events-none">
     <div className="absolute top-4 left-4 right-4 pointer-events-auto">
       <div className="bg-red-600 text-white px-4 py-2 rounded-lg shadow-lg flex items-center justify-between">
@@ -156,13 +166,22 @@ const EditModeOverlay = ({ onExitEdit, role, page }) => (
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             variant="secondary"
             onClick={onExitEdit}
             className="bg-white text-red-600 hover:bg-gray-100"
           >
             Exit Edit Mode
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onExitPreview}
+            className="bg-white text-gray-700 hover:bg-gray-100"
+          >
+            <LogOut className="w-4 h-4 mr-1" />
+            Exit Preview
           </Button>
         </div>
       </div>
@@ -170,7 +189,7 @@ const EditModeOverlay = ({ onExitEdit, role, page }) => (
   </div>
 );
 
-const OriginalPageWrapper = ({ role, page, mode, onEditRequest, onExitEdit, systemConfig }) => {
+const OriginalPageWrapper = ({ role, page, mode, onEditRequest, onExitEdit, onExitPreview, systemConfig }) => {
   const PageComponent = loadPageComponent(page);
   const isEditMode = mode === 'edit';
   const isSandbox = mode === 'sandbox';
@@ -200,18 +219,20 @@ const OriginalPageWrapper = ({ role, page, mode, onEditRequest, onExitEdit, syst
       
       {/* Conditional overlays */}
       {isSandbox && (
-        <SandboxOverlay 
-          onEditRequest={onEditRequest} 
-          role={role} 
-          page={page} 
+        <SandboxOverlay
+          onEditRequest={onEditRequest}
+          onExitPreview={onExitPreview}
+          role={role}
+          page={page}
         />
       )}
-      
+
       {isEditMode && (
-        <EditModeOverlay 
-          onExitEdit={onExitEdit} 
-          role={role} 
-          page={page} 
+        <EditModeOverlay
+          onExitEdit={onExitEdit}
+          onExitPreview={onExitPreview}
+          role={role}
+          page={page}
         />
       )}
     </div>
@@ -380,6 +401,7 @@ export default function InteractivePagePreview({
                 mode={previewMode}
                 onEditRequest={handleEditModeRequest}
                 onExitEdit={handleExitEdit}
+                onExitPreview={handleBackToControls}
                 systemConfig={systemConfig}
             />
           </div>
