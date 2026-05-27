@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ChevronDown } from 'lucide-react';
 
 const TimeSlotPill = ({ time, active, onClick }) => (
@@ -98,35 +97,33 @@ const NavigationWithinLegend = ({
             ))}
 
             {overflowSlots.length > 0 && (
-                // Hover lives on a real wrapper element (reliable onMouseEnter),
-                // not forwarded through Radix asChild.
+                // Self-contained hover dropdown — deliberately NOT a Radix menu.
+                // This row renders inside a modal Dialog, where a focus-managed
+                // Radix menu is closed instantly by the Dialog's focus trap. A
+                // plain in-place (non-portaled) hover panel is immune to that.
+                // Item clicks still run the same handleSelectSlot logic.
                 <div
-                    className="inline-flex"
+                    className="relative inline-flex"
                     onMouseEnter={openOverflowOnHover}
                     onMouseLeave={closeOverflowOnHoverOut}
                 >
-                <DropdownMenu open={overflowOpen} onOpenChange={setOverflowOpen} modal={false}>
-                    <DropdownMenuTrigger asChild>
-                        <Button variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
-                            +{overflowSlots.length} More <ChevronDown className="w-4 h-4 ml-1" />
-                        </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent
-                        onMouseEnter={openOverflowOnHover}
-                        onMouseLeave={closeOverflowOnHoverOut}
-                        // Don't grab focus on open — otherwise the enclosing modal
-                        // Dialog's focus trap pulls focus back and closes the menu
-                        // instantly, so it never appears on hover.
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                        onCloseAutoFocus={(e) => e.preventDefault()}
-                    >
-                        {overflowSlots.map(slot => (
-                             <DropdownMenuItem key={slot} onSelect={() => handleSelectSlot(slot)}>
-                                {slot}
-                            </DropdownMenuItem>
-                        ))}
-                    </DropdownMenuContent>
-                </DropdownMenu>
+                    <Button variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
+                        +{overflowSlots.length} More <ChevronDown className="w-4 h-4 ml-1" />
+                    </Button>
+                    {overflowOpen && (
+                        <div className="absolute left-1/2 top-full z-50 mt-1 -translate-x-1/2 min-w-[8rem] rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                            {overflowSlots.map(slot => (
+                                <button
+                                    key={slot}
+                                    type="button"
+                                    onClick={() => { handleSelectSlot(slot); setOverflowOpen(false); }}
+                                    className="block w-full whitespace-nowrap px-3 py-1.5 text-left text-xs text-gray-700 hover:bg-gray-50"
+                                >
+                                    {slot}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>
