@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { ChevronDown } from 'lucide-react';
@@ -71,6 +71,19 @@ const NavigationWithinLegend = ({
         }
     };
 
+    // The "+x More" overflow menu opens on HOVER (not only click). modal={false}
+    // + a short close delay let the pointer travel from the trigger onto the menu
+    // without it snapping shut. Click and item selection still work unchanged.
+    const [overflowOpen, setOverflowOpen] = useState(false);
+    const overflowCloseTimer = useRef(null);
+    const openOverflowOnHover = () => {
+        if (overflowCloseTimer.current) clearTimeout(overflowCloseTimer.current);
+        setOverflowOpen(true);
+    };
+    const closeOverflowOnHoverOut = () => {
+        overflowCloseTimer.current = setTimeout(() => setOverflowOpen(false), 120);
+    };
+
     const overflowSlots = timeSlots.filter(slot => !displayedSlots.includes(slot));
 
     return (
@@ -85,13 +98,17 @@ const NavigationWithinLegend = ({
             ))}
 
             {overflowSlots.length > 0 && (
-                <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                <DropdownMenu open={overflowOpen} onOpenChange={setOverflowOpen} modal={false}>
+                    <DropdownMenuTrigger asChild onMouseEnter={openOverflowOnHover} onMouseLeave={closeOverflowOnHoverOut}>
                         <Button variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
                             +{overflowSlots.length} More <ChevronDown className="w-4 h-4 ml-1" />
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent>
+                    <DropdownMenuContent
+                        onMouseEnter={openOverflowOnHover}
+                        onMouseLeave={closeOverflowOnHoverOut}
+                        onCloseAutoFocus={(e) => e.preventDefault()}
+                    >
                         {overflowSlots.map(slot => (
                              <DropdownMenuItem key={slot} onSelect={() => handleSelectSlot(slot)}>
                                 {slot}
