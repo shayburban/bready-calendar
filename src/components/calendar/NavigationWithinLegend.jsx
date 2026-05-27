@@ -98,8 +98,15 @@ const NavigationWithinLegend = ({
             ))}
 
             {overflowSlots.length > 0 && (
+                // Hover lives on a real wrapper element (reliable onMouseEnter),
+                // not forwarded through Radix asChild.
+                <div
+                    className="inline-flex"
+                    onMouseEnter={openOverflowOnHover}
+                    onMouseLeave={closeOverflowOnHoverOut}
+                >
                 <DropdownMenu open={overflowOpen} onOpenChange={setOverflowOpen} modal={false}>
-                    <DropdownMenuTrigger asChild onMouseEnter={openOverflowOnHover} onMouseLeave={closeOverflowOnHoverOut}>
+                    <DropdownMenuTrigger asChild>
                         <Button variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
                             +{overflowSlots.length} More <ChevronDown className="w-4 h-4 ml-1" />
                         </Button>
@@ -107,6 +114,10 @@ const NavigationWithinLegend = ({
                     <DropdownMenuContent
                         onMouseEnter={openOverflowOnHover}
                         onMouseLeave={closeOverflowOnHoverOut}
+                        // Don't grab focus on open — otherwise the enclosing modal
+                        // Dialog's focus trap pulls focus back and closes the menu
+                        // instantly, so it never appears on hover.
+                        onOpenAutoFocus={(e) => e.preventDefault()}
                         onCloseAutoFocus={(e) => e.preventDefault()}
                     >
                         {overflowSlots.map(slot => (
@@ -116,6 +127,7 @@ const NavigationWithinLegend = ({
                         ))}
                     </DropdownMenuContent>
                 </DropdownMenu>
+                </div>
             )}
         </div>
     );
