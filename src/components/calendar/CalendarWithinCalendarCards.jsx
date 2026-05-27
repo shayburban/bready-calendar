@@ -136,14 +136,16 @@ export default function CalendarWithinCalendarCards({
           let buttonClasses = "h-8 w-8 text-xs rounded-lg flex items-center justify-center transition-colors ";
 
           if (isDisabled) {
-            buttonClasses += "text-gray-300 cursor-not-allowed";
+            // Inactive date (no event of the current type): grey, no hover, unclickable.
+            buttonClasses += "text-gray-300 cursor-not-allowed pointer-events-none";
           } else {
             if (isSelected) {
               buttonClasses += "bg-gray-900 text-white font-bold hover:bg-gray-800";
             } else if (isDayToday) {
               buttonClasses += "bg-gray-100 text-gray-900 hover:bg-gray-200";
             } else {
-              buttonClasses += "hover:bg-gray-100";
+              // Active date (has an event of the current type): black, hoverable, clickable.
+              buttonClasses += "text-gray-900 font-medium hover:bg-gray-100";
             }
           }
 

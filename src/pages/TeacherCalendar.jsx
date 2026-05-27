@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User } from '@/api/entities';
 import { Booking } from '@/api/entities';
 import { Availability } from '@/api/entities';
@@ -107,6 +107,17 @@ const MONTHS_STEP = 2;
 // "Select <headerLabel> event" template (used by the mixed picker).
 function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTypeLabel = false }) {
   const [open, setOpen] = useState(false);
+  // Open the "+x more" picker on hover (not only on click). A short close delay
+  // lets the pointer travel from the chip onto the (portaled) content without it
+  // snapping shut. Click still toggles it, and selecting an item still closes it.
+  const closeTimerRef = useRef(null);
+  const openOnHover = () => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    setOpen(true);
+  };
+  const closeOnHoverOut = () => {
+    closeTimerRef.current = setTimeout(() => setOpen(false), 120);
+  };
   // Always render rows in start-time order (earliest first), regardless of
   // how the caller assembled `items`.
   const sortedItems = [...items].sort((a, b) =>
@@ -116,8 +127,8 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
   );
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>{chip}</PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
+      <PopoverTrigger asChild onMouseEnter={openOnHover} onMouseLeave={closeOnHoverOut}>{chip}</PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start" onMouseEnter={openOnHover} onMouseLeave={closeOnHoverOut}>
         <div className="px-3 py-2 border-b font-semibold text-sm text-gray-800">
           {header || `Select ${headerLabel} event`}
         </div>
@@ -730,6 +741,16 @@ export default function TeacherCalendar() {
     });
   };
 
+  // Reset the Set Availability form to its initial state (called by the sidebar
+  // after a successful Save or on Cancel). The sidebar resets its own fields;
+  // the parent owns the date ranges, so we revert those to the default here.
+  const resetAvailabilityForm = () => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    setPrimaryRange({ startDate: t, endDate: t });
+    setExtraRows([]);
+    setActiveWeekdays([0, 1, 2, 3, 4, 5, 6]);
+  };
+
   const startDrag = (id, mode) => {
     if (id === 'primary' && !primaryRange) return;
     setDragTarget({ id, mode });
@@ -865,6 +886,7 @@ export default function TeacherCalendar() {
             onActiveWeekdaysChange={setActiveWeekdays}
             onSaveAvailability={handleSaveAvailability}
             onNoEndDateChange={handleNoEndDateChange}
+            onResetAvailabilityForm={resetAvailabilityForm}
           />
 
           {/* Main Calendar Area */}

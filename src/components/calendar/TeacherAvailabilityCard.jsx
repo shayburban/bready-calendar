@@ -61,7 +61,7 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
         >
             <CalendarWithinCalendarCards
                 selectedDate={selectedDate}
-                onDateSelect={handleDateSelect}
+                onDateChange={handleDateSelect}
                 availableDates={event.availableDatesForCategory || []}
                 legendCategory={event.type}
             />

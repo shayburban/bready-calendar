@@ -261,7 +261,7 @@ const formatReviewDate = (d) => {
   return format(new Date(d), 'd MMMM yyyy');
 };
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange, onResetAvailabilityForm }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   // Active weekday indices for the "Advanced date selection" filter. Default
@@ -278,6 +278,9 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // When checked (default), Save Dates emits per-time slots; when unchecked,
   // it emits all-day slots (no startTime/endTime).
   const [timeAvailEnabled, setTimeAvailEnabled] = useState(true);
+  // Set true when the user clicks Save Dates while requirements aren't met, so
+  // the form can surface the reason + red-outline the missing fields.
+  const [showErrors, setShowErrors] = useState(false);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [user, setUser] = useState(null); // Retained state but not used in new legend logic
   const [appRoles, setAppRoles] = useState([]); // Retained state but not used in new legend logic
@@ -634,6 +637,49 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   const reviewRanges = computeFinalRanges(reviewRangeRows);
   const canSave = reviewRanges.length > 0;
 
+  // ── Set Availability form: validation + reset (additive). handleSave above is
+  //    unchanged and still guards, so an invalid save can never persist. ──
+  const rowComplete = (v) => !!(v && v.startDate && (v.endDate || noEndDate));
+  const anyRowComplete = rowComplete(primaryRangeValue) || extraRows.some(rowComplete);
+  // Highlight the date rows when the missing requirement is the date range,
+  // or the weekday picker when a range exists but no weekday is selected.
+  const dateFieldError = showErrors && !canSave && !anyRowComplete;
+  const weekdayError = showErrors && !canSave && anyRowComplete && activeWeekdays.length === 0;
+  const saveErrorMsg =
+    !showErrors || canSave
+      ? ''
+      : !anyRowComplete
+        ? 'Please choose a date range (start and end date, or tick "No end date") before saving.'
+        : activeWeekdays.length === 0
+          ? 'Select at least one weekday for the chosen date range.'
+          : 'Please complete the required availability fields before saving.';
+
+  // Revert every field in this tab to its initial state. The date ranges are
+  // owned by the parent, so we ask it to reset those via onResetAvailabilityForm.
+  const resetAvailabilityFields = () => {
+    setAvailabilityMode('open');
+    setNoEndDate(false);
+    setActiveWeekdays([0, 1, 2, 3, 4, 5, 6]);
+    setTimeAvailEnabled(true);
+    setTimeRanges([{ id: 1, startTime: '', endTime: '' }]);
+    setIsAdvancedOpen(false);
+    setShowErrors(false);
+    if (onActiveWeekdaysChange) onActiveWeekdaysChange([0, 1, 2, 3, 4, 5, 6]);
+    if (onResetAvailabilityForm) onResetAvailabilityForm();
+  };
+
+  // Save Dates click: if requirements aren't met, surface the reason + red
+  // fields (instead of doing nothing); otherwise save, then reset the form.
+  const handleSaveClick = () => {
+    if (!canSave) {
+      setShowErrors(true);
+      if (anyRowComplete && activeWeekdays.length === 0) setIsAdvancedOpen(true);
+      return;
+    }
+    handleSave();
+    resetAvailabilityFields();
+  };
+
   const handleViewChange = (newView) => {
     if (newView === 'Month') {
       window.location.href = createPageUrl('TeacherCalendar');
@@ -739,21 +785,26 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
               const value = isPrimary
                 ? primaryRangeValue
                 : { startDate: range.startDate, endDate: range.endDate };
+              const showRowError = dateFieldError && !rowComplete(value);
               return (
-                <DateRangePicker
+                <div
                   key={range.id}
-                  value={value}
-                  onRemove={() => removeDateRange(range.id)}
-                  onAdd={index === allRows.length - 1 ? addDateRange : null}
-                  onRangeChange={(rangeData) =>
-                    isPrimary
-                      ? (onPrimaryRangeChange && onPrimaryRangeChange(rangeData))
-                      : handleRowRangeChange(range.id, rangeData)
-                  }
-                  noEndDate={noEndDate}
-                  hideRemove={isPrimary}
-                  isOnlyRow={allRows.length === 1}
-                />
+                  className={showRowError ? 'rounded-md ring-2 ring-red-500' : ''}
+                >
+                  <DateRangePicker
+                    value={value}
+                    onRemove={() => removeDateRange(range.id)}
+                    onAdd={index === allRows.length - 1 ? addDateRange : null}
+                    onRangeChange={(rangeData) =>
+                      isPrimary
+                        ? (onPrimaryRangeChange && onPrimaryRangeChange(rangeData))
+                        : handleRowRangeChange(range.id, rangeData)
+                    }
+                    noEndDate={noEndDate}
+                    hideRemove={isPrimary}
+                    isOnlyRow={allRows.length === 1}
+                  />
+                </div>
               );
             })}
                             </div>
@@ -776,7 +827,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                 <ChevronDown className={`w-4 h-4 mr-1 transition-transform ${isAdvancedOpen ? '' : '-rotate-90'}`} /> Advanced date selection
                             </Button>
                             {isAdvancedOpen && (
-                              <div className="mt-2 ml-5 grid grid-cols-2 gap-x-3 gap-y-1">
+                              <div className={`mt-2 ml-5 grid grid-cols-2 gap-x-3 gap-y-1 ${weekdayError ? 'rounded-md ring-2 ring-red-500 p-2' : ''}`}>
                                 {WEEKDAY_OPTIONS.map((opt) => (
                                   <label
                                     key={opt.idx}
@@ -888,15 +939,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         })()}
 
                         <div className="flex gap-2">
-                            <Button variant="outline" className="w-full">Cancel</Button>
+                            <Button variant="outline" className="w-full" onClick={resetAvailabilityFields}>Cancel</Button>
                             <Button
-                              onClick={handleSave}
-                              disabled={!canSave}
-                              className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                              onClick={handleSaveClick}
+                              aria-disabled={!canSave}
+                              className={`w-full ${canSave ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'}`}
                             >
                               Save Dates
                             </Button>
                         </div>
+                        {saveErrorMsg && (
+                          <p className="text-sm text-red-600 -mt-2">{saveErrorMsg}</p>
+                        )}
 
                         <div>
                             <p className="text-sm text-gray-600">Last Updated: Today</p>

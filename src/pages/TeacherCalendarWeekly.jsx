@@ -67,6 +67,15 @@ export default function TeacherCalendarWeekly() {
   const [activeWeekdays, setActiveWeekdays] = useState([0, 1, 2, 3, 4, 5, 6]);
   const [noEndDate, setNoEndDate] = useState(false);
 
+  // Reset the Set Availability form's parent-owned date ranges (called by the
+  // sidebar after a successful Save or on Cancel). Mirrors Monthly.
+  const resetAvailabilityForm = () => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    setPrimaryRange({ startDate: t, endDate: t });
+    setExtraRows([]);
+    setActiveWeekdays([0, 1, 2, 3, 4, 5, 6]);
+  };
+
   useEffect(() => {
     const fetchUserAndEvents = async () => {
       try {
@@ -222,6 +231,7 @@ export default function TeacherCalendarWeekly() {
             onActiveWeekdaysChange={setActiveWeekdays}
             onSaveAvailability={handleSaveAvailability}
             onNoEndDateChange={handleNoEndDateChange}
+            onResetAvailabilityForm={resetAvailabilityForm}
           />
 
           {/* Main Calendar Area */}
