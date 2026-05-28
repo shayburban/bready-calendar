@@ -26,10 +26,28 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showWarning, setShowWarning] = useState(true);
   const [activeTimeSlot, setActiveTimeSlot] = useState('');
+  // Controlled visibility for the date-picker Popover so a date click can
+  // auto-close it (Task 1). Trigger-button click still toggles it via Radix's
+  // onOpenChange, and the existing onInteractOutside.preventDefault() on the
+  // PopoverContent (intentional) continues to keep outside clicks from closing.
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
 
+  // selectedDate is intentionally driven by event?.dateString ONLY — not the
+  // whole `event` reference. Navigating between same-day time-range chips
+  // swaps `event` to a sibling that shares the same dateString, so this effect
+  // no longer fires and the user's chosen date persists across chip clicks
+  // (Task 2). Opening the popup on a different day still updates correctly
+  // because dateString actually changes.
+  useEffect(() => {
+    if (event?.dateString) {
+      setSelectedDate(new Date(event.dateString));
+    }
+  }, [event?.dateString]);
+
+  // activeTimeSlot keeps its prior reset behavior (resyncs whenever the active
+  // event swaps), so existing logic that relies on it remains intact.
   useEffect(() => {
     if (event) {
-      setSelectedDate(new Date(event.dateString || Date.now()));
       setActiveTimeSlot(event.timeSlots && event.timeSlots.length > 0 ? event.timeSlots[0] : '');
     }
   }, [event]);
@@ -40,6 +58,8 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
 
   const handleDateSelect = (date) => {
     setSelectedDate(date);
+    // Auto-close the date-picker dropdown immediately on selection (Task 1).
+    setDatePickerOpen(false);
     // Here you would typically fetch new event data for the selected date
     console.log("Date selected, new data should be fetched for:", date);
   };
@@ -48,15 +68,15 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
     <div className="p-4 space-y-3">
       <h3 className="text-center font-bold text-lg text-gray-800">My Availability {roleDisplay}</h3>
 
-      <Popover>
+      <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>
         <PopoverTrigger asChild>
             <Button variant="ghost" className="w-full text-center font-medium">
                 {format(selectedDate, 'dd.MM.yyyy')}
                 <ChevronDown className="w-4 h-4 ml-2" />
             </Button>
         </PopoverTrigger>
-        <PopoverContent 
-          className="w-auto p-0" 
+        <PopoverContent
+          className="w-auto p-0"
           onInteractOutside={(e) => e.preventDefault()}
         >
             <CalendarWithinCalendarCards
