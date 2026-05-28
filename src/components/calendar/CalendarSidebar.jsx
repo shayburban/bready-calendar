@@ -657,7 +657,8 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // Revert every field in this tab to its initial state. The date ranges are
   // owned by the parent, so we ask it to reset those via onResetAvailabilityForm.
   const resetAvailabilityFields = () => {
-    setAvailabilityMode('open');
+    // availabilityMode (Open/Closed) is intentionally NOT reset here so the
+    // toggle stays on the user's last selection across Save Dates and Cancel.
     setNoEndDate(false);
     setActiveWeekdays([0, 1, 2, 3, 4, 5, 6]);
     setTimeAvailEnabled(true);

@@ -343,9 +343,18 @@ export default function TeacherCalendar() {
   const openEventModal = (event, monthDate) => {
     const ref = monthDate || currentDate;
     const eventDate = new Date(ref.getFullYear(), ref.getMonth(), event.date);
-    const allDatesForCategory = sampleEvents
-      .filter((e) => e.type === event.type && e.role === event.role)
-      .map((e) => new Date(ref.getFullYear(), ref.getMonth(), e.date).toISOString());
+    // Picker's active dates come exclusively from savedAvailabilitySlots
+    // (user-saved data via the "Set Availability (T)" sidebar). sampleEvents
+    // are intentionally excluded so the popup card's date picker only
+    // highlights dates the teacher has actually saved. The 'YYYY-MM-DD' slot
+    // dates are reparsed via local Date + toISOString so the resulting ISO
+    // strings round-trip correctly via `new Date(iso).getDate()` (matching
+    // the previous output format expected by downstream consumers such as
+    // SyncedEventsModal).
+    const allDatesForCategory = savedAvailabilitySlots.map((s) => {
+      const [y, m, d] = s.date.split('-').map(Number);
+      return new Date(y, m - 1, d).toISOString();
+    });
     const uniqueDates = [...new Set(allDatesForCategory)];
 
     // Build the day's combined event list (sample + synthesized saved

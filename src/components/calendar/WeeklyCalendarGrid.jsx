@@ -79,6 +79,15 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
         const mm = String(day.getMonth() + 1).padStart(2, '0');
         const dd = String(day.getDate()).padStart(2, '0');
         const isoDate = `${yyyy}-${mm}-${dd}`;
+        // Picker's active dates come exclusively from savedAvailabilitySlots
+        // (user-saved data). sampleEvents are intentionally excluded so the
+        // popup card's date picker only highlights dates the teacher has
+        // actually saved. Reparse 'YYYY-MM-DD' via local Date + toISOString so
+        // the resulting ISO strings round-trip via `new Date(iso).getDate()`.
+        const savedDates = Array.from(new Set(savedAvailabilitySlots.map((s) => {
+            const [y, mo, d] = s.date.split('-').map(Number);
+            return new Date(y, mo - 1, d).toISOString();
+        })));
         const savedAvailEvents = savedAvailabilitySlots
             .filter((s) => s.date === isoDate && s.startTime && s.endTime)
             .map((s, i) => {
@@ -96,7 +105,7 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
                     endHour,
                     dayIndex,
                     dateString: day.toISOString(),
-                    availableDatesForCategory: [],
+                    availableDatesForCategory: savedDates,
                 };
             });
 
@@ -110,27 +119,19 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
             (!FILTERABLE_TYPES.includes(e.type) || activeFilters.includes(e.type))
         );
 
-        // Build the same `availableDatesForCategory` that monthly produces for SyncedEventsModal etc.
-        const allDatesByCategory = {};
-        sampleEvents.forEach((e) => {
-            const key = `${e.type}-${e.role || ''}`;
-            const iso = new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString();
-            if (!allDatesByCategory[key]) allDatesByCategory[key] = new Set();
-            allDatesByCategory[key].add(iso);
-        });
-
+        // `availableDatesForCategory` is now sourced from savedAvailabilitySlots
+        // only (computed above as `savedDates`) — sampleEvents are excluded per
+        // user requirement so the popup picker shows only user-saved dates.
         const enriched = dayEvents.map((e) => {
             const { startHour, endHour } = parseTimeRange(e.time);
             const dateString = new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString();
-            const key = `${e.type}-${e.role || ''}`;
-            const availableDatesForCategory = Array.from(allDatesByCategory[key] || []);
             return {
                 ...e,
                 startHour,
                 endHour,
                 dayIndex,
                 dateString,
-                availableDatesForCategory,
+                availableDatesForCategory: savedDates,
             };
         });
 
