@@ -33,10 +33,14 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
   // active (Bug 1 fix). Output format matches what CalendarWithinCalendarCards
   // already accepts (full ISO via local Date + toISOString reparse).
   const globalSavedDates = useMemo(() => {
-    return Array.from(new Set((savedAvailabilitySlots || []).map((s) => {
-      const [y, m, d] = s.date.split('-').map(Number);
-      return new Date(y, m - 1, d).toISOString();
-    })));
+    // Defensive filter: skip null/malformed slots so a single bad localStorage
+    // entry can't crash the modal at mount time.
+    return Array.from(new Set((savedAvailabilitySlots || [])
+      .filter((s) => s && typeof s.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
+      .map((s) => {
+        const [y, m, d] = s.date.split('-').map(Number);
+        return new Date(y, m - 1, d).toISOString();
+      })));
   }, [savedAvailabilitySlots]);
 
   // The modal owns the "active date" so chips, "Your Availability" text,
@@ -56,7 +60,13 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
   // the newly selected day (Bug 2 fix). Time string is the slot identity.
   const allSlots = useMemo(() => {
     if (!event) return [];
-    const isOriginalDate = activeDate === event.dateString;
+    // CRITICAL: useState only initializes once on mount, so on the very first
+    // render after a fresh `event` arrives, `activeDate` is still the stale
+    // empty string from the time `event` was null. Treat an empty/missing
+    // activeDate as the original-date case so we don't try to parse '' and
+    // throw — the sync useEffect will set activeDate to event.dateString on
+    // the next tick, and from then on the comparison works normally.
+    const isOriginalDate = !activeDate || activeDate === event.dateString;
     if (isOriginalDate) {
       const siblings = (event.siblingEvents || [])
         .filter((s) => s?.time && s.time !== event.time)
@@ -72,10 +82,17 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
       return [event, ...dedupSiblings];
     }
     // Different date picked via the picker — synthesize sibling-shaped events
-    // from savedAvailabilitySlots filtered to that day.
-    const activeYMD = format(new Date(activeDate), 'yyyy-MM-dd');
+    // from savedAvailabilitySlots filtered to that day. Wrap the parse in
+    // try/catch so a malformed activeDate falls back to [event] instead of
+    // crashing the modal during render.
+    let activeYMD;
+    try {
+      activeYMD = format(new Date(activeDate), 'yyyy-MM-dd');
+    } catch {
+      return [event];
+    }
     const matched = (savedAvailabilitySlots || [])
-      .filter((s) => s.date === activeYMD && s.startTime && s.endTime)
+      .filter((s) => s && typeof s.date === 'string' && s.date === activeYMD && s.startTime && s.endTime)
       .slice()
       .sort((a, b) => {
         const am = parseInt(a.startTime.split(':')[0], 10) * 60 + parseInt(a.startTime.split(':')[1], 10);
@@ -98,10 +115,16 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
   // (chips, "Your Availability" text, form details) follows (Bug 2 fix).
   const handleDateChange = (newDateISO) => {
     if (!newDateISO) return;
+    // Guard the parse so a malformed date string can't crash the modal.
+    let newYMD;
+    try {
+      newYMD = format(new Date(newDateISO), 'yyyy-MM-dd');
+    } catch {
+      return;
+    }
     setActiveDate(newDateISO);
-    const newYMD = format(new Date(newDateISO), 'yyyy-MM-dd');
     const matched = (savedAvailabilitySlots || [])
-      .filter((s) => s.date === newYMD && s.startTime && s.endTime)
+      .filter((s) => s && typeof s.date === 'string' && s.date === newYMD && s.startTime && s.endTime)
       .slice()
       .sort((a, b) => {
         const am = parseInt(a.startTime.split(':')[0], 10) * 60 + parseInt(a.startTime.split(':')[1], 10);
@@ -134,7 +157,10 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
   // chip is currently active (Bug 1 fix).
   const activeEvent = {
     ...baseActive,
-    dateString: activeDate,
+    // Fall back to event.dateString so the very first render — when activeDate
+    // hasn't been hydrated yet by the sync effect — emits a coherent dateString
+    // instead of an empty string that the card's downstream effect would skip.
+    dateString: activeDate || event.dateString,
     slotHeader,
     availableDatesForCategory: globalSavedDates,
   };
