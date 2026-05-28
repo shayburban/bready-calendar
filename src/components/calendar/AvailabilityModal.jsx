@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { format } from 'date-fns';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import NavigationWithinLegend from './NavigationWithinLegend';
+import { synthesizeSavedAvailEvent, dayOfMonthFromSlot } from '@/lib/eventSiblings';
 import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
 import BookedAsStudentCard from './BookedAsStudentCard';
@@ -25,25 +27,65 @@ const startMinutesOf = (e) => {
   return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
 };
 
-export default function AvailabilityModal({ event, isOpen, onClose }) {
-  // Combined slot list: clicked event always first, then same-day siblings
-  // of identical type+role sorted chronologically. Time string is the slot
-  // identity used for de-dup.
+export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [] }) {
+  // Global picker highlight list — sourced ONCE from savedAvailabilitySlots so
+  // the calendar highlights the same days regardless of which sibling chip is
+  // active (Bug 1 fix). Output format matches what CalendarWithinCalendarCards
+  // already accepts (full ISO via local Date + toISOString reparse).
+  const globalSavedDates = useMemo(() => {
+    return Array.from(new Set((savedAvailabilitySlots || []).map((s) => {
+      const [y, m, d] = s.date.split('-').map(Number);
+      return new Date(y, m - 1, d).toISOString();
+    })));
+  }, [savedAvailabilitySlots]);
+
+  // The modal owns the "active date" so chips, "Your Availability" text,
+  // and the picker can stay in sync as the user picks a new date. Initialized
+  // from the clicked event's dateString and resynced if the event itself
+  // changes (i.e. a new popup is opened on a different day).
+  const [activeDate, setActiveDate] = useState(event?.dateString || '');
+  useEffect(() => {
+    if (event?.dateString) setActiveDate(event.dateString);
+  }, [event?.dateString]);
+
+  // Combined slot list. When the user is still on the originally-clicked day
+  // (`activeDate === event.dateString`), use the existing siblingEvents-based
+  // list so all prior chip behavior is preserved bit-for-bit. When the user
+  // has navigated to a different date via the picker, derive slots from
+  // savedAvailabilitySlots for that day so the chips and dateString match
+  // the newly selected day (Bug 2 fix). Time string is the slot identity.
   const allSlots = useMemo(() => {
     if (!event) return [];
-    const siblings = (event.siblingEvents || [])
-      .filter((s) => s?.time && s.time !== event.time)
+    const isOriginalDate = activeDate === event.dateString;
+    if (isOriginalDate) {
+      const siblings = (event.siblingEvents || [])
+        .filter((s) => s?.time && s.time !== event.time)
+        .slice()
+        .sort((a, b) => startMinutesOf(a) - startMinutesOf(b));
+      const seen = new Set([event.time]);
+      const dedupSiblings = [];
+      siblings.forEach((s) => {
+        if (seen.has(s.time)) return;
+        seen.add(s.time);
+        dedupSiblings.push(s);
+      });
+      return [event, ...dedupSiblings];
+    }
+    // Different date picked via the picker — synthesize sibling-shaped events
+    // from savedAvailabilitySlots filtered to that day.
+    const activeYMD = format(new Date(activeDate), 'yyyy-MM-dd');
+    const matched = (savedAvailabilitySlots || [])
+      .filter((s) => s.date === activeYMD && s.startTime && s.endTime)
       .slice()
-      .sort((a, b) => startMinutesOf(a) - startMinutesOf(b));
-    const seen = new Set([event.time]);
-    const dedupSiblings = [];
-    siblings.forEach((s) => {
-      if (seen.has(s.time)) return;
-      seen.add(s.time);
-      dedupSiblings.push(s);
-    });
-    return [event, ...dedupSiblings];
-  }, [event]);
+      .sort((a, b) => {
+        const am = parseInt(a.startTime.split(':')[0], 10) * 60 + parseInt(a.startTime.split(':')[1], 10);
+        const bm = parseInt(b.startTime.split(':')[0], 10) * 60 + parseInt(b.startTime.split(':')[1], 10);
+        return am - bm;
+      });
+    return matched.map((s, idx) =>
+      synthesizeSavedAvailEvent(s, dayOfMonthFromSlot(s) ?? 1, activeDate, idx)
+    );
+  }, [event, activeDate, savedAvailabilitySlots]);
 
   const [selectedTime, setSelectedTime] = useState(event?.time || '');
 
@@ -51,9 +93,27 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
     if (event?.time) setSelectedTime(event.time);
   }, [event]);
 
+  // Picker → date change handler. Updates activeDate AND snaps the active
+  // chip to the first slot of the newly selected day so the modal content
+  // (chips, "Your Availability" text, form details) follows (Bug 2 fix).
+  const handleDateChange = (newDateISO) => {
+    if (!newDateISO) return;
+    setActiveDate(newDateISO);
+    const newYMD = format(new Date(newDateISO), 'yyyy-MM-dd');
+    const matched = (savedAvailabilitySlots || [])
+      .filter((s) => s.date === newYMD && s.startTime && s.endTime)
+      .slice()
+      .sort((a, b) => {
+        const am = parseInt(a.startTime.split(':')[0], 10) * 60 + parseInt(a.startTime.split(':')[1], 10);
+        const bm = parseInt(b.startTime.split(':')[0], 10) * 60 + parseInt(b.startTime.split(':')[1], 10);
+        return am - bm;
+      });
+    setSelectedTime(matched.length > 0 ? `${matched[0].startTime} - ${matched[0].endTime}` : '');
+  };
+
   if (!event) return null;
 
-  const baseActive = allSlots.find((s) => s.time === selectedTime) || event;
+  const baseActive = allSlots.find((s) => s.time === selectedTime) || allSlots[0] || event;
   // Controlled chip row injected into each card at its native "below-date,
   // above-actions" slot. Only renders when there's more than one same-day
   // sibling for this type+role; otherwise it's null and cards fall through.
@@ -68,13 +128,22 @@ export default function AvailabilityModal({ event, isOpen, onClose }) {
         />
       </div>
     ) : null;
-  const activeEvent = { ...baseActive, slotHeader };
+  // Override dateString to the active date so the card's date-driven UI
+  // follows; override availableDatesForCategory so the picker always shows
+  // the global savedAvailabilitySlots highlights regardless of which sibling
+  // chip is currently active (Bug 1 fix).
+  const activeEvent = {
+    ...baseActive,
+    dateString: activeDate,
+    slotHeader,
+    availableDatesForCategory: globalSavedDates,
+  };
 
   const renderCard = () => {
     switch (activeEvent.type) {
       case 'availability':
         if (activeEvent.role === 'S') return <TeacherAvailabilityStudentCard event={activeEvent} onClose={onClose} />;
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       case 'booked':
         if (activeEvent.role === 'S') {
           if (activeEvent.reschedule) return <BookedAsStudentRescheduleCard event={activeEvent} onClose={onClose} />;

@@ -22,7 +22,7 @@ import { format } from 'date-fns';
 import NavigationWithinLegend from './NavigationWithinLegend';
 import CalendarWithinCalendarCards from './CalendarWithinCalendarCards'; // New import
 
-export default function TeacherAvailabilityCard({ event, onClose }) {
+export default function TeacherAvailabilityCard({ event, onClose, onDateChange }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showWarning, setShowWarning] = useState(true);
   const [activeTimeSlot, setActiveTimeSlot] = useState('');
@@ -60,6 +60,13 @@ export default function TeacherAvailabilityCard({ event, onClose }) {
     setSelectedDate(date);
     // Auto-close the date-picker dropdown immediately on selection (Task 1).
     setDatePickerOpen(false);
+    // Lift the date change up to the modal so it can swap the active event
+    // context (chips, "Your Availability" text, form details) to match the
+    // newly selected day. CalendarWithinCalendarCards passes a full ISO
+    // string, which AvailabilityModal's handleDateChange consumes directly.
+    if (typeof onDateChange === 'function') {
+      onDateChange(date);
+    }
     // Here you would typically fetch new event data for the selected date
     console.log("Date selected, new data should be fetched for:", date);
   };

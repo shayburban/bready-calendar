@@ -1145,6 +1145,7 @@ export default function TeacherCalendar() {
         event={selectedEvent}
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
+        savedAvailabilitySlots={savedAvailabilitySlots}
       />
       <SyncedEventsModal
         event={selectedEvent}

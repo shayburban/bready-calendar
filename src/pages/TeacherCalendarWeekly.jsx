@@ -322,6 +322,7 @@ export default function TeacherCalendarWeekly() {
         event={selectedEvent}
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
+        savedAvailabilitySlots={savedAvailabilitySlots}
       />
       <SyncedEventsModal
         event={selectedEvent}
