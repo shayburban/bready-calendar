@@ -107,7 +107,7 @@ const NavigationWithinLegend = ({
                     onMouseEnter={openOverflowOnHover}
                     onMouseLeave={closeOverflowOnHoverOut}
                 >
-                    <Button variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
+                    <Button onMouseEnter={openOverflowOnHover} variant="outline" className="rounded-md h-8 px-3 text-xs whitespace-nowrap bg-white border border-green-600 text-green-700 hover:bg-green-50">
                         +{overflowSlots.length} More <ChevronDown className="w-4 h-4 ml-1" />
                     </Button>
                     {overflowOpen && (
