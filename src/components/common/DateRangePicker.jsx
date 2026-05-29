@@ -198,15 +198,39 @@ const DateRangePicker = ({
   };
 
   const handleInputClick = (isStart) => {
-    // Capture the trigger container's viewport rect so the portaled calendar
-    // can be positioned just below it in fixed coordinates (single-date mode).
-    // For range mode this state exists but is unused — the calendar uses the
-    // existing absolute positioning so the sidebar's behavior is unchanged.
+    // Smart-flip collision detection (single-date mode portal). Default is
+    // to drop the calendar DOWN under the trigger; if there isn't enough
+    // viewport space below AND there's more space above, flip and render
+    // UP instead so the calendar is always 100% visible. Horizontal coords
+    // are also clamped to keep the calendar inside the viewport.
+    // Range mode also writes this state but doesn't use it (the sidebar's
+    // calendar uses the existing in-place absolute positioning, unchanged).
     if (containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
+      const vh = window.innerHeight;
+      const vw = window.innerWidth;
+      const estCalendarHeight = 360; // ~6 day rows + headers + selection info + p-4
+      const minCalendarWidth = 280;
+      const gap = 8;
+      const safetyMargin = 8;
+
+      const spaceBelow = vh - rect.bottom;
+      const spaceAbove = rect.top;
+      const flipUp = spaceBelow < estCalendarHeight + gap && spaceAbove > spaceBelow;
+
+      const top = flipUp
+        ? Math.max(safetyMargin, rect.top - estCalendarHeight - gap)
+        : rect.bottom + gap;
+
+      const targetWidth = Math.max(rect.width, minCalendarWidth);
+      let left = rect.left;
+      if (left + targetWidth > vw - safetyMargin) {
+        left = Math.max(safetyMargin, vw - targetWidth - safetyMargin);
+      }
+
       setCalendarPosition({
-        top: rect.bottom + 8,
-        left: rect.left,
+        top,
+        left,
         width: rect.width,
       });
     }
@@ -272,7 +296,7 @@ const DateRangePicker = ({
             <Button
               variant="outline"
               onClick={() => handleInputClick(true)}
-              className={`w-full justify-start text-left h-10 ${singleDate && startDate ? 'pl-3 pr-9' : 'px-3'} border-gray-300 ${
+              className={`w-full justify-start text-left h-10 ${singleDate ? 'pl-3 pr-9' : 'px-3'} border-gray-300 ${
                 startDate
                   ? 'bg-gray-50 font-semibold text-gray-900'
                   : 'bg-gray-50 font-normal text-gray-500'
@@ -282,10 +306,12 @@ const DateRangePicker = ({
                 {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
               </span>
             </Button>
-            {/* Clear (X) button — single-date mode only. stopPropagation keeps
+            {/* Clear (X) button — visible whenever the picker is in single-date
+                mode so it's reliably present in the DOM. stopPropagation keeps
                 the click from re-opening the calendar via the parent Button,
-                and the click never reaches the Dialog so the modal stays open. */}
-            {singleDate && startDate && (
+                and the click never reaches the Dialog so the modal stays open.
+                Classes are exactly the set specified in the bug-report spec. */}
+            {singleDate && (
               <button
                 type="button"
                 onClick={(e) => {
@@ -295,10 +321,10 @@ const DateRangePicker = ({
                     onSingleChange(null);
                   }
                 }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-500 hover:bg-gray-200 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer z-10"
                 aria-label="Clear date"
               >
-                <X className="w-3 h-3" />
+                <X className="w-4 h-4" />
               </button>
             )}
           </div>
