@@ -21,9 +21,21 @@ import {
 import { format } from 'date-fns';
 import NavigationWithinLegend from './NavigationWithinLegend';
 import CalendarWithinCalendarCards from './CalendarWithinCalendarCards';
-import DateRangePicker from '../common/DateRangePicker'; // New import
+import DateRangePicker from '../common/DateRangePicker';
+import TimeSelect from '../common/TimeSelect';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'; // New import
 
-export default function TeacherAvailabilityCard({ event, onClose, onDateChange, savedAvailabilitySlots = [], syncedDayEvents = [] }) {
+export default function TeacherAvailabilityCard({ event, onClose, onDateChange, savedAvailabilitySlots = [], syncedDayEvents = [], showEditIcon = true }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activeTimeSlot, setActiveTimeSlot] = useState('');
   // Controlled visibility for the date-picker Popover so a date click can
@@ -189,9 +201,52 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
         />
       )}
 
+      {/* Task 2 — Pencil edit icon is hidden when `showEditIcon` is false (the
+          AvailabilityModal passes false for the My-Availability-(T) view). The
+          icon stays available on any other call site, default `true`. */}
+      {/* Task 3 — Trash2 click is intercepted by a Radix AlertDialog. The
+          underlying delete function will be wired in `<AlertDialogAction>`
+          when it exists; right now the action just closes the alert so no
+          save/data flow is altered. Dynamic Date/Start/End come from the
+          selected event's `dateString` and `time`. */}
       <div className="flex justify-end items-center border-b pb-2">
-        <Button variant="ghost" size="icon"><Pencil className="w-4 h-4" /></Button>
-        <Button variant="ghost" size="icon"><Trash2 className="w-4 h-4" /></Button>
+        {showEditIcon && (
+          <Button variant="ghost" size="icon"><Pencil className="w-4 h-4" /></Button>
+        )}
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" size="icon"><Trash2 className="w-4 h-4" /></Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Availability Slot?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {(() => {
+                  const eventTypeLabel = event?.type === 'availability'
+                    ? (event?.role === 'T' ? 'My Availability' : 'availability')
+                    : (event?.type || 'event');
+                  const evDate = event?.dateString
+                    ? format(new Date(event.dateString), 'dd.MM.yyyy')
+                    : '—';
+                  const [evStart = '—', evEnd = '—'] = (event?.time || '').split(' - ');
+                  return (
+                    <>
+                      Are you sure you want to remove your <strong>{eventTypeLabel}</strong> on{' '}
+                      <strong>{evDate}</strong> between <strong>{evStart}</strong> and{' '}
+                      <strong>{evEnd}</strong>? This action cannot be undone.
+                    </>
+                  );
+                })()}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white">
+                Remove
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
         <Button variant="ghost" size="icon"><Mail className="w-4 h-4" /></Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -225,40 +280,35 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               singleLabel="Select Date"
             />
           </div>
-          {/* space-y-1 mirrors the DateRangePicker's internal field wrapper
-              so the label→input vertical gap is identical across all three
-              grid cells (Task 2 alignment fix). */}
+          {/* Task 1 — Start Time / End Time now use the shared <TimeSelect>
+              extracted from CalendarSidebar (Radix-Popover-based HH:MM picker).
+              Identical Tailwind classes and dropdown logic as the sidebar's
+              "Set Availability (T)" tab; the popover registers as a branch of
+              the parent Dialog so its menu is recognized as "inside" the modal
+              and never dismisses it. minTime on End wires the same strict
+              "must be after Start" filter used in the sidebar. */}
           <div className="col-span-1 space-y-1">
-            {/* Label uses the same text-gray-700 / font-medium as the
-                DateRangePicker's "Select Date" label so headers line up. */}
             <label className="text-xs font-medium text-gray-700">Start Time</label>
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-              {/* Task 3 — uniform height/padding/border across all three
-                  inputs in this grid row (h-10 + border-gray-300 + bg-gray-50)
-                  so the Start Time / End Time fields visually match the
-                  DateRangePicker's h-10 trigger Button exactly. */}
-              <Input
-                type="text"
-                placeholder="Select Time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="h-10 pl-9 pr-3 border-gray-300 bg-gray-50"
-              />
-            </div>
+            <TimeSelect
+              value={startTime}
+              onChange={(newStart) => {
+                if (endTime && newStart >= endTime) {
+                  setStartTime(newStart);
+                  setEndTime('');
+                } else {
+                  setStartTime(newStart);
+                }
+              }}
+            />
           </div>
           <div className="col-span-1 space-y-1">
             <label className="text-xs font-medium text-gray-700">End Time</label>
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-              <Input
-                type="text"
-                placeholder="Select Time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="h-10 pl-9 pr-3 border-gray-300 bg-gray-50"
-              />
-            </div>
+            <TimeSelect
+              value={endTime}
+              onChange={(newEnd) => setEndTime(newEnd)}
+              minTime={startTime}
+              invalid={!!(startTime && endTime && endTime <= startTime)}
+            />
           </div>
         </div>
       </div>
