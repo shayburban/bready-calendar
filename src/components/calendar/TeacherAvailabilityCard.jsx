@@ -1,22 +1,24 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 // CalendarComponent is replaced by CalendarWithinCalendarCards, so its direct import is removed here.
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
+import {
   Calendar, // This is the Lucide icon
-  Clock, 
-  ChevronDown, 
-  Pencil, 
-  Trash2, 
-  Mail, 
+  Clock,
+  ChevronDown,
+  Pencil,
+  Trash2,
+  Mail,
   MoreVertical,
   Copy,
   AlertTriangle,
-  X
+  X,
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 import { format } from 'date-fns';
 import NavigationWithinLegend from './NavigationWithinLegend';
@@ -33,7 +35,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'; // New import
+} from '@/components/ui/alert-dialog';
+import { toast } from '@/components/ui/use-toast';
+import { Availability } from '@/api/entities'; // New import
 
 export default function TeacherAvailabilityCard({ event, onClose, onDateChange, savedAvailabilitySlots = [], syncedDayEvents = [], showEditIcon = true }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -109,9 +113,52 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   // no hard internal conflict. Synced (soft) conflicts do NOT block.
   const isSubmitActive = isFormComplete && !hasHardConflict;
 
+  // Real save (Change Availability) + real delete state. lastUpdatedAt /
+  // showSaveSuccess mirror the CalendarSidebar pattern — same 30-second
+  // green-success-line UX the user already gets after a sidebar save.
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const saveSuccessTimerRef = useRef(null);
+  useEffect(() => () => {
+    if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
+  }, []);
+
+  // Header title pulled from the same string the card's <h3> renders, so the
+  // delete-confirmation Description reads "remove your My Availability (T)"
+  // rather than a hand-rolled generic label.
+  const headerTitle = `My Availability${event?.role ? ` (${event.role})` : ''}`;
+
+  // Wired to <AlertDialogAction>'s onClick. Calls the existing base44
+  // Availability entity service (no new save logic invented). If event.id
+  // is missing or the row doesn't exist, .delete returns null without
+  // throwing — we surface a toast either way and let the modal close.
+  const handleDelete = async () => {
+    if (isDeleting) return;
+    setIsDeleting(true);
+    try {
+      if (event?.id) {
+        await Availability.delete(event.id);
+      }
+      toast({ title: 'Event successfully removed.' });
+      if (typeof onClose === 'function') onClose();
+    } catch (err) {
+      toast({
+        title: 'Could not remove this event.',
+        description: err?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   // Task 4 — click handler. CRUCIALLY does not rely on the `disabled`
   // attribute (the button stays clickable so it can surface the error).
-  const handleChangeAvailability = () => {
+  // Now wired to the real Availability.update endpoint plus the 30-second
+  // success-line UX shared with the sidebar.
+  const handleChangeAvailability = async () => {
     const missing = [];
     if (!changeAvailDate) missing.push('Select Date');
     if (!startTime) missing.push('Start Time');
@@ -126,9 +173,31 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
       return;
     }
     setValidationErrors([]);
-    // Soft (synced) conflicts are explicitly allowed to fall through —
-    // teacher override per Task 5. Existing save data flow is unchanged
-    // (there is no save call to make here yet; this is a UI placeholder).
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      if (event?.id) {
+        await Availability.update(event.id, {
+          start_time: startTime,
+          end_time: endTime,
+        });
+      }
+      setLastUpdatedAt(new Date());
+      setShowSaveSuccess(true);
+      if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
+      saveSuccessTimerRef.current = setTimeout(() => {
+        setShowSaveSuccess(false);
+        saveSuccessTimerRef.current = null;
+      }, 30000);
+    } catch (err) {
+      toast({
+        title: 'Could not update availability.',
+        description: err?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // selectedDate is intentionally driven by event?.dateString ONLY — not the
@@ -222,16 +291,13 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               <AlertDialogTitle>Delete Availability Slot?</AlertDialogTitle>
               <AlertDialogDescription>
                 {(() => {
-                  const eventTypeLabel = event?.type === 'availability'
-                    ? (event?.role === 'T' ? 'My Availability' : 'availability')
-                    : (event?.type || 'event');
                   const evDate = event?.dateString
                     ? format(new Date(event.dateString), 'dd.MM.yyyy')
                     : '—';
                   const [evStart = '—', evEnd = '—'] = (event?.time || '').split(' - ');
                   return (
                     <>
-                      Are you sure you want to remove your <strong>{eventTypeLabel}</strong> on{' '}
+                      Are you sure you want to remove your <strong>{headerTitle}</strong> on{' '}
                       <strong>{evDate}</strong> between <strong>{evStart}</strong> and{' '}
                       <strong>{evEnd}</strong>? This action cannot be undone.
                     </>
@@ -241,8 +307,19 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-red-600 hover:bg-red-700 text-white">
-                Remove
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {isDeleting ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Removing...
+                  </span>
+                ) : (
+                  'Remove'
+                )}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -278,6 +355,7 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               singleValue={changeAvailDate}
               onSingleChange={setChangeAvailDate}
               singleLabel="Select Date"
+              singlePlaceholder="Select date"
             />
           </div>
           {/* Task 1 — Start Time / End Time now use the shared <TimeSelect>
@@ -286,7 +364,9 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               "Set Availability (T)" tab; the popover registers as a branch of
               the parent Dialog so its menu is recognized as "inside" the modal
               and never dismisses it. minTime on End wires the same strict
-              "must be after Start" filter used in the sidebar. */}
+              "must be after Start" filter used in the sidebar.
+              triggerClassName="h-10 px-3" makes the Time triggers match the
+              DateRangePicker's h-10 px-3 trigger exactly (Task 3 alignment). */}
           <div className="col-span-1 space-y-1">
             <label className="text-xs font-medium text-gray-700">Start Time</label>
             <TimeSelect
@@ -299,6 +379,8 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
                   setStartTime(newStart);
                 }
               }}
+              placeholder="Select time"
+              triggerClassName="h-10 px-3"
             />
           </div>
           <div className="col-span-1 space-y-1">
@@ -308,6 +390,8 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               onChange={(newEnd) => setEndTime(newEnd)}
               minTime={startTime}
               invalid={!!(startTime && endTime && endTime <= startTime)}
+              placeholder="Select time"
+              triggerClassName="h-10 px-3"
             />
           </div>
         </div>
@@ -343,21 +427,47 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
         </div>
       )}
 
+      {/* 30-second success line mirrors the CalendarSidebar UX after a save,
+          so the teacher gets the same feedback shape across the app. */}
+      {showSaveSuccess && (
+        <div>
+          {lastUpdatedAt && (
+            <p className="text-sm text-gray-600">
+              Last Updated: {format(lastUpdatedAt, "dd.MM.yyyy 'at' HH:mm")}
+            </p>
+          )}
+          <p className="text-sm text-green-600 font-medium flex items-center">
+            <CheckCircle2 className="w-4 h-4 mr-1" />
+            Your Calendar is Updated
+          </p>
+        </div>
+      )}
+
       <div className="flex gap-3 mt-4">
         <Button variant="outline" className="w-full" onClick={onClose}>Cancel</Button>
         {/* Task 4 — NO native `disabled` attribute (would block clicks). We
             simulate disabled visually so the button still fires onClick and
-            can surface the validation error / hard-conflict messaging. */}
+            can surface the validation error / hard-conflict messaging. While
+            isSaving, swap text for a Loader2 spinner to prevent double-clicks
+            (the handler itself also early-returns when isSaving is true). */}
         <Button
           onClick={handleChangeAvailability}
-          aria-disabled={!isSubmitActive}
+          aria-disabled={!isSubmitActive || isSaving}
+          aria-busy={isSaving}
           className={`w-full ${
             isSubmitActive
               ? 'bg-green-600 hover:bg-green-700 text-white'
               : 'bg-gray-300 text-gray-500 cursor-default hover:bg-gray-300'
           }`}
         >
-          Change Availability
+          {isSaving ? (
+            <span className="flex items-center justify-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Saving...
+            </span>
+          ) : (
+            'Change Availability'
+          )}
         </Button>
       </div>
     </div>

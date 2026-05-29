@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // HH dropdown shows 00–23. MM dropdown is restricted to {00,15,30,45} so the
 // user can only ever pick a 15-minute boundary (no free-text typing).
@@ -19,7 +20,7 @@ export const MINUTE_OPTIONS = ['00', '15', '30', '45'];
 // context propagates through Radix's portal). That means clicks inside the
 // time dropdown are recognized as "inside the modal" and don't dismiss the
 // surrounding Dialog — exactly the behavior the AvailabilityModal needs.
-const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
+const TimeSelect = ({ value, onChange, minTime, invalid, disabled, placeholder = 'HH:MM', triggerClassName = '' }) => {
   const [hour = '', minute = ''] = value ? value.split(':') : [];
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState('hour');
@@ -61,10 +62,18 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled }) => {
           type="button"
           variant="outline"
           disabled={disabled}
-          className={`h-9 w-full justify-between px-2 border-gray-300 ${invalid ? 'ring-1 ring-red-500' : ''} ${value ? 'bg-gray-50 font-semibold text-gray-900' : 'bg-gray-50 font-normal text-gray-500'}`}
+          className={cn(
+            'h-9 w-full justify-between px-2 border-gray-300',
+            invalid && 'ring-1 ring-red-500',
+            value ? 'bg-gray-50 font-semibold text-gray-900' : 'bg-gray-50 font-normal text-gray-500',
+            // `triggerClassName` is appended last so callers can override
+            // height/padding (e.g. h-10 px-3 for the popup card) via cn's
+            // tailwind-merge without affecting the sidebar's default look.
+            triggerClassName,
+          )}
         >
           <span className="flex items-center gap-2 min-w-0 truncate">
-            <span className="truncate">{value || 'HH:MM'}</span>
+            <span className="truncate">{value || placeholder}</span>
           </span>
           <ChevronDown className="w-3.5 h-3.5 flex-shrink-0 ml-2 opacity-60" />
         </Button>

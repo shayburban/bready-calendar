@@ -23,6 +23,7 @@ const DateRangePicker = ({
   singleValue = null,
   onSingleChange,
   singleLabel = 'Start Date',
+  singlePlaceholder = 'DD.MM.YY',
 }) => {
   // When `value` is supplied the picker runs in controlled mode — internal
   // state stays in sync with the prop via the useEffect below. When `value`
@@ -272,7 +273,7 @@ const DateRangePicker = ({
                   }`}
                 >
                   <span className="truncate">
-                    {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
+                    {startDate ? format(startDate, 'dd.MM.yy') : singlePlaceholder}
                   </span>
                 </Button>
               </PopoverTrigger>
