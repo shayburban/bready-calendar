@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 
@@ -86,11 +86,7 @@ const DateRangePicker = ({
   const [selectingStart, setSelectingStart] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [hoveredDate, setHoveredDate] = useState(null);
-  // Position for the portaled calendar in single-date mode. Computed from the
-  // trigger container's bounding rect when the calendar opens. In range mode
-  // the calendar uses the existing absolute positioning and this is unused.
-  const [calendarPosition, setCalendarPosition] = useState({ top: 0, left: 0, width: 0 });
-  
+
   const calendarRef = useRef(null);
   const containerRef = useRef(null);
 
@@ -106,30 +102,6 @@ const DateRangePicker = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // Stop the inner mousedown from bubbling to the document-level click-outside
-  // listener when the calendar is portaled (single-date mode). React's
-  // onMouseDown on a portaled element does NOT stop native bubbling because
-  // the portaled DOM lives outside React's container root — we need a native
-  // listener on the portaled element itself. Without this, navigation arrows
-  // (← / →) and date-cell clicks could intermittently fail to register
-  // because the document listener races with the React handler. In range
-  // mode the calendar is in-place and ref-containment already works.
-  useEffect(() => {
-    if (!isCalendarOpen || !singleDate) return;
-    const el = calendarRef.current;
-    if (!el) return;
-    const stopInnerPropagation = (e) => e.stopPropagation();
-    // Cover both mousedown (legacy) and pointerdown (Radix uses pointer
-    // events). Belt-and-suspenders defense against any bubble-phase
-    // outside-detection listeners attached at document level.
-    el.addEventListener('mousedown', stopInnerPropagation);
-    el.addEventListener('pointerdown', stopInnerPropagation);
-    return () => {
-      el.removeEventListener('mousedown', stopInnerPropagation);
-      el.removeEventListener('pointerdown', stopInnerPropagation);
-    };
-  }, [isCalendarOpen, singleDate]);
 
   // Generate calendar days
   const generateCalendarDays = () => {
@@ -221,43 +193,10 @@ const DateRangePicker = ({
     setIsCalendarOpen(false);
   };
 
+  // Range-mode trigger handler. Single-date mode no longer goes through
+  // here — its trigger is wrapped in a Radix Popover whose open state is
+  // driven directly by isCalendarOpen via onOpenChange.
   const handleInputClick = (isStart) => {
-    // Smart-flip collision detection (single-date mode portal). Default is
-    // to drop the calendar DOWN under the trigger; if there isn't enough
-    // viewport space below AND there's more space above, flip and render
-    // UP instead so the calendar is always 100% visible. Horizontal coords
-    // are also clamped to keep the calendar inside the viewport.
-    // Range mode also writes this state but doesn't use it (the sidebar's
-    // calendar uses the existing in-place absolute positioning, unchanged).
-    if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
-      const vh = window.innerHeight;
-      const vw = window.innerWidth;
-      const estCalendarHeight = 360; // ~6 day rows + headers + selection info + p-4
-      const minCalendarWidth = 280;
-      const gap = 8;
-      const safetyMargin = 8;
-
-      const spaceBelow = vh - rect.bottom;
-      const spaceAbove = rect.top;
-      const flipUp = spaceBelow < estCalendarHeight + gap && spaceAbove > spaceBelow;
-
-      const top = flipUp
-        ? Math.max(safetyMargin, rect.top - estCalendarHeight - gap)
-        : rect.bottom + gap;
-
-      const targetWidth = Math.max(rect.width, minCalendarWidth);
-      let left = rect.left;
-      if (left + targetWidth > vw - safetyMargin) {
-        left = Math.max(safetyMargin, vw - targetWidth - safetyMargin);
-      }
-
-      setCalendarPosition({
-        top,
-        left,
-        width: rect.width,
-      });
-    }
     setSelectingStart(isStart);
     setIsCalendarOpen(true);
   };
@@ -313,22 +252,131 @@ const DateRangePicker = ({
   return (
     <div className={`relative ${className}`} ref={containerRef}>
       <div className="flex items-center gap-1 min-w-0">
-        {/* Start Date Field — in single-date mode this IS the single field. */}
+        {/* Start Date Field — in single-date mode this IS the single field,
+            wrapped in a Radix Popover so it registers as a DismissableLayer
+            BRANCH of the parent Dialog (via React context that propagates
+            through portals). That's what makes Radix treat clicks on the
+            popover content as INSIDE the modal — the durable fix for the
+            previous portal-vs-Dialog "abruptly closes" bug. */}
         <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">{singleDate ? singleLabel : 'Start Date'}</label>
-          <Button
-            variant="outline"
-            onClick={() => handleInputClick(true)}
-            className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
-              startDate
-                ? 'bg-gray-50 font-semibold text-gray-900'
-                : 'bg-gray-50 font-normal text-gray-500'
-            }`}
-          >
-            <span className="truncate">
-              {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
-            </span>
-          </Button>
+          {singleDate ? (
+            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
+                    startDate
+                      ? 'bg-gray-50 font-semibold text-gray-900'
+                      : 'bg-gray-50 font-normal text-gray-500'
+                  }`}
+                >
+                  <span className="truncate">
+                    {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
+                  </span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="start" sideOffset={8} className="w-auto p-4">
+                {/* Calendar Header */}
+                <div className="flex items-center justify-between mb-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigateMonth(-1)}
+                    className="h-8 w-8 p-0"
+                  >
+                    ←
+                  </Button>
+                  <h3 className="font-medium text-sm">{monthYear}</h3>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigateMonth(1)}
+                    className="h-8 w-8 p-0"
+                  >
+                    →
+                  </Button>
+                </div>
+
+                {/* Weekday Headers */}
+                <div className="grid grid-cols-7 gap-1 mb-2">
+                  {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                    <div key={day} className="text-center text-xs font-medium text-gray-500 p-2">
+                      {day}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Calendar Days */}
+                <div className="grid grid-cols-7 gap-1">
+                  {days.map((date, index) => {
+                    const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                    const isToday = isEqual(startOfDay(date), startOfDay(today));
+                    const isPast = isBefore(startOfDay(date), startOfDay(today));
+                    const inRange = isInRange(date);
+                    const rangeStart = isRangeStart(date);
+                    const rangeEnd = isRangeEnd(date);
+                    const previewRange = isPreviewRange(date);
+
+                    return (
+                      <button
+                        key={index}
+                        onClick={() => handleDateClick(date)}
+                        onMouseEnter={() => !isPast && setHoveredDate(date)}
+                        onMouseLeave={() => setHoveredDate(null)}
+                        disabled={isPast}
+                        className={`
+                          h-8 w-8 text-sm rounded transition-all duration-200
+                          ${isPast ? 'text-gray-300 cursor-not-allowed opacity-50' : !isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                          ${isToday ? 'font-bold' : ''}
+                          ${!isPast && (rangeStart || rangeEnd) ? 'bg-blue-600 text-white' : ''}
+                          ${!isPast && inRange && !rangeStart && !rangeEnd ? 'bg-blue-100 text-blue-700' : ''}
+                          ${!isPast && previewRange && !rangeStart && !rangeEnd ? 'bg-blue-50 text-blue-600' : ''}
+                          ${!isPast && !inRange && !rangeStart && !rangeEnd && !previewRange ? 'hover:bg-gray-100' : ''}
+                        `}
+                      >
+                        {date.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Selection Info + Clear Selection (Task 2 spec). */}
+                <div className="mt-4 text-xs text-gray-500">
+                  <div className="flex items-center justify-between gap-3">
+                    <span>{startDate ? 'Date selected' : 'Select date'}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setStartDate(null);
+                        if (typeof onSingleChange === 'function') {
+                          onSingleChange(null);
+                        }
+                      }}
+                      className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                    >
+                      Clear Selection
+                    </button>
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <Button
+              variant="outline"
+              onClick={() => handleInputClick(true)}
+              className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
+                startDate
+                  ? 'bg-gray-50 font-semibold text-gray-900'
+                  : 'bg-gray-50 font-normal text-gray-500'
+              }`}
+            >
+              <span className="truncate">
+                {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
+              </span>
+            </Button>
+          )}
         </div>
 
         {/* End Date Field — hidden in single-date mode. When noEndDate is on,
@@ -388,118 +436,9 @@ const DateRangePicker = ({
         )}
       </div>
 
-      {/* Calendar Popup. In single-date mode the popup is portaled to
-          document.body with fixed positioning so it floats above the host
-          card's overflow:auto/hidden boundaries (e.g. the AvailabilityModal's
-          DialogContent scroll container). In range mode it stays an
-          in-place absolute element so the sidebar's behavior is unchanged. */}
-      {isCalendarOpen && singleDate && createPortal(
-        <div
-          ref={calendarRef}
-          data-calendar-portal="true"
-          className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] p-4"
-          style={{
-            top: `${calendarPosition.top}px`,
-            left: `${calendarPosition.left}px`,
-            minWidth: `${calendarPosition.width}px`,
-          }}
-        >
-          {/* Calendar Header */}
-          <div className="flex items-center justify-between mb-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigateMonth(-1)}
-              className="h-8 w-8 p-0"
-            >
-              ←
-            </Button>
-            <h3 className="font-medium text-sm">{monthYear}</h3>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigateMonth(1)}
-              className="h-8 w-8 p-0"
-            >
-              →
-            </Button>
-          </div>
-
-          {/* Weekday Headers */}
-          <div className="grid grid-cols-7 gap-1 mb-2">
-            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
-              <div key={day} className="text-center text-xs font-medium text-gray-500 p-2">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar Days */}
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((date, index) => {
-              const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-              const isToday = isEqual(startOfDay(date), startOfDay(today));
-              const isPast = isBefore(startOfDay(date), startOfDay(today));
-              const inRange = isInRange(date);
-              const rangeStart = isRangeStart(date);
-              const rangeEnd = isRangeEnd(date);
-              const previewRange = isPreviewRange(date);
-
-              return (
-                <button
-                  key={index}
-                  onClick={() => handleDateClick(date)}
-                  onMouseEnter={() => !isPast && setHoveredDate(date)}
-                  onMouseLeave={() => setHoveredDate(null)}
-                  disabled={isPast}
-                  className={`
-                    h-8 w-8 text-sm rounded transition-all duration-200
-                    ${isPast ? 'text-gray-300 cursor-not-allowed opacity-50' : !isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
-                    ${isToday ? 'font-bold' : ''}
-                    ${!isPast && (rangeStart || rangeEnd) ? 'bg-blue-600 text-white' : ''}
-                    ${!isPast && inRange && !rangeStart && !rangeEnd ? 'bg-blue-100 text-blue-700' : ''}
-                    ${!isPast && previewRange && !rangeStart && !rangeEnd ? 'bg-blue-50 text-blue-600' : ''}
-                    ${!isPast && !inRange && !rangeStart && !rangeEnd && !previewRange ? 'hover:bg-gray-100' : ''}
-                  `}
-                >
-                  {date.getDate()}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selection Info. In single-date mode the footer hosts the
-              "Clear Selection" text link (relocated from the input per
-              Task 2 spec) side-by-side with the hint text. */}
-          <div className="mt-4 text-xs text-gray-500">
-            {singleDate ? (
-              <div className="flex items-center justify-between gap-3">
-                <span>{startDate ? 'Date selected' : 'Select date'}</span>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setStartDate(null);
-                    if (typeof onSingleChange === 'function') {
-                      onSingleChange(null);
-                    }
-                  }}
-                  className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
-                >
-                  Clear Selection
-                </button>
-              </div>
-            ) : (
-              <div className="text-center">
-                {selectingStart && !startDate && "Select start date"}
-                {!selectingStart && startDate && !endDate && "Select end date"}
-                {startDate && endDate && "Range selected"}
-              </div>
-            )}
-          </div>
-        </div>,
-        document.body
-      )}
+      {/* Range mode keeps the in-place absolute-positioned calendar so the
+          sidebar's behavior is unchanged. Single-date mode now lives inside
+          a Radix Popover rendered above (recognized as a Dialog branch). */}
       {isCalendarOpen && !singleDate && (
         <div
           ref={calendarRef}
