@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
 import { X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
@@ -85,6 +86,10 @@ const DateRangePicker = ({
   const [selectingStart, setSelectingStart] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [hoveredDate, setHoveredDate] = useState(null);
+  // Position for the portaled calendar in single-date mode. Computed from the
+  // trigger container's bounding rect when the calendar opens. In range mode
+  // the calendar uses the existing absolute positioning and this is unused.
+  const [calendarPosition, setCalendarPosition] = useState({ top: 0, left: 0, width: 0 });
   
   const calendarRef = useRef(null);
   const containerRef = useRef(null);
@@ -193,6 +198,18 @@ const DateRangePicker = ({
   };
 
   const handleInputClick = (isStart) => {
+    // Capture the trigger container's viewport rect so the portaled calendar
+    // can be positioned just below it in fixed coordinates (single-date mode).
+    // For range mode this state exists but is unused — the calendar uses the
+    // existing absolute positioning so the sidebar's behavior is unchanged.
+    if (containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect();
+      setCalendarPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+        width: rect.width,
+      });
+    }
     setSelectingStart(isStart);
     setIsCalendarOpen(true);
   };
@@ -251,19 +268,40 @@ const DateRangePicker = ({
         {/* Start Date Field — in single-date mode this IS the single field. */}
         <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">{singleDate ? singleLabel : 'Start Date'}</label>
-          <Button
-            variant="outline"
-            onClick={() => handleInputClick(true)}
-            className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
-              startDate
-                ? 'bg-gray-50 font-semibold text-gray-900'
-                : 'bg-gray-50 font-normal text-gray-500'
-            }`}
-          >
-            <span className="truncate">
-              {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
-            </span>
-          </Button>
+          <div className="relative">
+            <Button
+              variant="outline"
+              onClick={() => handleInputClick(true)}
+              className={`w-full justify-start text-left h-10 ${singleDate && startDate ? 'pl-3 pr-9' : 'px-3'} border-gray-300 ${
+                startDate
+                  ? 'bg-gray-50 font-semibold text-gray-900'
+                  : 'bg-gray-50 font-normal text-gray-500'
+              }`}
+            >
+              <span className="truncate">
+                {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
+              </span>
+            </Button>
+            {/* Clear (X) button — single-date mode only. stopPropagation keeps
+                the click from re-opening the calendar via the parent Button,
+                and the click never reaches the Dialog so the modal stays open. */}
+            {singleDate && startDate && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStartDate(null);
+                  if (typeof onSingleChange === 'function') {
+                    onSingleChange(null);
+                  }
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-gray-500 hover:bg-gray-200 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-gray-300"
+                aria-label="Clear date"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* End Date Field — hidden in single-date mode. When noEndDate is on,
@@ -323,9 +361,97 @@ const DateRangePicker = ({
         )}
       </div>
 
-      {/* Calendar Popup */}
-      {isCalendarOpen && (
-        <div 
+      {/* Calendar Popup. In single-date mode the popup is portaled to
+          document.body with fixed positioning so it floats above the host
+          card's overflow:auto/hidden boundaries (e.g. the AvailabilityModal's
+          DialogContent scroll container). In range mode it stays an
+          in-place absolute element so the sidebar's behavior is unchanged. */}
+      {isCalendarOpen && singleDate && createPortal(
+        <div
+          ref={calendarRef}
+          className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] p-4"
+          style={{
+            top: `${calendarPosition.top}px`,
+            left: `${calendarPosition.left}px`,
+            minWidth: `${calendarPosition.width}px`,
+          }}
+        >
+          {/* Calendar Header */}
+          <div className="flex items-center justify-between mb-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigateMonth(-1)}
+              className="h-8 w-8 p-0"
+            >
+              ←
+            </Button>
+            <h3 className="font-medium text-sm">{monthYear}</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigateMonth(1)}
+              className="h-8 w-8 p-0"
+            >
+              →
+            </Button>
+          </div>
+
+          {/* Weekday Headers */}
+          <div className="grid grid-cols-7 gap-1 mb-2">
+            {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+              <div key={day} className="text-center text-xs font-medium text-gray-500 p-2">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar Days */}
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((date, index) => {
+              const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+              const isToday = isEqual(startOfDay(date), startOfDay(today));
+              const isPast = isBefore(startOfDay(date), startOfDay(today));
+              const inRange = isInRange(date);
+              const rangeStart = isRangeStart(date);
+              const rangeEnd = isRangeEnd(date);
+              const previewRange = isPreviewRange(date);
+
+              return (
+                <button
+                  key={index}
+                  onClick={() => handleDateClick(date)}
+                  onMouseEnter={() => !isPast && setHoveredDate(date)}
+                  onMouseLeave={() => setHoveredDate(null)}
+                  disabled={isPast}
+                  className={`
+                    h-8 w-8 text-sm rounded transition-all duration-200
+                    ${isPast ? 'text-gray-300 cursor-not-allowed opacity-50' : !isCurrentMonth ? 'text-gray-300' : 'text-gray-700'}
+                    ${isToday ? 'font-bold' : ''}
+                    ${!isPast && (rangeStart || rangeEnd) ? 'bg-blue-600 text-white' : ''}
+                    ${!isPast && inRange && !rangeStart && !rangeEnd ? 'bg-blue-100 text-blue-700' : ''}
+                    ${!isPast && previewRange && !rangeStart && !rangeEnd ? 'bg-blue-50 text-blue-600' : ''}
+                    ${!isPast && !inRange && !rangeStart && !rangeEnd && !previewRange ? 'hover:bg-gray-100' : ''}
+                  `}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selection Info */}
+          <div className="mt-4 text-xs text-gray-500 text-center">
+            {singleDate && (startDate ? 'Date selected' : 'Select date')}
+            {!singleDate && selectingStart && !startDate && "Select start date"}
+            {!singleDate && !selectingStart && startDate && !endDate && "Select end date"}
+            {!singleDate && startDate && endDate && "Range selected"}
+          </div>
+        </div>,
+        document.body
+      )}
+      {isCalendarOpen && !singleDate && (
+        <div
           ref={calendarRef}
           className="absolute top-full left-0 right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 p-4"
         >

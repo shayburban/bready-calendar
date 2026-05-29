@@ -131,21 +131,26 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange }
 
       <div className="space-y-3">
         <p className="font-bold text-gray-800 underline mt-4">Change Your Availability</p>
-        <DateRangePicker
-          singleDate
-          singleValue={changeAvailDate}
-          onSingleChange={setChangeAvailDate}
-          singleLabel="Select Date"
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <div>
+        {/* Responsive grid (Task 4): on mobile, 2 columns — Select Date spans
+            both columns on top, Start/End Time sit side-by-side below. At md+
+            it switches to 3 equal columns so the three fields share the row. */}
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+          <div className="col-span-2 md:col-span-1">
+            <DateRangePicker
+              singleDate
+              singleValue={changeAvailDate}
+              onSingleChange={setChangeAvailDate}
+              singleLabel="Select Date"
+            />
+          </div>
+          <div className="col-span-1">
             <label className="text-xs font-medium text-gray-600">Start Time</label>
             <div className="relative">
               <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
               <Input type="text" placeholder="Select Time" className="pl-9" />
             </div>
           </div>
-          <div>
+          <div className="col-span-1">
             <label className="text-xs font-medium text-gray-600">End Time</label>
             <div className="relative">
               <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
