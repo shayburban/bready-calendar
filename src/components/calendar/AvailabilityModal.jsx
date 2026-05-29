@@ -205,9 +205,27 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
     }
   };
 
+  // Treat clicks on the DateRangePicker's portaled calendar (rendered to
+  // document.body in single-date mode) as "inside" the modal. The portaled
+  // node lives outside DialogContent's DOM subtree, so without this guard
+  // Radix's DismissableLayer treats every calendar click — including date
+  // cells and month-nav arrows — as an outside interaction and closes the
+  // modal, which was the source of the "abruptly closes" bug.
+  const guardOutsideAgainstCalendarPortal = (e) => {
+    const originalTarget = e.detail?.originalEvent?.target;
+    if (originalTarget instanceof Element &&
+        originalTarget.closest('[data-calendar-portal="true"]')) {
+      e.preventDefault();
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 bg-gray-50">
+      <DialogContent
+        className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 bg-gray-50"
+        onPointerDownOutside={guardOutsideAgainstCalendarPortal}
+        onInteractOutside={guardOutsideAgainstCalendarPortal}
+      >
         {renderCard()}
       </DialogContent>
     </Dialog>

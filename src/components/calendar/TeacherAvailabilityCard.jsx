@@ -25,7 +25,6 @@ import DateRangePicker from '../common/DateRangePicker'; // New import
 
 export default function TeacherAvailabilityCard({ event, onClose, onDateChange, savedAvailabilitySlots = [], syncedDayEvents = [] }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showWarning, setShowWarning] = useState(true);
   const [activeTimeSlot, setActiveTimeSlot] = useState('');
   // Controlled visibility for the date-picker Popover so a date click can
   // auto-close it (Task 1). Trigger-button click still toggles it via Radix's
@@ -226,7 +225,10 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               singleLabel="Select Date"
             />
           </div>
-          <div className="col-span-1">
+          {/* space-y-1 mirrors the DateRangePicker's internal field wrapper
+              so the label→input vertical gap is identical across all three
+              grid cells (Task 2 alignment fix). */}
+          <div className="col-span-1 space-y-1">
             {/* Label uses the same text-gray-700 / font-medium as the
                 DateRangePicker's "Select Date" label so headers line up. */}
             <label className="text-xs font-medium text-gray-700">Start Time</label>
@@ -245,7 +247,7 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               />
             </div>
           </div>
-          <div className="col-span-1">
+          <div className="col-span-1 space-y-1">
             <label className="text-xs font-medium text-gray-700">End Time</label>
             <div className="relative">
               <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
@@ -261,19 +263,6 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
         </div>
       </div>
       
-      {showWarning && (
-        <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertTitle>Warning!</AlertTitle>
-            <AlertDescription className="text-xs">
-                You are busy on 21.08.2021 between the time entered.
-            </AlertDescription>
-            <button onClick={() => setShowWarning(false)} className="absolute top-2 right-2 p-1">
-                <X className="h-4 w-4" />
-            </button>
-        </Alert>
-      )}
-
       {/* Task 5 — Hard conflict (RED) alert. Triggers the gray/inactive
           state on the submit button below. */}
       {hasHardConflict && (
@@ -315,7 +304,7 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
           className={`w-full ${
             isSubmitActive
               ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
+              : 'bg-gray-300 text-gray-500 cursor-default hover:bg-gray-300'
           }`}
         >
           Change Availability

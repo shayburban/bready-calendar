@@ -120,8 +120,15 @@ const DateRangePicker = ({
     const el = calendarRef.current;
     if (!el) return;
     const stopInnerPropagation = (e) => e.stopPropagation();
+    // Cover both mousedown (legacy) and pointerdown (Radix uses pointer
+    // events). Belt-and-suspenders defense against any bubble-phase
+    // outside-detection listeners attached at document level.
     el.addEventListener('mousedown', stopInnerPropagation);
-    return () => el.removeEventListener('mousedown', stopInnerPropagation);
+    el.addEventListener('pointerdown', stopInnerPropagation);
+    return () => {
+      el.removeEventListener('mousedown', stopInnerPropagation);
+      el.removeEventListener('pointerdown', stopInnerPropagation);
+    };
   }, [isCalendarOpen, singleDate]);
 
   // Generate calendar days
@@ -389,6 +396,7 @@ const DateRangePicker = ({
       {isCalendarOpen && singleDate && createPortal(
         <div
           ref={calendarRef}
+          data-calendar-portal="true"
           className="fixed bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] p-4"
           style={{
             top: `${calendarPosition.top}px`,
