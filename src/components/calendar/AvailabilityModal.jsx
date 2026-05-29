@@ -169,7 +169,7 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
     switch (activeEvent.type) {
       case 'availability':
         if (activeEvent.role === 'S') return <TeacherAvailabilityStudentCard event={activeEvent} onClose={onClose} />;
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} savedAvailabilitySlots={savedAvailabilitySlots} />;
       case 'booked':
         if (activeEvent.role === 'S') {
           if (activeEvent.reschedule) return <BookedAsStudentRescheduleCard event={activeEvent} onClose={onClose} />;

@@ -107,6 +107,23 @@ const DateRangePicker = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Stop the inner mousedown from bubbling to the document-level click-outside
+  // listener when the calendar is portaled (single-date mode). React's
+  // onMouseDown on a portaled element does NOT stop native bubbling because
+  // the portaled DOM lives outside React's container root — we need a native
+  // listener on the portaled element itself. Without this, navigation arrows
+  // (← / →) and date-cell clicks could intermittently fail to register
+  // because the document listener races with the React handler. In range
+  // mode the calendar is in-place and ref-containment already works.
+  useEffect(() => {
+    if (!isCalendarOpen || !singleDate) return;
+    const el = calendarRef.current;
+    if (!el) return;
+    const stopInnerPropagation = (e) => e.stopPropagation();
+    el.addEventListener('mousedown', stopInnerPropagation);
+    return () => el.removeEventListener('mousedown', stopInnerPropagation);
+  }, [isCalendarOpen, singleDate]);
+
   // Generate calendar days
   const generateCalendarDays = () => {
     const year = currentMonth.getFullYear();
@@ -292,42 +309,19 @@ const DateRangePicker = ({
         {/* Start Date Field — in single-date mode this IS the single field. */}
         <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">{singleDate ? singleLabel : 'Start Date'}</label>
-          <div className="relative">
-            <Button
-              variant="outline"
-              onClick={() => handleInputClick(true)}
-              className={`w-full justify-start text-left h-10 ${singleDate ? 'pl-3 pr-9' : 'px-3'} border-gray-300 ${
-                startDate
-                  ? 'bg-gray-50 font-semibold text-gray-900'
-                  : 'bg-gray-50 font-normal text-gray-500'
-              }`}
-            >
-              <span className="truncate">
-                {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
-              </span>
-            </Button>
-            {/* Clear (X) button — visible whenever the picker is in single-date
-                mode so it's reliably present in the DOM. stopPropagation keeps
-                the click from re-opening the calendar via the parent Button,
-                and the click never reaches the Dialog so the modal stays open.
-                Classes are exactly the set specified in the bug-report spec. */}
-            {singleDate && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setStartDate(null);
-                  if (typeof onSingleChange === 'function') {
-                    onSingleChange(null);
-                  }
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 cursor-pointer z-10"
-                aria-label="Clear date"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            onClick={() => handleInputClick(true)}
+            className={`w-full justify-start text-left h-10 px-3 border-gray-300 ${
+              startDate
+                ? 'bg-gray-50 font-semibold text-gray-900'
+                : 'bg-gray-50 font-normal text-gray-500'
+            }`}
+          >
+            <span className="truncate">
+              {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
+            </span>
+          </Button>
         </div>
 
         {/* End Date Field — hidden in single-date mode. When noEndDate is on,
@@ -466,12 +460,34 @@ const DateRangePicker = ({
             })}
           </div>
 
-          {/* Selection Info */}
-          <div className="mt-4 text-xs text-gray-500 text-center">
-            {singleDate && (startDate ? 'Date selected' : 'Select date')}
-            {!singleDate && selectingStart && !startDate && "Select start date"}
-            {!singleDate && !selectingStart && startDate && !endDate && "Select end date"}
-            {!singleDate && startDate && endDate && "Range selected"}
+          {/* Selection Info. In single-date mode the footer hosts the
+              "Clear Selection" text link (relocated from the input per
+              Task 2 spec) side-by-side with the hint text. */}
+          <div className="mt-4 text-xs text-gray-500">
+            {singleDate ? (
+              <div className="flex items-center justify-between gap-3">
+                <span>{startDate ? 'Date selected' : 'Select date'}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStartDate(null);
+                    if (typeof onSingleChange === 'function') {
+                      onSingleChange(null);
+                    }
+                  }}
+                  className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            ) : (
+              <div className="text-center">
+                {selectingStart && !startDate && "Select start date"}
+                {!selectingStart && startDate && !endDate && "Select end date"}
+                {startDate && endDate && "Range selected"}
+              </div>
+            )}
           </div>
         </div>,
         document.body
@@ -545,12 +561,34 @@ const DateRangePicker = ({
             })}
           </div>
 
-          {/* Selection Info */}
-          <div className="mt-4 text-xs text-gray-500 text-center">
-            {singleDate && (startDate ? 'Date selected' : 'Select date')}
-            {!singleDate && selectingStart && !startDate && "Select start date"}
-            {!singleDate && !selectingStart && startDate && !endDate && "Select end date"}
-            {!singleDate && startDate && endDate && "Range selected"}
+          {/* Selection Info. In single-date mode the footer hosts the
+              "Clear Selection" text link (relocated from the input per
+              Task 2 spec) side-by-side with the hint text. */}
+          <div className="mt-4 text-xs text-gray-500">
+            {singleDate ? (
+              <div className="flex items-center justify-between gap-3">
+                <span>{startDate ? 'Date selected' : 'Select date'}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setStartDate(null);
+                    if (typeof onSingleChange === 'function') {
+                      onSingleChange(null);
+                    }
+                  }}
+                  className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                >
+                  Clear Selection
+                </button>
+              </div>
+            ) : (
+              <div className="text-center">
+                {selectingStart && !startDate && "Select start date"}
+                {!selectingStart && startDate && !endDate && "Select end date"}
+                {startDate && endDate && "Range selected"}
+              </div>
+            )}
           </div>
         </div>
       )}
