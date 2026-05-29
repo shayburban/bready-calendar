@@ -113,17 +113,12 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   // no hard internal conflict. Synced (soft) conflicts do NOT block.
   const isSubmitActive = isFormComplete && !hasHardConflict;
 
-  // Real save (Change Availability) + real delete state. lastUpdatedAt /
-  // showSaveSuccess mirror the CalendarSidebar pattern — same 30-second
-  // green-success-line UX the user already gets after a sidebar save.
+  // Real save (Change Availability) + real delete state. Success feedback
+  // now goes through the centered 10-second toast (Task 1) — the popup
+  // closes on success so the previous in-popup 30s success line had
+  // nothing to attach to and is removed.
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
-  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
-  const saveSuccessTimerRef = useRef(null);
-  useEffect(() => () => {
-    if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
-  }, []);
 
   // Header title pulled from the same string the card's <h3> renders, so the
   // delete-confirmation Description reads "remove your My Availability (T)"
@@ -182,13 +177,15 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
           end_time: endTime,
         });
       }
-      setLastUpdatedAt(new Date());
-      setShowSaveSuccess(true);
-      if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current);
-      saveSuccessTimerRef.current = setTimeout(() => {
-        setShowSaveSuccess(false);
-        saveSuccessTimerRef.current = null;
-      }, 30000);
+      // Centered 10-second success toast (Task 1 default duration). The
+      // popup closes immediately after so the teacher's focus moves back
+      // to the calendar — matches the "close popup + toast" pattern the
+      // user asked for in Task 2.
+      toast({
+        title: 'Availability successfully updated.',
+        description: `${headerTitle} on ${format(changeAvailDate, 'dd.MM.yyyy')} between ${startTime} and ${endTime}.`,
+      });
+      if (typeof onClose === 'function') onClose();
     } catch (err) {
       toast({
         title: 'Could not update availability.',
@@ -424,22 +421,6 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
       {validationErrors.length > 0 && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
           Please fill in the following required field{validationErrors.length > 1 ? 's' : ''}: {validationErrors.join(', ')}.
-        </div>
-      )}
-
-      {/* 30-second success line mirrors the CalendarSidebar UX after a save,
-          so the teacher gets the same feedback shape across the app. */}
-      {showSaveSuccess && (
-        <div>
-          {lastUpdatedAt && (
-            <p className="text-sm text-gray-600">
-              Last Updated: {format(lastUpdatedAt, "dd.MM.yyyy 'at' HH:mm")}
-            </p>
-          )}
-          <p className="text-sm text-green-600 font-medium flex items-center">
-            <CheckCircle2 className="w-4 h-4 mr-1" />
-            Your Calendar is Updated
-          </p>
         </div>
       )}
 
