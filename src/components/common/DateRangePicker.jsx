@@ -3,7 +3,26 @@ import { Button } from '@/components/ui/button';
 import { X, Plus } from 'lucide-react';
 import { format, isAfter, isBefore, isEqual, startOfDay } from 'date-fns';
 
-const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls = true, className = "", isOnlyRow = false, noEndDate = false, hideRemove = false }) => {
+const DateRangePicker = ({
+  value,
+  onRangeChange,
+  onRemove,
+  onAdd,
+  showControls = true,
+  className = "",
+  isOnlyRow = false,
+  noEndDate = false,
+  hideRemove = false,
+  // ── Single-date mode (additive). When `singleDate` is true the picker
+  //    renders a single Start-Date-style field that selects one date and
+  //    emits via `onSingleChange`. All range logic, the End Date field,
+  //    and the add/remove controls are suppressed. Default behavior
+  //    (range mode) is 100% backward-compatible.
+  singleDate = false,
+  singleValue = null,
+  onSingleChange,
+  singleLabel = 'Start Date',
+}) => {
   // When `value` is supplied the picker runs in controlled mode — internal
   // state stays in sync with the prop via the useEffect below. When `value`
   // is undefined the picker is uncontrolled (legacy behavior).
@@ -47,6 +66,21 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
       return newEnd;
     });
   }, [value]);
+
+  // Single-date mode: mirror `singleValue` into the internal `startDate`
+  // so the same Start-Date UI/calendar logic visualizes the selection.
+  // Dedupe pattern mirrors the value-sync effect above so a parent re-render
+  // emitting a freshly-constructed Date object doesn't churn state.
+  useEffect(() => {
+    if (!singleDate) return;
+    const nextDate = singleValue ? startOfDay(new Date(singleValue)) : null;
+    setStartDate((prev) => {
+      if (prev && nextDate && prev.getTime() === nextDate.getTime()) return prev;
+      if (!prev && !nextDate) return prev;
+      return nextDate;
+    });
+  }, [singleDate, singleValue]);
+
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [selectingStart, setSelectingStart] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -103,6 +137,17 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
   const handleDateClick = (date) => {
     const selectedDate = startOfDay(date);
     if (isBefore(selectedDate, startOfDay(new Date()))) return;
+
+    // Single-date mode: one click selects the date, closes the calendar,
+    // and notifies the parent. None of the range logic below runs.
+    if (singleDate) {
+      setStartDate(selectedDate);
+      setIsCalendarOpen(false);
+      if (typeof onSingleChange === 'function') {
+        onSingleChange(selectedDate);
+      }
+      return;
+    }
 
     if (selectingStart) {
       setStartDate(selectedDate);
@@ -190,19 +235,22 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
   // re-firing just because `onRangeChange` got a new function reference
   // on a parent re-render (the typical inline-arrow case).
   useEffect(() => {
+    // No range to emit in single-date mode — the picker emits via
+    // onSingleChange from handleDateClick instead.
+    if (singleDate) return;
     if (!onRangeChange || !startDate || !endDate) return;
     const sig = `${startDate.getTime()}-${endDate.getTime()}`;
     if (lastEmittedRef.current === sig) return;
     lastEmittedRef.current = sig;
     onRangeChange({ startDate, endDate });
-  }, [startDate, endDate, onRangeChange]);
+  }, [startDate, endDate, onRangeChange, singleDate]);
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
       <div className="flex items-center gap-1 min-w-0">
-        {/* Start Date Field */}
+        {/* Start Date Field — in single-date mode this IS the single field. */}
         <div className="flex-1 min-w-0 space-y-1">
-          <label className="text-xs font-medium text-gray-700">Start Date</label>
+          <label className="text-xs font-medium text-gray-700">{singleDate ? singleLabel : 'Start Date'}</label>
           <Button
             variant="outline"
             onClick={() => handleInputClick(true)}
@@ -218,9 +266,11 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
           </Button>
         </div>
 
-        {/* End Date Field — when noEndDate is on, the field is disabled and
-            shows "∞ (Inf.)". The internal endDate state is preserved so
-            unchecking "No end date" automatically restores the prior value. */}
+        {/* End Date Field — hidden in single-date mode. When noEndDate is on,
+            the field is disabled and shows "∞ (Inf.)". The internal endDate
+            state is preserved so unchecking "No end date" automatically
+            restores the prior value. */}
+        {!singleDate && (
         <div className="flex-1 min-w-0 space-y-1">
           <label className="text-xs font-medium text-gray-700">End Date</label>
           <Button
@@ -244,9 +294,10 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
             </span>
           </Button>
         </div>
+        )}
 
-        {/* Control Buttons */}
-        {showControls && (
+        {/* Control Buttons \u2014 also hidden in single-date mode. */}
+        {!singleDate && showControls && (
           <div className="flex flex-col gap-1 pt-5 flex-shrink-0">
             {!hideRemove && (
               <Button
@@ -344,9 +395,10 @@ const DateRangePicker = ({ value, onRangeChange, onRemove, onAdd, showControls =
 
           {/* Selection Info */}
           <div className="mt-4 text-xs text-gray-500 text-center">
-            {selectingStart && !startDate && "Select start date"}
-            {!selectingStart && startDate && !endDate && "Select end date"}
-            {startDate && endDate && "Range selected"}
+            {singleDate && (startDate ? 'Date selected' : 'Select date')}
+            {!singleDate && selectingStart && !startDate && "Select start date"}
+            {!singleDate && !selectingStart && startDate && !endDate && "Select end date"}
+            {!singleDate && startDate && endDate && "Range selected"}
           </div>
         </div>
       )}

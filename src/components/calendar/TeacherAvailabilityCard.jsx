@@ -20,7 +20,8 @@ import {
 } from 'lucide-react';
 import { format } from 'date-fns';
 import NavigationWithinLegend from './NavigationWithinLegend';
-import CalendarWithinCalendarCards from './CalendarWithinCalendarCards'; // New import
+import CalendarWithinCalendarCards from './CalendarWithinCalendarCards';
+import DateRangePicker from '../common/DateRangePicker'; // New import
 
 export default function TeacherAvailabilityCard({ event, onClose, onDateChange }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -31,6 +32,10 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange }
   // onOpenChange, and the existing onInteractOutside.preventDefault() on the
   // PopoverContent (intentional) continues to keep outside clicks from closing.
   const [datePickerOpen, setDatePickerOpen] = useState(false);
+  // "Change Your Availability" → Select Date field (Task 2). Single-date
+  // selection driven by the shared DateRangePicker so the field uses the
+  // EXACT same UI/styling/calendar logic as the sidebar's Start Date picker.
+  const [changeAvailDate, setChangeAvailDate] = useState(null);
 
   // selectedDate is intentionally driven by event?.dateString ONLY — not the
   // whole `event` reference. Navigating between same-day time-range chips
@@ -126,13 +131,12 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange }
 
       <div className="space-y-3">
         <p className="font-bold text-gray-800 underline mt-4">Change Your Availability</p>
-        <div>
-          <label className="text-xs font-medium text-gray-600">Select Date</label>
-          <div className="relative">
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-            <Input type="text" placeholder="Select Date" className="pl-9" />
-          </div>
-        </div>
+        <DateRangePicker
+          singleDate
+          singleValue={changeAvailDate}
+          onSingleChange={setChangeAvailDate}
+          singleLabel="Select Date"
+        />
         <div className="grid grid-cols-2 gap-2">
           <div>
             <label className="text-xs font-medium text-gray-600">Start Time</label>

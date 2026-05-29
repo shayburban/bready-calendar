@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -282,6 +282,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // the form can surface the reason + red-outline the missing fields.
   const [showErrors, setShowErrors] = useState(false);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
+  // Task 1: dynamic "Last Updated" timestamp + transient success message.
+  // lastUpdatedAt is null until the first successful Save Dates; once set it
+  // renders the most recent successful save time. showSuccessMessage is
+  // toggled true on successful save and back to false by a 30s setTimeout
+  // tracked in successMessageTimerRef so the timer can be cleared on a
+  // back-to-back save or on unmount.
+  const [lastUpdatedAt, setLastUpdatedAt] = useState(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const successMessageTimerRef = useRef(null);
+  useEffect(() => () => {
+    if (successMessageTimerRef.current) clearTimeout(successMessageTimerRef.current);
+  }, []);
   const [user, setUser] = useState(null); // Retained state but not used in new legend logic
   const [appRoles, setAppRoles] = useState([]); // Retained state but not used in new legend logic
   const [legendItems, setLegendItems] = useState([]);
@@ -679,6 +691,17 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     }
     handleSave();
     resetAvailabilityFields();
+    // Task 1: record the successful-save timestamp and show the green
+    // "Your Calendar is Updated" message for 30s. A back-to-back save
+    // clears the previous timer before starting a fresh one so the
+    // message remains visible for a full 30s after the latest save.
+    setLastUpdatedAt(new Date());
+    setShowSuccessMessage(true);
+    if (successMessageTimerRef.current) clearTimeout(successMessageTimerRef.current);
+    successMessageTimerRef.current = setTimeout(() => {
+      setShowSuccessMessage(false);
+      successMessageTimerRef.current = null;
+    }, 30000);
   };
 
   const handleViewChange = (newView) => {
@@ -954,11 +977,17 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         )}
 
                         <div>
-                            <p className="text-sm text-gray-600">Last Updated: Today</p>
-                            <p className="text-sm text-green-600 font-medium flex items-center">
+                            {lastUpdatedAt && (
+                              <p className="text-sm text-gray-600">
+                                Last Updated: {format(lastUpdatedAt, "dd.MM.yyyy 'at' HH:mm")}
+                              </p>
+                            )}
+                            {showSuccessMessage && (
+                              <p className="text-sm text-green-600 font-medium flex items-center">
                                 <CheckCircle2 className="w-4 h-4 mr-1" />
                                 Your Calendar is Updated
-                            </p>
+                              </p>
+                            )}
                         </div>
                     </div>
         }
