@@ -233,6 +233,38 @@ const TeacherForm = () => {
           isValid = false;
         }
 
+        // Booking preferences (paired-dropdown rule: both-or-neither).
+        // Mirrors the sidebar's submit-time gate so a half-filled
+        // availability_window / advance_booking_policy / break_after_class
+        // pair blocks Next here and can never reach TeacherProfile.create.
+        // - Empty (both null / falsy / unset) is allowed because these
+        //   fields are optional at registration time.
+        // - Fully filled (both set) is allowed.
+        // - Partial (one set, the other null) is invalid.
+        // The user-facing labels match the headings the teacher already
+        // sees on Page 5c so the error is self-explanatory.
+        const isPartialPair = (field) => {
+          if (!field || typeof field !== 'object') return false;
+          const hasPref = field.preference != null;
+          const hasType = field.preferenceType != null;
+          return hasPref !== hasType; // XOR — exactly one set
+        };
+        const partialPrefFields = [];
+        if (isPartialPair(availability.availabilityWindow)) {
+          partialPrefFields.push('Availability Window');
+        }
+        if (isPartialPair(availability.farAdvanceBookingFromStudent)) {
+          partialPrefFields.push('How far in advance can students book?');
+        }
+        if (isPartialPair(availability.breakAfterClassInHours)) {
+          partialPrefFields.push('Break after a class');
+        }
+        if (partialPrefFields.length > 0) {
+          newErrors.bookingPreferences =
+            `Please complete both the number and time-unit for: ${partialPrefFields.join(', ')}.`;
+          isValid = false;
+        }
+
         // Removed duplicate declaration of 'details'
         const pricingHasErrors =
           !!details.hasUnpricedServices ||
