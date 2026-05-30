@@ -27,7 +27,7 @@ const startMinutesOf = (e) => {
   return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
 };
 
-export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [] }) {
+export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [], onAvailabilityChanged }) {
   // Global picker highlight list — sourced ONCE from savedAvailabilitySlots so
   // the calendar highlights the same days regardless of which sibling chip is
   // active (Bug 1 fix). Output format matches what CalendarWithinCalendarCards
@@ -169,7 +169,7 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
     switch (activeEvent.type) {
       case 'availability':
         if (activeEvent.role === 'S') return <TeacherAvailabilityStudentCard event={activeEvent} onClose={onClose} />;
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} savedAvailabilitySlots={savedAvailabilitySlots} showEditIcon={false} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} savedAvailabilitySlots={savedAvailabilitySlots} onAvailabilityChanged={onAvailabilityChanged} showEditIcon={false} />;
       case 'booked':
         if (activeEvent.role === 'S') {
           if (activeEvent.reschedule) return <BookedAsStudentRescheduleCard event={activeEvent} onClose={onClose} />;
@@ -213,7 +213,14 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
   // clicks no longer dismiss the modal.
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 bg-gray-50">
+      {/* Task 4 — onCloseAutoFocus.preventDefault stops Radix from
+          scrolling the page back to the originating chip when the modal
+          closes after a successful save/delete. Without it the calendar
+          briefly "jumps" as focus is restored mid-close animation. */}
+      <DialogContent
+        className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto p-0 bg-gray-50"
+        onCloseAutoFocus={(e) => e.preventDefault()}
+      >
         {renderCard()}
       </DialogContent>
     </Dialog>

@@ -39,7 +39,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import { Availability } from '@/api/entities'; // New import
 
-export default function TeacherAvailabilityCard({ event, onClose, onDateChange, savedAvailabilitySlots = [], syncedDayEvents = [], showEditIcon = true }) {
+export default function TeacherAvailabilityCard({ event, onClose, onDateChange, onAvailabilityChanged, savedAvailabilitySlots = [], syncedDayEvents = [], showEditIcon = true }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [activeTimeSlot, setActiveTimeSlot] = useState('');
   // Controlled visibility for the date-picker Popover so a date click can
@@ -136,6 +136,13 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
       if (event?.id) {
         await Availability.delete(event.id);
       }
+      // Tasks 2 — surface the change to the parent grid so its
+      // `savedAvailabilitySlots` state drops this slot reactively. The
+      // grid renders chips off that store; without this hop the chip
+      // would stay visible until a full reload.
+      if (typeof onAvailabilityChanged === 'function') {
+        onAvailabilityChanged({ type: 'delete', event });
+      }
       toast({ title: 'Event successfully removed.' });
       if (typeof onClose === 'function') onClose();
     } catch (err) {
@@ -177,10 +184,22 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
           end_time: endTime,
         });
       }
-      // Centered 10-second success toast (Task 1 default duration). The
-      // popup closes immediately after so the teacher's focus moves back
-      // to the calendar — matches the "close popup + toast" pattern the
-      // user asked for in Task 2.
+      // Task 3 — surface the new (date, start, end) to the parent grid
+      // so the chip moves to its new day/time without a hard refresh.
+      // The parent removes the old slot identified by event.dateString +
+      // event.time and inserts a fresh one for the new tuple.
+      if (typeof onAvailabilityChanged === 'function') {
+        onAvailabilityChanged({
+          type: 'update',
+          event,
+          nextDate: changeAvailDate,
+          nextStartTime: startTime,
+          nextEndTime: endTime,
+        });
+      }
+      // Centered 5-second success toast (default duration). The popup
+      // closes immediately after so the teacher's focus moves back to
+      // the calendar — matches the "close popup + toast" pattern.
       toast({
         title: 'Availability successfully updated.',
         description: `${headerTitle} on ${format(changeAvailDate, 'dd.MM.yyyy')} between ${startTime} and ${endTime}.`,

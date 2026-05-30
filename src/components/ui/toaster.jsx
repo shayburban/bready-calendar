@@ -9,7 +9,11 @@ import {
 } from "@/components/ui/toast";
 
 export function Toaster() {
-  const { toasts } = useToast();
+  // `dismiss` is the same dispatch the auto-dismiss timer fires (see
+  // use-toast.jsx). Wiring it to the X button gives the close icon its
+  // missing onClick — previously <ToastClose /> rendered with zero props
+  // so the button was inert.
+  const { toasts, dismiss } = useToast();
 
   return (
     <ToastProvider>
@@ -23,7 +27,7 @@ export function Toaster() {
               )}
             </div>
             {action}
-            <ToastClose />
+            <ToastClose onClick={() => dismiss(id)} />
           </Toast>
         );
       })}

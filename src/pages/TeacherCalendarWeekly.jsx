@@ -99,6 +99,52 @@ export default function TeacherCalendarWeekly() {
     });
   };
 
+  // Inline YYYY-MM-DD formatter so we don't pull date-fns into this page
+  // just for one slot-key conversion. Mirrors Monthly's helper.
+  const toYMD = (input) => {
+    if (!input) return null;
+    const d = input instanceof Date ? input : new Date(input);
+    if (Number.isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  // Tasks 2 & 3 — Reactive grid sync on popup-driven delete/update.
+  // Identical contract to Monthly: identifies the existing slot via
+  // (event.dateString, event.time) and either drops it or replaces it
+  // with the new (nextDate, nextStartTime, nextEndTime) tuple. The
+  // localStorage store is shared, so writing here is enough for the
+  // Weekly grid to re-render reactively.
+  const handleAvailabilityChanged = ({ type, event, nextDate, nextStartTime, nextEndTime }) => {
+    if (!event) return;
+    const prevYMD = toYMD(event.dateString);
+    const [prevStart, prevEnd] = (event.time || '').split(' - ');
+    if (!prevYMD || !prevStart || !prevEnd) return;
+    setSavedAvailabilitySlots((prev) => {
+      const remaining = prev.filter(
+        (s) => !(s.date === prevYMD && s.startTime === prevStart && s.endTime === prevEnd)
+      );
+      if (type === 'delete') {
+        persistAvailabilitySlots(remaining);
+        return remaining;
+      }
+      if (type === 'update') {
+        const newYMD = toYMD(nextDate);
+        if (!newYMD || !nextStartTime || !nextEndTime) {
+          persistAvailabilitySlots(remaining);
+          return remaining;
+        }
+        const next = applySaveAvailability(
+          remaining,
+          [{ date: newYMD, startTime: nextStartTime, endTime: nextEndTime }],
+          'open'
+        );
+        persistAvailabilitySlots(next);
+        return next;
+      }
+      return prev;
+    });
+  };
+
   const handlePrimaryRangeChange = (rangeData) => {
     if (!rangeData?.startDate || !rangeData?.endDate) return;
     const ns = new Date(rangeData.startDate); ns.setHours(0, 0, 0, 0);
@@ -323,6 +369,7 @@ export default function TeacherCalendarWeekly() {
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
         savedAvailabilitySlots={savedAvailabilitySlots}
+        onAvailabilityChanged={handleAvailabilityChanged}
       />
       <SyncedEventsModal
         event={selectedEvent}

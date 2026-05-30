@@ -26,7 +26,11 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: "border bg-background text-foreground",
+        // Muted dark theme (Task 1): off-white text on a near-black, softly
+        // bordered surface. Avoids the stark black/white pairing while keeping
+        // the success toast clearly readable in the center of the screen.
+        default:
+          "border border-neutral-800 bg-neutral-900 text-neutral-200",
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
       },
@@ -64,7 +68,10 @@ const ToastClose = React.forwardRef(({ className, ...props }, ref) => (
   <button
     ref={ref}
     className={cn(
-      "absolute right-2 top-2 rounded-md p-1 text-foreground/50 opacity-0 transition-opacity hover:text-foreground focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
+      // Default surface is now dark (Task 1 muted theme) so the X icon needs
+      // a neutral-light base instead of `text-foreground`. The destructive
+      // group override below still wins for error toasts (red on red).
+      "absolute right-2 top-2 rounded-md p-1 text-neutral-400 opacity-0 transition-opacity hover:text-neutral-100 focus:opacity-100 focus:outline-none focus:ring-2 group-hover:opacity-100 group-[.destructive]:text-red-300 group-[.destructive]:hover:text-red-50 group-[.destructive]:focus:ring-red-400 group-[.destructive]:focus:ring-offset-red-600",
       className
     )}
     toast-close=""

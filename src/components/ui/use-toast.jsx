@@ -110,11 +110,11 @@ function dispatch(action) {
   });
 }
 
-// Default auto-dismiss for toasts is 10 seconds (Task 1). Callers can pass
+// Default auto-dismiss for toasts is 5 seconds. Callers can pass
 // `duration: 0` (or any non-positive number) to opt out of auto-dismiss for
 // genuinely sticky messages — preserves the prior "stays until closed"
 // behavior for anyone who explicitly wants it.
-const DEFAULT_TOAST_DURATION = 10000;
+const DEFAULT_TOAST_DURATION = 5000;
 
 function toast({ duration = DEFAULT_TOAST_DURATION, ...props }) {
   const id = genId();
