@@ -271,22 +271,25 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // Page 5c writes to. If no row exists yet (user reached the calendar
   // pre-registration-completion), create one with these fields.
   //
-  // Save click semantics (user spec):
-  //   1. Defensive early-return on isSavingSchedPrefs / !isAnyPairComplete
-  //      — the button is also disabled in these cases so this should
-  //      not normally fire, but it's a safety net for keyboard / a11y.
+  // Save click semantics (user spec — updated):
+  //   The Save button is ALWAYS clickable (cursor-allowed) regardless
+  //   of state — its colour reflects the current form state but does
+  //   not gate the click itself.
+  //   1. Early-return only on isSavingSchedPrefs (mid-flight safety).
   //   2. Flip hasAttemptedSave true so any latent validation errors
-  //      surface via the showErrors cascade — partial rows now light up
-  //      with their red Alert + red field-border ring.
-  //   3. If isPrefsValid is false (any row partial), stop before
-  //      hitting the DB. The UI is now showing the user where to fix.
-  //   4. Otherwise persist.
-  //   5. On success, refresh the baseline (so Cancel reverts to the
+  //      surface via the showErrors cascade — partial rows now light
+  //      up with their red Alert + red field-border ring.
+  //   3. If !isAnyPairComplete, nothing to save (form is empty
+  //      pristine) → silent no-op; button stays gray.
+  //   4. If !isPrefsValid (any row partial), stop before hitting the
+  //      DB. The UI is now showing the user where to fix it.
+  //   5. Otherwise persist.
+  //   6. On success, refresh the baseline (so Cancel reverts to the
   //      just-saved values) and reset hasAttemptedSave.
   const handleSaveSchedPrefs = async () => {
     if (isSavingSchedPrefs) return;
-    if (!isAnyPairComplete) return; // defensive (button is also disabled)
     setHasAttemptedSave(true);
+    if (!isAnyPairComplete) return; // nothing to save
     if (!isPrefsValid) return; // surface errors but don't persist
     setIsSavingSchedPrefs(true);
     try {
@@ -1123,28 +1126,32 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                          >
                            Cancel
                          </Button>
-                         {/* Save — gated by the user-spec rule:
-                             "the save button is inactive unless at
-                             least one of the Both fields are
-                             completed". A completed pair = both
-                             `preference` and `preferenceType` set.
-                             - Inactive  → bg-gray-300 text-gray-500
-                                          cursor-not-allowed.
-                             - Active    → bg-green-600 hover:bg-green-700
-                                          text-white (the platform's
-                                          standard green CTA).
-                             Click-with-invalid behaviour is preserved:
-                             the handler flips hasAttemptedSave true so
-                             any partial row lights up with its red
-                             Alert + red border (Rule 2 trigger). */}
+                         {/* Save — user spec (updated):
+                             The button is ALWAYS clickable (cursor-
+                             allowed). Its colour reflects the current
+                             form state but does NOT gate the click.
+                             - Green (active look) → at least one row
+                               is a fully-filled pair AND no row is
+                               partial. Clicking persists to the DB.
+                             - Gray (inactive look) → any row is
+                               partial OR no row is a full pair.
+                               Clicking still fires the handler, which
+                               flips hasAttemptedSave true and surfaces
+                               the red Alert + red border on partial
+                               rows via the showErrors cascade. If
+                               nothing partial and nothing complete
+                               (pristine empty form), the click is a
+                               silent no-op — the button stays gray. */}
                          <Button
                            size="sm"
                            onClick={handleSaveSchedPrefs}
-                           disabled={isSavingSchedPrefs || !isAnyPairComplete}
+                           disabled={isSavingSchedPrefs}
                            className={
-                             !isAnyPairComplete || isSavingSchedPrefs
-                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
-                               : 'bg-green-600 hover:bg-green-700 text-white'
+                             isSavingSchedPrefs
+                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                               : isAnyPairComplete && isPrefsValid
+                                 ? 'bg-green-600 hover:bg-green-700 text-white'
+                                 : 'bg-gray-300 text-gray-500 hover:bg-gray-400'
                            }
                          >
                            {isSavingSchedPrefs ? 'Saving...' : 'Save'}
