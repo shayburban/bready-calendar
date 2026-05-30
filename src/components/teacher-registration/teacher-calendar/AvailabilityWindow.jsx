@@ -24,7 +24,12 @@ const AvailabilityWindow = ({ onDataChange, onValidityChange, initialData = {} }
   }
 
   return (
-    <div className="space-y-4">
+    // Task 2 — `relative z-[999] pointer-events-auto` forces the entire
+    // Availability Window block to the top of the stacking context on
+    // Page 5c, so the Time Unit dropdown and the bin/reset icon stay
+    // clickable even when an invisible ancestor's transparent padding
+    // bleeds down the page near the bottom of the form.
+    <div className="space-y-4 relative z-[999] pointer-events-auto">
       <div className="flex items-center gap-2">
         <h4 className="text-lg font-medium text-gray-900">Availability Window</h4>
         <TooltipProvider>

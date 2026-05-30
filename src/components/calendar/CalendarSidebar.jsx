@@ -1045,10 +1045,21 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
                 {isEditingPreferences &&
         <div className="flex justify-end gap-2 pt-2">
-                         {/* Cancel — subtle ghost/outline variant so the
-                             green Save is clearly the primary action.
-                             Reverts schedPrefs to the captured baseline
-                             without any backend write. */}
+                         {/* Cancel — subtle outline variant so green Save
+                             is clearly the primary action. Behavior:
+                               1. Revert schedPrefs to the captured DB
+                                  baseline. The common selectors each
+                                  have a value-prop sync useEffect that
+                                  cascades this revert into their
+                                  internal duration/timeUnit state, so
+                                  the visible dropdowns also reset.
+                               2. The selectors' own validation effects
+                                  re-run on the reset state, clearing
+                                  any active red "Please select…" Alert
+                                  automatically — no separate setErrors
+                                  call needed because errors live inside
+                                  the selectors, not in the sidebar.
+                               3. Exit edit mode. NO backend write. */}
                          <Button
                            size="sm"
                            variant="outline"

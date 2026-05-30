@@ -31,6 +31,24 @@ const BreakTimeSelector = ({
     }
   }, [showCustomInput]);
 
+  // Task 1 — External value sync (Cancel revert). See identical
+  // comment in common/AvailabilityWindow.jsx for the rationale.
+  useEffect(() => {
+    const incomingPref = value?.preference ?? null;
+    const incomingType = value?.preferenceType ?? null;
+    if (incomingPref !== duration) {
+      setDuration(incomingPref);
+      if (incomingPref === null) {
+        setCustomValue('');
+        setShowCustomInput(false);
+      }
+    }
+    if (incomingType !== timeUnit) {
+      setTimeUnit(incomingType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.preference, value?.preferenceType]);
+
   // Generate number options based on time unit
   const getNumberOptions = () => {
     if (timeUnit === 'hours') {

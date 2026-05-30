@@ -4,6 +4,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectSe
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Trash2 } from 'lucide-react';
+// Task 1 — Mirrors AdvanceBookingSelector / BreakTimeSelector so the
+// missing red error banner now renders here too. Both Page 5c (via the
+// teacher-calendar/AvailabilityWindow wrapper) and the Calendar Sidebar
+// pick this up automatically since they share this common component.
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const AvailabilityWindow = ({
   value = { preference: null, preferenceType: null },
@@ -28,6 +33,27 @@ const AvailabilityWindow = ({
     }
   }, [showCustomInput]);
 
+  // Task 1 — Sync internal state when the parent reverts `value` (e.g.
+  // the Cancel button in CalendarSidebar restoring the schedPrefs
+  // baseline). Without this, dropdowns keep showing in-progress
+  // selections even after the parent has reverted. Guard prevents a
+  // re-render loop (incoming === current means no-op).
+  useEffect(() => {
+    const incomingPref = value?.preference ?? null;
+    const incomingType = value?.preferenceType ?? null;
+    if (incomingPref !== duration) {
+      setDuration(incomingPref);
+      if (incomingPref === null) {
+        setCustomValue('');
+        setShowCustomInput(false);
+      }
+    }
+    if (incomingType !== timeUnit) {
+      setTimeUnit(incomingType);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value?.preference, value?.preferenceType]);
+
   // Generate number options 1-10
   const numberOptions = Array.from({ length: 10 }, (_, i) => ({
     value: i + 1,
@@ -46,9 +72,11 @@ const AvailabilityWindow = ({
     const isValid = duration !== null && timeUnit !== null;
 
     if (duration && !timeUnit) {
-      validationError = 'Please select a time unit';
+      // Task 1 — Wording mirrors AdvanceBookingSelector verbatim so the
+      // three scheduling-preference fields read identically.
+      validationError = 'Please select a time unit (e.g., days, weeks).';
     } else if (timeUnit && !duration) {
-      validationError = 'Please select a duration';
+      validationError = 'Please select a number for the duration.';
     } else if (duration && timeUnit) {
       // Check maximum limits
       if (timeUnit === 'months' && duration > 10) {
@@ -127,12 +155,13 @@ const AvailabilityWindow = ({
   };
 
   return (
-    // `relative z-[1]` guarantees the Selects and Trash button live in
-    // a positioned, elevated ancestor — together with the `isolate`
-    // stacking context BookingPreferences provides on Page 5c, no
-    // sibling overlay can intercept their pointer events when the user
-    // is scrolled near the bottom of the page.
-    <div className={`flex items-center gap-2 relative z-[1] ${className}`}>
+    // Task 2 — `relative z-[999] pointer-events-auto` forces this row
+    // to the absolute top of the stacking context above whatever
+    // invisible container is bleeding down the page on Page 5c.
+    // `space-y-3` wraps the row + the new error Alert so layout stays
+    // tidy with the other selectors.
+    <div className={`space-y-2 relative z-[999] pointer-events-auto ${className}`}>
+    <div className={`flex items-center gap-2`}>
         {/* First Dropdown - Duration Selection */}
         <div className="w-32">
           {showCustomInput ?
@@ -199,7 +228,7 @@ const AvailabilityWindow = ({
             <SelectContent
             position="popper"
             sideOffset={4}
-            className="z-50"
+            className="z-[60]"
             onCloseAutoFocus={(e) => e.preventDefault()}>
 
               {timeUnitOptions.map((option) =>
@@ -215,11 +244,26 @@ const AvailabilityWindow = ({
           </Select>
         </div>
         
-        {/* Trash Icon to clear selection */}
+        {/* Trash Icon to clear selection — `relative z-[999]
+            pointer-events-auto` mirrors the row wrapper above so the
+            bin icon stays clickable on Page 5c even when scrolled to
+            the bottom (Task 2). */}
         {(duration || timeUnit) &&
-      <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1" aria-label="Remove">
+      <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1 relative z-[999] pointer-events-auto" aria-label="Remove">
                 <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
             </Button>
+      }
+    </div>
+      {/* Task 1 — Error banner that was previously missing. Identical
+          shape to AdvanceBookingSelector / BreakTimeSelector so the
+          three scheduling-preference fields surface validation the
+          same way on both Page 5c and the Calendar Sidebar. */}
+      {error &&
+        <Alert variant="destructive" className="p-2 text-xs">
+          <AlertDescription>
+            {error}
+          </AlertDescription>
+        </Alert>
       }
     </div>);
 
