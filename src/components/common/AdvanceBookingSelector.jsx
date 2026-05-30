@@ -11,7 +11,12 @@ const AdvanceBookingSelector = ({
   value = { preference: null, preferenceType: null },
   onChange,
   onValidationChange,
-  className = ""
+  className = "",
+  // Set true when the parent renders its own external heading (e.g. the
+  // shared TeacherSchedulingPreferences uses this to swap heading
+  // typography between sidebar and Page 5c without forking the control).
+  hideHeading = false,
+  disabled = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -144,21 +149,23 @@ const AdvanceBookingSelector = ({
 
   return (
     <div className={`space-y-3 ${className}`}>
-      <div className="flex items-center gap-2">
-        <h4 className="text-lg font-medium text-gray-900">How far in advance can students book?</h4>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button type="button" className="p-0 bg-transparent border-none" aria-label="More info">
-                <Info className="w-4 h-4 text-gray-400 cursor-help" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent className="bg-black text-white text-xs rounded-md shadow-lg p-2">
-              <p className="max-w-xs">Minimum time required before a lesson can be booked</p>
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+      {!hideHeading && (
+        <div className="flex items-center gap-2">
+          <h4 className="text-lg font-medium text-gray-900">How far in advance can students book?</h4>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button type="button" className="p-0 bg-transparent border-none" aria-label="More info">
+                  <Info className="w-4 h-4 text-gray-400 cursor-help" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent className="bg-black text-white text-xs rounded-md shadow-lg p-2">
+                <p className="max-w-xs">Minimum time required before a lesson can be booked</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
 
       <div className={`flex items-center gap-2`}>
         {/* First Dropdown - Duration Selection */}
@@ -190,7 +197,8 @@ const AdvanceBookingSelector = ({
 
           <Select
             value={duration?.toString() || ''}
-            onValueChange={handleDurationChange}>
+            onValueChange={handleDurationChange}
+            disabled={disabled}>
 
               <SelectTrigger className="bg-gray-50 px-3 py-2 text-sm flex h-10 w-full items-center justify-between rounded-md border border-input ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1">
                 <SelectValue placeholder="Number" />
@@ -217,7 +225,8 @@ const AdvanceBookingSelector = ({
         <div className="w-40">
           <Select
             value={timeUnit || ''}
-            onValueChange={handleTimeUnitChange}>
+            onValueChange={handleTimeUnitChange}
+            disabled={disabled}>
 
             <SelectTrigger className="bg-gray-50 px-3 py-2 text-sm flex h-10 w-full items-center justify-between rounded-md border border-input ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1">
               <SelectValue placeholder="Time Unit" />

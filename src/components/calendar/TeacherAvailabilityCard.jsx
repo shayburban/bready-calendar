@@ -86,15 +86,32 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
     }
   }, [changeAvailDate]);
 
-  // Hard conflicts — overlapping availability slots the teacher already
-  // saved internally on the same date. Surfaces a RED alert and forces the
-  // submit button into the gray/inactive state (Task 5 hard-overlap rule).
+  // Internal conflicts — overlapping availability slots the teacher
+  // already saved on the same date.
   const internalConflicts = useMemo(() => {
     if (!changeAvailYMD || !startTime || !endTime) return [];
     return (savedAvailabilitySlots || []).filter(
       (s) => s && s.date === changeAvailYMD && timesOverlap(startTime, endTime, s.startTime, s.endTime)
     );
   }, [savedAvailabilitySlots, changeAvailYMD, startTime, endTime]);
+
+  // Same-role vs cross-role split (new soft-conflict rule). Saved slots
+  // in this store carry no explicit `role` field — they're all role 'T'
+  // by construction (synthesized as such in TeacherCalendar). So when
+  // the active card is also 'T', every overlap is a same-role conflict
+  // and downgrades to YELLOW (soft, non-blocking). If a future store
+  // ever includes role-'S' rows, those would land in the cross-role
+  // bucket and trigger the existing RED (hard, blocking) behavior.
+  const currentRole = event?.role || 'T';
+  const internalSameRoleConflicts = useMemo(
+    () => internalConflicts.filter((s) => (s.role || 'T') === currentRole),
+    [internalConflicts, currentRole]
+  );
+  const internalCrossRoleConflicts = useMemo(
+    () => internalConflicts.filter((s) => (s.role || 'T') !== currentRole),
+    [internalConflicts, currentRole]
+  );
+  const hasInternalSoftConflict = internalSameRoleConflicts.length > 0;
 
   // Soft conflicts — external synced-calendar events on the same date.
   // Surfaces a YELLOW alert; the submit button stays ACTIVE/green so the
@@ -108,9 +125,12 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   }, [syncedDayEvents, changeAvailYMD, startTime, endTime]);
 
   const isFormComplete = !!changeAvailDate && !!startTime && !!endTime;
-  const hasHardConflict = internalConflicts.length > 0;
-  // Button is "active green" only when all fields are filled AND there is
-  // no hard internal conflict. Synced (soft) conflicts do NOT block.
+  // Only cross-role internal overlaps trigger the RED hard-block now.
+  // Same-role overlaps are soft (yellow) and the teacher can still save.
+  const hasHardConflict = internalCrossRoleConflicts.length > 0;
+  // Button is "active green" when all fields are filled AND there is no
+  // hard cross-role internal conflict. Same-role internal conflicts and
+  // synced (external) conflicts are soft and do NOT block submission.
   const isSubmitActive = isFormComplete && !hasHardConflict;
 
   // Real save (Change Availability) + real delete state. Success feedback
@@ -413,8 +433,9 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
         </div>
       </div>
       
-      {/* Task 5 — Hard conflict (RED) alert. Triggers the gray/inactive
-          state on the submit button below. */}
+      {/* Cross-role hard conflict (RED). Submit gets the gray/inactive
+          state below. Same-role overlaps are downgraded to soft yellow
+          (rendered immediately under this block). */}
       {hasHardConflict && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
@@ -424,8 +445,22 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
           </AlertDescription>
         </Alert>
       )}
-      {/* Task 5 — Soft conflict (YELLOW) alert. Button stays ACTIVE/green
-          per spec so the teacher can override the external synced event. */}
+      {/* Task 1 — Same-role internal overlap (YELLOW, soft). Submit
+          stays ACTIVE/green so the teacher can intentionally save an
+          overlap with their own existing slot — the parent's
+          handleAvailabilityChanged then merges the new slot via
+          applySaveAvailability's v6 fold. */}
+      {hasInternalSoftConflict && (
+        <Alert className="bg-yellow-50 border border-yellow-200 text-yellow-900">
+          <AlertTriangle className="h-4 w-4 text-yellow-700" />
+          <AlertTitle>Overlaps with another {headerTitle} slot</AlertTitle>
+          <AlertDescription className="text-xs">
+            This time overlaps with another availability of the same role on this date. You can still save it and it will be merged with the existing slot.
+          </AlertDescription>
+        </Alert>
+      )}
+      {/* External synced-calendar overlap (YELLOW, soft). Button stays
+          ACTIVE/green so the teacher can override the synced event. */}
       {syncedConflicts.length > 0 && (
         <Alert className="bg-yellow-50 border border-yellow-200 text-yellow-900">
           <AlertTriangle className="h-4 w-4 text-yellow-700" />

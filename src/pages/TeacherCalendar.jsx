@@ -116,7 +116,11 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
     setOpen(true);
   };
   const closeOnHoverOut = () => {
-    closeTimerRef.current = setTimeout(() => setOpen(false), 120);
+    // Bumped from 120ms → 250ms so the mouse can travel from the chip
+    // into the popover content without the popover snapping shut
+    // mid-transit. Combined with sideOffset={0} on PopoverContent
+    // (below) there is no visible gap to traverse.
+    closeTimerRef.current = setTimeout(() => setOpen(false), 250);
   };
   // Always render rows in start-time order (earliest first), regardless of
   // how the caller assembled `items`.
@@ -128,7 +132,18 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild onMouseEnter={openOnHover} onMouseLeave={closeOnHoverOut}>{chip}</PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start" onMouseEnter={openOnHover} onMouseLeave={closeOnHoverOut}>
+      {/* Width sizes to content (`w-max`) but is bounded by min/max so
+          long reschedule labels can't push text past the right edge.
+          sideOffset={0} kills the visible gap between the chip and the
+          popover so the hover transit can't fall into a no-hover zone
+          and trigger the close timer. */}
+      <PopoverContent
+        className="w-max min-w-[16rem] max-w-[22rem] p-0"
+        align="start"
+        sideOffset={0}
+        onMouseEnter={openOnHover}
+        onMouseLeave={closeOnHoverOut}
+      >
         <div className="px-3 py-2 border-b font-semibold text-sm text-gray-800">
           {header || `Select ${headerLabel} event`}
         </div>
@@ -140,7 +155,10 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
                 key={e.id}
                 type="button"
                 onClick={() => { setOpen(false); onSelect(e); }}
-                className="w-full flex items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
+                // flex-wrap lets the orange reschedule badge drop to a
+                // second line when the row gets crowded instead of
+                // overflowing the popover's right border.
+                className="w-full flex flex-wrap items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
               >
                 <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${rowDotColor}`} />
                 {e.role && (
@@ -151,7 +169,10 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
                   <span className="text-gray-500 truncate ml-1">{TYPE_HEADER_LABEL[e.type] || e.type}</span>
                 )}
                 {e.reschedule && (
-                  <span className="ml-auto text-[10px] text-orange-600 font-semibold flex-shrink-0">
+                  // Dropped `flex-shrink-0` and added `whitespace-normal
+                  // break-words` so long labels wrap inside the row
+                  // instead of breaking outside the container border.
+                  <span className="ml-auto text-[10px] text-orange-600 font-semibold whitespace-normal break-words text-right">
                     {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
                   </span>
                 )}

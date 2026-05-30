@@ -17,6 +17,9 @@ import CalendarSetPricePanel from './CalendarSetPricePanel';
 import CalendarNewBookingPanel from './CalendarNewBookingPanel';
 import { User } from '@/api/entities';
 import { AppRole } from '@/api/entities';
+import { TeacherProfile } from '@/api/entities';
+import { toast } from '@/components/ui/use-toast';
+import TeacherSchedulingPreferences from '@/components/common/teacher-scheduling-preferences/TeacherSchedulingPreferences';
 
 // Master category definitions - static internal structure
 // Each category has a 'perspectives' array indicating which role_ids (from AppRole) it applies to.
@@ -183,6 +186,82 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // the form can surface the reason + red-outline the missing fields.
   const [showErrors, setShowErrors] = useState(false);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
+  // Scheduling preferences (Task 2). Shape matches the Page 5c schema —
+  // `availability_window`, `advance_booking_policy`, `break_after_class_hours`
+  // — exactly as TeacherForm persists them to TeacherProfile. Hydration
+  // attempts to find the current user's TeacherProfile row and seed
+  // these from it; if no row exists yet the sidebar starts empty and
+  // creates a row on first Save.
+  const [schedPrefs, setSchedPrefs] = useState({
+    availability_window: null,
+    advance_booking_policy: null,
+    break_after_class_hours: null,
+  });
+  const [schedProfileId, setSchedProfileId] = useState(null);
+  const [isSavingSchedPrefs, setIsSavingSchedPrefs] = useState(false);
+
+  // One-shot hydration from TeacherProfile. Errors are non-fatal — log
+  // them and leave the form empty so the user can still enter values
+  // and save (which will create a row).
+  useEffect(() => {
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        const me = await User.me();
+        if (cancelled || !me?.email) return;
+        const profiles = await TeacherProfile.filter({ created_by: me.email });
+        const profile = Array.isArray(profiles) ? profiles[0] : null;
+        if (cancelled || !profile) return;
+        setSchedProfileId(profile.id);
+        setSchedPrefs({
+          availability_window: profile.availability_window || null,
+          advance_booking_policy: profile.advance_booking_policy || null,
+          break_after_class_hours: profile.break_after_class_hours || null,
+        });
+      } catch (err) {
+        // Swallow — registration may not be complete yet. The empty
+        // initial state remains usable.
+        console.warn('CalendarSidebar: could not hydrate scheduling prefs', err);
+      }
+    };
+    hydrate();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist the three scheduling fields to the same TeacherProfile row
+  // Page 5c writes to. If no row exists yet (user reached the calendar
+  // pre-registration-completion), create one with these fields.
+  const handleSaveSchedPrefs = async () => {
+    if (isSavingSchedPrefs) return;
+    setIsSavingSchedPrefs(true);
+    try {
+      const patch = {
+        availability_window: schedPrefs.availability_window,
+        advance_booking_policy: schedPrefs.advance_booking_policy,
+        break_after_class_hours: schedPrefs.break_after_class_hours,
+      };
+      if (schedProfileId) {
+        await TeacherProfile.update(schedProfileId, patch);
+      } else {
+        const me = await User.me().catch(() => null);
+        const created = await TeacherProfile.create({
+          ...patch,
+          created_by: me?.email,
+        });
+        if (created?.id) setSchedProfileId(created.id);
+      }
+      toast({ title: 'Scheduling preferences saved.' });
+      setIsEditingPreferences(false);
+    } catch (err) {
+      toast({
+        title: 'Could not save scheduling preferences.',
+        description: err?.message || 'Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingSchedPrefs(false);
+    }
+  };
   // Task 1: dynamic "Last Updated" timestamp + transient success message.
   // lastUpdatedAt is null until the first successful Save Dates; once set it
   // renders the most recent successful save time. showSuccessMessage is
@@ -905,65 +984,30 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
              <div className="bg-white rounded-lg shadow p-6 space-y-4 mt-6">
                 <div className="flex items-center justify-between">
-                    <Button variant="ghost" size="icon" onClick={() => setIsEditingPreferences(!isEditingPreferences)}>
+                    <Button variant="ghost" size="icon" onClick={() => setIsEditingPreferences(!isEditingPreferences)} aria-label={isEditingPreferences ? 'Stop editing scheduling preferences' : 'Edit scheduling preferences'}>
                         <Pencil className="w-4 h-4" />
                     </Button>
                 </div>
 
-                <div className="space-y-4">
-                    <div>
-                        <h4 className="font-bold text-gray-800 mb-2 flex items-center">
-                            Availability Window <Info className="w-4 h-4 ml-2 text-gray-400" />
-                        </h4>
-                        <div className="flex space-x-2">
-                            <Input className="flex-1 text-center" defaultValue="1" disabled={!isEditingPreferences} />
-                            <Select defaultValue="hours" disabled={!isEditingPreferences}>
-                                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="hours">Hours</SelectItem>
-                                    <SelectItem value="days">Days</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
+                {/* Task 2 — Single source of truth. This is the shared
+                    blueprint extracted from Page 5c (same field labels,
+                    same dropdown options, same tooltip copy). It reads
+                    from / writes to the exact TeacherProfile fields
+                    Page 5c uses (availability_window,
+                    advance_booking_policy, break_after_class_hours),
+                    with sidebar-sized headings via variant="sidebar". */}
+                <TeacherSchedulingPreferences
+                  variant="sidebar"
+                  value={schedPrefs}
+                  onChange={setSchedPrefs}
+                  disabled={!isEditingPreferences}
+                />
 
-                    <div>
-                        <h4 className="font-bold text-gray-800 text-sm mb-2 flex items-center">
-                            How far in advance can students book? <Info className="w-4 h-4 ml-2 text-gray-400" />
-                        </h4>
-                        <div className="flex space-x-2">
-                            <Input className="flex-1 text-center" defaultValue="1" disabled={!isEditingPreferences} />
-                            <Select defaultValue="hours" disabled={!isEditingPreferences}>
-                                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="hours">Hours</SelectItem>
-                                    <SelectItem value="days">Days</SelectItem>
-                                    <SelectItem value="weeks">Weeks</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <h4 className="font-bold text-gray-800 text-sm mb-2 flex items-center">
-                            Break after a class <Info className="w-4 h-4 ml-2 text-gray-400" />
-                        </h4>
-                        <div className="flex space-x-2">
-                            <Input className="flex-1 text-center" defaultValue="1" disabled={!isEditingPreferences} />
-                            <Select defaultValue="hours" disabled={!isEditingPreferences}>
-                                <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="minutes">Minutes</SelectItem>
-                                    <SelectItem value="hours">Hours</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
-                </div>
-                
                 {isEditingPreferences &&
         <div className="flex justify-end pt-2">
-                         <Button size="sm" onClick={() => setIsEditingPreferences(false)}>Save</Button>
+                         <Button size="sm" onClick={handleSaveSchedPrefs} disabled={isSavingSchedPrefs}>
+                           {isSavingSchedPrefs ? 'Saving...' : 'Save'}
+                         </Button>
                     </div>
         }
             </div>

@@ -9,7 +9,10 @@ const AvailabilityWindow = ({
   value = { preference: null, preferenceType: null },
   onChange,
   onValidationChange,
-  className = ""
+  className = "",
+  // Sidebar variants need the dropdowns gated by the Pencil edit toggle.
+  // Defaults to interactive so Page 5c continues to work unchanged.
+  disabled = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -154,7 +157,8 @@ const AvailabilityWindow = ({
 
         <Select
           value={duration?.toString() || ''}
-          onValueChange={handleDurationChange}>
+          onValueChange={handleDurationChange}
+          disabled={disabled}>
 
               <SelectTrigger className="bg-gray-50 px-3 py-2 text-sm flex h-10 w-full items-center justify-between rounded-md border border-input ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1">
                 <SelectValue placeholder="Number" />
@@ -181,7 +185,8 @@ const AvailabilityWindow = ({
         <div className="w-40">
           <Select
           value={timeUnit || ''}
-          onValueChange={handleTimeUnitChange}>
+          onValueChange={handleTimeUnitChange}
+          disabled={disabled}>
 
             <SelectTrigger className="bg-gray-50 px-3 py-2 text-sm flex h-10 w-full items-center justify-between rounded-md border border-input ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1">
               <SelectValue placeholder="Time Unit" />
