@@ -6,7 +6,15 @@ import { cn } from "@/lib/utils";
 const ToastProvider = React.forwardRef(({ ...props }, ref) => (
   <div
     ref={ref}
-    className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] flex max-h-screen w-full max-w-md flex-col gap-2 p-4"
+    // pointer-events-none on the OUTER container is the shadcn-canonical
+    // pattern: the container is always-mounted and fixed-position, so
+    // without this it captures every cursor that crosses it — silently
+    // stealing pointer events from the form underneath. The CAUSE of the
+    // Page 5c cursor-flicker bug: I'd moved this to viewport-center for
+    // the centered toast UX but lost the original pointer-events-none.
+    // Individual <Toast> elements re-enable pointer events via the cva
+    // variant's "pointer-events-auto" class — so toasts stay clickable.
+    className="pointer-events-none fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] flex max-h-screen w-full max-w-md flex-col gap-2 p-4"
     {...props}
   />
 ));
@@ -15,7 +23,15 @@ ToastProvider.displayName = "ToastProvider";
 const ToastViewport = React.forwardRef(({ ...props }, ref) => (
   <div
     ref={ref}
-    className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] flex max-h-screen w-full max-w-md flex-col gap-2 p-4"
+    // pointer-events-none on the OUTER container is the shadcn-canonical
+    // pattern: the container is always-mounted and fixed-position, so
+    // without this it captures every cursor that crosses it — silently
+    // stealing pointer events from the form underneath. The CAUSE of the
+    // Page 5c cursor-flicker bug: I'd moved this to viewport-center for
+    // the centered toast UX but lost the original pointer-events-none.
+    // Individual <Toast> elements re-enable pointer events via the cva
+    // variant's "pointer-events-auto" class — so toasts stay clickable.
+    className="pointer-events-none fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[100] flex max-h-screen w-full max-w-md flex-col gap-2 p-4"
     {...props}
   />
 ));
