@@ -2,7 +2,15 @@
 import { useState, useEffect, createContext, useContext } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+// Time between DISMISS_TOAST (open:false) and REMOVE_TOAST (array purge).
+// The original shadcn template uses 1_000_000 ms as a "wait for the Radix
+// exit animation, then remove" sentinel — Radix triggers REMOVE early via
+// onAnimationEnd. This project's ToastProvider/Toast/ToastClose primitives
+// are plain divs (NOT Radix), so nothing fires onAnimationEnd and the
+// sentinel actually elapses in full: the dismissed toast stays in state
+// for ~16.7 minutes. 200 ms is enough headroom to add a CSS exit
+// transition later without the toast getting clipped.
+const TOAST_REMOVE_DELAY = 200;
 
 const actionTypes = {
   ADD_TOAST: "ADD_TOAST",
