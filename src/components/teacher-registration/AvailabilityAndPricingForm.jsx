@@ -26,6 +26,7 @@ export default function AvailabilityAndPricingForm({
         <Step5cAvailability
           currentSubStep={currentSubStep}
           setCurrentSubStep={setCurrentSubStep}
+          showValidationErrors={showValidationErrors}
           {...rest}
         />
       )}

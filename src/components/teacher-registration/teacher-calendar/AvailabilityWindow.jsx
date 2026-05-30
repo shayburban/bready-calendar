@@ -4,7 +4,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Info } from 'lucide-react';
 import CommonAvailabilityWindow from '../../common/AvailabilityWindow';
 
-const AvailabilityWindow = ({ onDataChange, onValidityChange, initialData = {} }) => {
+const AvailabilityWindow = ({ onDataChange, onValidityChange, initialData = {}, showErrors = false }) => {
   const [availability, setAvailability] = useState({
     preference: initialData.preference || null,
     preferenceType: initialData.preferenceType || null,
@@ -51,6 +51,7 @@ const AvailabilityWindow = ({ onDataChange, onValidityChange, initialData = {} }
         value={availability}
         onChange={handleChange}
         onValidationChange={handleValidation}
+        showErrors={showErrors}
       />
     </div>
   );

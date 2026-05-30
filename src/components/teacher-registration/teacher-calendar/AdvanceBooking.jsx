@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import AdvanceBookingSelector from '../../common/AdvanceBookingSelector';
 
-const AdvanceBooking = ({ onDataChange, onValidityChange, initialData = {} }) => {
+const AdvanceBooking = ({ onDataChange, onValidityChange, initialData = {}, showErrors = false }) => {
   const [advanceBooking, setAdvanceBooking] = useState({
     preference: initialData.preference || null,
     preferenceType: initialData.preferenceType || null,
@@ -25,6 +25,7 @@ const AdvanceBooking = ({ onDataChange, onValidityChange, initialData = {} }) =>
       value={advanceBooking}
       onChange={handleChange}
       onValidationChange={handleValidation}
+      showErrors={showErrors}
     />
   );
 };

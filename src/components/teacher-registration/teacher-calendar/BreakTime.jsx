@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import BreakTimeSelector from '../../common/BreakTimeSelector';
 
-const BreakTime = ({ onDataChange, onValidityChange, initialData = {} }) => {
+const BreakTime = ({ onDataChange, onValidityChange, initialData = {}, showErrors = false }) => {
   const [breakTime, setBreakTime] = useState({
     preference: initialData.preference || null,
     preferenceType: initialData.preferenceType || null,
@@ -25,6 +25,7 @@ const BreakTime = ({ onDataChange, onValidityChange, initialData = {} }) => {
       value={breakTime}
       onChange={handleChange}
       onValidationChange={handleValidation}
+      showErrors={showErrors}
     />
   );
 };
