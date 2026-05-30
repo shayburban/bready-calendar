@@ -236,6 +236,35 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
     }
   };
 
+  // Task 1 — Dynamic error clearing. Re-evaluate validationErrors any
+  // time the user changes Date / Start Time / End Time so the red
+  // "Please fill in the following required field(s)" banner shrinks
+  // (and eventually disappears) live, instead of freezing until the
+  // next gray-button click.
+  //
+  // Important: this NEVER promotes a clean state to an error. It only
+  // narrows / clears the existing error set. Initial validation still
+  // happens exclusively in handleChangeAvailability on save-click.
+  //
+  // Performance note: the hard/soft conflict checks are already pure
+  // useMemo over the in-memory savedAvailabilitySlots store — there
+  // is no backend call on each keystroke, so no debounce is required.
+  // If a future revision routes overlap-checking through the backend,
+  // wrap the new check in a 300ms debounce per the spec.
+  useEffect(() => {
+    if (validationErrors.length === 0) return;
+    const next = [];
+    if (!changeAvailDate) next.push('Select Date');
+    if (!startTime) next.push('Start Time');
+    if (!endTime) next.push('End Time');
+    // Only call setState when the set actually changed — avoids a
+    // re-render loop because this effect's deps include the inputs that
+    // the banner reflects.
+    const sameLength = next.length === validationErrors.length;
+    const sameContents = sameLength && next.every((m, i) => m === validationErrors[i]);
+    if (!sameContents) setValidationErrors(next);
+  }, [changeAvailDate, startTime, endTime, validationErrors]);
+
   // selectedDate is intentionally driven by event?.dateString ONLY — not the
   // whole `event` reference. Navigating between same-day time-range chips
   // swaps `event` to a sibling that shares the same dateString, so this effect

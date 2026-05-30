@@ -116,11 +116,12 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
     setOpen(true);
   };
   const closeOnHoverOut = () => {
-    // Bumped from 120ms → 250ms so the mouse can travel from the chip
-    // into the popover content without the popover snapping shut
-    // mid-transit. Combined with sideOffset={0} on PopoverContent
-    // (below) there is no visible gap to traverse.
-    closeTimerRef.current = setTimeout(() => setOpen(false), 250);
+    // 300ms grace period so the cursor can travel from the chip into
+    // the popover content without the popover snapping shut mid-transit.
+    // Combined with sideOffset={0} on PopoverContent (below) there is
+    // no visible gap to traverse, and z-[100] guarantees no calendar
+    // cell beneath can steal the pointer event.
+    closeTimerRef.current = setTimeout(() => setOpen(false), 300);
   };
   // Always render rows in start-time order (earliest first), regardless of
   // how the caller assembled `items`.
@@ -132,13 +133,15 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild onMouseEnter={openOnHover} onMouseLeave={closeOnHoverOut}>{chip}</PopoverTrigger>
-      {/* Width sizes to content (`w-max`) but is bounded by min/max so
-          long reschedule labels can't push text past the right edge.
-          sideOffset={0} kills the visible gap between the chip and the
-          popover so the hover transit can't fall into a no-hover zone
-          and trigger the close timer. */}
+      {/* w-max grows to content, max-w-[20rem] caps at 20rem so the
+          popover dynamically widens but never escapes the cell area.
+          z-[100] overrides Radix's default z-50 — guarantees the
+          popover sits above any calendar cell, drag-handle, or chip
+          and never has its mouseEnter "stolen" by a sibling beneath.
+          sideOffset={0} closes the visible gap between chip & popover
+          so the hover transit can't fall into a no-hover dead zone. */}
       <PopoverContent
-        className="w-max min-w-[16rem] max-w-[22rem] p-0"
+        className="w-max min-w-[16rem] max-w-[20rem] p-0 z-[100]"
         align="start"
         sideOffset={0}
         onMouseEnter={openOnHover}
@@ -155,26 +158,29 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
                 key={e.id}
                 type="button"
                 onClick={() => { setOpen(false); onSelect(e); }}
-                // flex-wrap lets the orange reschedule badge drop to a
-                // second line when the row gets crowded instead of
-                // overflowing the popover's right border.
-                className="w-full flex flex-wrap items-center gap-2 px-3 py-2 text-xs text-left hover:bg-gray-50"
+                className="w-full block px-3 py-2 text-xs text-left hover:bg-gray-50"
               >
-                <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${rowDotColor}`} />
-                {e.role && (
-                  <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
-                )}
-                <span className="text-gray-700 flex-shrink-0">{e.time}</span>
-                {showTypeLabel && (
-                  <span className="text-gray-500 truncate ml-1">{TYPE_HEADER_LABEL[e.type] || e.type}</span>
-                )}
+                {/* Line 1: dot + (role) + time + optional type label.
+                    min-w-0 + truncate on the type label keeps the row
+                    bounded; everything else is a small fixed-size chip. */}
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${rowDotColor}`} />
+                  {e.role && (
+                    <span className="font-semibold text-gray-700 w-7 flex-shrink-0">({e.role})</span>
+                  )}
+                  <span className="text-gray-700 flex-shrink-0">{e.time}</span>
+                  {showTypeLabel && (
+                    <span className="text-gray-500 truncate min-w-0">{TYPE_HEADER_LABEL[e.type] || e.type}</span>
+                  )}
+                </div>
+                {/* Line 2 (only when present): the orange reschedule
+                    label gets its own row. whitespace-normal + break-words
+                    enforce wrapping inside the 20rem container — no
+                    chance of bleeding past the right border. */}
                 {e.reschedule && (
-                  // Dropped `flex-shrink-0` and added `whitespace-normal
-                  // break-words` so long labels wrap inside the row
-                  // instead of breaking outside the container border.
-                  <span className="ml-auto text-[10px] text-orange-600 font-semibold whitespace-normal break-words text-right">
+                  <div className="mt-1 text-[10px] text-orange-600 font-semibold whitespace-normal break-words">
                     {e.type === 'booked' ? 'You Requested a Change' : 'Reschedule'}
-                  </span>
+                  </div>
                 )}
               </button>
             );

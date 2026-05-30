@@ -127,7 +127,12 @@ const AvailabilityWindow = ({
   };
 
   return (
-    <div className={`flex items-center gap-2 ${className}`}>
+    // `relative z-[1]` guarantees the Selects and Trash button live in
+    // a positioned, elevated ancestor — together with the `isolate`
+    // stacking context BookingPreferences provides on Page 5c, no
+    // sibling overlay can intercept their pointer events when the user
+    // is scrolled near the bottom of the page.
+    <div className={`flex items-center gap-2 relative z-[1] ${className}`}>
         {/* First Dropdown - Duration Selection */}
         <div className="w-32">
           {showCustomInput ?
@@ -166,7 +171,7 @@ const AvailabilityWindow = ({
               <SelectContent
             position="popper"
             sideOffset={4}
-            className="z-50"
+            className="z-[60]"
             onCloseAutoFocus={(e) => e.preventDefault()}>
 
                 <div className="max-h-48 overflow-y-auto">

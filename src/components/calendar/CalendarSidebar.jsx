@@ -199,6 +199,16 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   });
   const [schedProfileId, setSchedProfileId] = useState(null);
   const [isSavingSchedPrefs, setIsSavingSchedPrefs] = useState(false);
+  // Baseline = the values currently persisted to TeacherProfile.
+  // Captured on hydrate, refreshed on successful save, and snapshotted
+  // when the user enters edit mode. Cancel restores from this so a
+  // discarded edit can never silently leave the form out of sync with
+  // the DB row. Initialised to the same empty shape as schedPrefs.
+  const [schedPrefsBaseline, setSchedPrefsBaseline] = useState({
+    availability_window: null,
+    advance_booking_policy: null,
+    break_after_class_hours: null,
+  });
 
   // One-shot hydration from TeacherProfile. Errors are non-fatal — log
   // them and leave the form empty so the user can still enter values
@@ -213,11 +223,15 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
         const profile = Array.isArray(profiles) ? profiles[0] : null;
         if (cancelled || !profile) return;
         setSchedProfileId(profile.id);
-        setSchedPrefs({
+        const hydrated = {
           availability_window: profile.availability_window || null,
           advance_booking_policy: profile.advance_booking_policy || null,
           break_after_class_hours: profile.break_after_class_hours || null,
-        });
+        };
+        setSchedPrefs(hydrated);
+        // Seed the baseline so a subsequent Cancel reverts to what's
+        // actually persisted, not to the empty initial state.
+        setSchedPrefsBaseline(hydrated);
       } catch (err) {
         // Swallow — registration may not be complete yet. The empty
         // initial state remains usable.
@@ -250,6 +264,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
         });
         if (created?.id) setSchedProfileId(created.id);
       }
+      // Save succeeded — promote the just-saved values to baseline so
+      // a subsequent Pencil → Cancel reverts to these, not to the
+      // previous DB snapshot.
+      setSchedPrefsBaseline({
+        availability_window: schedPrefs.availability_window,
+        advance_booking_policy: schedPrefs.advance_booking_policy,
+        break_after_class_hours: schedPrefs.break_after_class_hours,
+      });
       toast({ title: 'Scheduling preferences saved.' });
       setIsEditingPreferences(false);
     } catch (err) {
@@ -984,7 +1006,25 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
              <div className="bg-white rounded-lg shadow p-6 space-y-4 mt-6">
                 <div className="flex items-center justify-between">
-                    <Button variant="ghost" size="icon" onClick={() => setIsEditingPreferences(!isEditingPreferences)} aria-label={isEditingPreferences ? 'Stop editing scheduling preferences' : 'Edit scheduling preferences'}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        // Entering edit mode: snapshot the current
+                        // values so Cancel reverts to exactly what
+                        // was displayed before any keystrokes.
+                        // Leaving edit mode via Pencil (without
+                        // saving or cancelling) behaves like Cancel
+                        // — drop any in-progress edits.
+                        if (!isEditingPreferences) {
+                          setSchedPrefsBaseline({ ...schedPrefs });
+                        } else {
+                          setSchedPrefs({ ...schedPrefsBaseline });
+                        }
+                        setIsEditingPreferences((v) => !v);
+                      }}
+                      aria-label={isEditingPreferences ? 'Stop editing scheduling preferences' : 'Edit scheduling preferences'}
+                    >
                         <Pencil className="w-4 h-4" />
                     </Button>
                 </div>
@@ -1004,8 +1044,32 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                 />
 
                 {isEditingPreferences &&
-        <div className="flex justify-end pt-2">
-                         <Button size="sm" onClick={handleSaveSchedPrefs} disabled={isSavingSchedPrefs}>
+        <div className="flex justify-end gap-2 pt-2">
+                         {/* Cancel — subtle ghost/outline variant so the
+                             green Save is clearly the primary action.
+                             Reverts schedPrefs to the captured baseline
+                             without any backend write. */}
+                         <Button
+                           size="sm"
+                           variant="outline"
+                           onClick={() => {
+                             setSchedPrefs({ ...schedPrefsBaseline });
+                             setIsEditingPreferences(false);
+                           }}
+                           disabled={isSavingSchedPrefs}
+                           className="bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                         >
+                           Cancel
+                         </Button>
+                         {/* Save — primary green to match the platform's
+                             "Save Dates" CTA above and "Complete
+                             Registration" on Page 5c. */}
+                         <Button
+                           size="sm"
+                           onClick={handleSaveSchedPrefs}
+                           disabled={isSavingSchedPrefs}
+                           className="bg-green-600 hover:bg-green-700 text-white"
+                         >
                            {isSavingSchedPrefs ? 'Saving...' : 'Save'}
                          </Button>
                     </div>
