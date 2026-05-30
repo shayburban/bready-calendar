@@ -219,12 +219,21 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // to true (pristine empty state is valid) and updated whenever any
   // field transitions.
   const [isPrefsValid, setIsPrefsValid] = useState(true);
-  // Task 3 — `isDirty` derived from a deep compare of current vs
-  // baseline. Save is disabled when !isDirty, so clicking Edit then
-  // immediately Save does NOT hit the DB.
-  const isPrefsDirty = useMemo(() => {
-    return JSON.stringify(schedPrefs) !== JSON.stringify(schedPrefsBaseline);
-  }, [schedPrefs, schedPrefsBaseline]);
+  // Save-activation rule (user spec): "the save button is inactive
+  // unless at least one of the Both fields are completed". A row counts
+  // as completed only when BOTH `preference` AND `preferenceType` are
+  // set. Partial pairs do NOT count toward activation but DO surface
+  // errors on a click attempt (via the existing showErrors cascade).
+  const isAnyPairComplete = useMemo(() => {
+    const fields = [
+      schedPrefs.availability_window,
+      schedPrefs.advance_booking_policy,
+      schedPrefs.break_after_class_hours,
+    ];
+    return fields.some(
+      (f) => f && f.preference != null && f.preferenceType != null,
+    );
+  }, [schedPrefs]);
 
   // One-shot hydration from TeacherProfile. Errors are non-fatal — log
   // them and leave the form empty so the user can still enter values
@@ -262,17 +271,21 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // Page 5c writes to. If no row exists yet (user reached the calendar
   // pre-registration-completion), create one with these fields.
   //
-  // Task 3 — Save click semantics:
-  //   1. If !isPrefsDirty, the button is disabled so this never runs —
-  //      no wasted DB call when nothing changed.
-  //   2. Mark hasAttemptedSave true so any latent validation surfaces
-  //      via showErrors cascade.
-  //   3. If !isPrefsValid, bail out (errors are now visible).
+  // Save click semantics (user spec):
+  //   1. Defensive early-return on isSavingSchedPrefs / !isAnyPairComplete
+  //      — the button is also disabled in these cases so this should
+  //      not normally fire, but it's a safety net for keyboard / a11y.
+  //   2. Flip hasAttemptedSave true so any latent validation errors
+  //      surface via the showErrors cascade — partial rows now light up
+  //      with their red Alert + red field-border ring.
+  //   3. If isPrefsValid is false (any row partial), stop before
+  //      hitting the DB. The UI is now showing the user where to fix.
   //   4. Otherwise persist.
-  //   5. On success, reset hasAttemptedSave so the Alerts disappear.
+  //   5. On success, refresh the baseline (so Cancel reverts to the
+  //      just-saved values) and reset hasAttemptedSave.
   const handleSaveSchedPrefs = async () => {
     if (isSavingSchedPrefs) return;
-    if (!isPrefsDirty) return; // defensive (button is also disabled)
+    if (!isAnyPairComplete) return; // defensive (button is also disabled)
     setHasAttemptedSave(true);
     if (!isPrefsValid) return; // surface errors but don't persist
     setIsSavingSchedPrefs(true);
@@ -1110,19 +1123,26 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                          >
                            Cancel
                          </Button>
-                         {/* Save — Task 3 dirty-state gating: button is
-                             completely disabled (gray + cursor-not-
-                             allowed) until at least one field has
-                             changed from baseline AND the save isn't
-                             already in flight. Stops wasted DB calls
-                             when a teacher clicks Edit then Save
-                             without changing anything. */}
+                         {/* Save — gated by the user-spec rule:
+                             "the save button is inactive unless at
+                             least one of the Both fields are
+                             completed". A completed pair = both
+                             `preference` and `preferenceType` set.
+                             - Inactive  → bg-gray-300 text-gray-500
+                                          cursor-not-allowed.
+                             - Active    → bg-green-600 hover:bg-green-700
+                                          text-white (the platform's
+                                          standard green CTA).
+                             Click-with-invalid behaviour is preserved:
+                             the handler flips hasAttemptedSave true so
+                             any partial row lights up with its red
+                             Alert + red border (Rule 2 trigger). */}
                          <Button
                            size="sm"
                            onClick={handleSaveSchedPrefs}
-                           disabled={isSavingSchedPrefs || !isPrefsDirty}
+                           disabled={isSavingSchedPrefs || !isAnyPairComplete}
                            className={
-                             !isPrefsDirty || isSavingSchedPrefs
+                             !isAnyPairComplete || isSavingSchedPrefs
                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
                                : 'bg-green-600 hover:bg-green-700 text-white'
                            }
