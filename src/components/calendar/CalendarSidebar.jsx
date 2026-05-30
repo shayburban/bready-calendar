@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -209,6 +209,22 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     advance_booking_policy: null,
     break_after_class_hours: null,
   });
+  // Task 3 — submit-triggered validation. Flips to true ONLY when the
+  // user clicks Save with an invalid form, and resets to false on
+  // Cancel / Pencil-toggle-out / successful save. Cascades to the
+  // shared TeacherSchedulingPreferences as `showErrors`, which in turn
+  // gates the red Alert + red field border in each common selector.
+  const [hasAttemptedSave, setHasAttemptedSave] = useState(false);
+  // Aggregate validity surfaced from the three selectors. Initialised
+  // to true (pristine empty state is valid) and updated whenever any
+  // field transitions.
+  const [isPrefsValid, setIsPrefsValid] = useState(true);
+  // Task 3 — `isDirty` derived from a deep compare of current vs
+  // baseline. Save is disabled when !isDirty, so clicking Edit then
+  // immediately Save does NOT hit the DB.
+  const isPrefsDirty = useMemo(() => {
+    return JSON.stringify(schedPrefs) !== JSON.stringify(schedPrefsBaseline);
+  }, [schedPrefs, schedPrefsBaseline]);
 
   // One-shot hydration from TeacherProfile. Errors are non-fatal — log
   // them and leave the form empty so the user can still enter values
@@ -245,8 +261,20 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // Persist the three scheduling fields to the same TeacherProfile row
   // Page 5c writes to. If no row exists yet (user reached the calendar
   // pre-registration-completion), create one with these fields.
+  //
+  // Task 3 — Save click semantics:
+  //   1. If !isPrefsDirty, the button is disabled so this never runs —
+  //      no wasted DB call when nothing changed.
+  //   2. Mark hasAttemptedSave true so any latent validation surfaces
+  //      via showErrors cascade.
+  //   3. If !isPrefsValid, bail out (errors are now visible).
+  //   4. Otherwise persist.
+  //   5. On success, reset hasAttemptedSave so the Alerts disappear.
   const handleSaveSchedPrefs = async () => {
     if (isSavingSchedPrefs) return;
+    if (!isPrefsDirty) return; // defensive (button is also disabled)
+    setHasAttemptedSave(true);
+    if (!isPrefsValid) return; // surface errors but don't persist
     setIsSavingSchedPrefs(true);
     try {
       const patch = {
@@ -273,6 +301,10 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
         break_after_class_hours: schedPrefs.break_after_class_hours,
       });
       toast({ title: 'Scheduling preferences saved.' });
+      // Task 3 — clear the submit-trigger so any lingering error UI
+      // disappears, even though the now-valid state would suppress it
+      // anyway. Belt-and-suspenders.
+      setHasAttemptedSave(false);
       setIsEditingPreferences(false);
     } catch (err) {
       toast({
@@ -1011,15 +1043,19 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                       size="icon"
                       onClick={() => {
                         // Entering edit mode: snapshot the current
-                        // values so Cancel reverts to exactly what
-                        // was displayed before any keystrokes.
-                        // Leaving edit mode via Pencil (without
-                        // saving or cancelling) behaves like Cancel
-                        // — drop any in-progress edits.
+                        // values so Cancel reverts to exactly what was
+                        // displayed before any keystrokes. Clear any
+                        // latent submit-trigger so the form starts
+                        // quiet (Task 3 hard state reset).
                         if (!isEditingPreferences) {
                           setSchedPrefsBaseline({ ...schedPrefs });
+                          setHasAttemptedSave(false);
                         } else {
+                          // Leaving edit mode via Pencil (without
+                          // explicit Save / Cancel) behaves like
+                          // Cancel — drop edits AND clear errors.
                           setSchedPrefs({ ...schedPrefsBaseline });
+                          setHasAttemptedSave(false);
                         }
                         setIsEditingPreferences((v) => !v);
                       }}
@@ -1041,30 +1077,32 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                   value={schedPrefs}
                   onChange={setSchedPrefs}
                   disabled={!isEditingPreferences}
+                  showErrors={hasAttemptedSave}
+                  onValidityChange={setIsPrefsValid}
                 />
 
                 {isEditingPreferences &&
         <div className="flex justify-end gap-2 pt-2">
-                         {/* Cancel — subtle outline variant so green Save
-                             is clearly the primary action. Behavior:
+                         {/* Cancel — subtle outline variant so the green
+                             Save is clearly the primary action.
+                             Task 1 hard state reset:
                                1. Revert schedPrefs to the captured DB
                                   baseline. The common selectors each
                                   have a value-prop sync useEffect that
                                   cascades this revert into their
                                   internal duration/timeUnit state, so
                                   the visible dropdowns also reset.
-                               2. The selectors' own validation effects
-                                  re-run on the reset state, clearing
-                                  any active red "Please select…" Alert
-                                  automatically — no separate setErrors
-                                  call needed because errors live inside
-                                  the selectors, not in the sidebar.
+                               2. EXPLICITLY clear hasAttemptedSave so
+                                  the showErrors cascade switches off
+                                  any active red Alert immediately —
+                                  errors don't linger to the next open.
                                3. Exit edit mode. NO backend write. */}
                          <Button
                            size="sm"
                            variant="outline"
                            onClick={() => {
                              setSchedPrefs({ ...schedPrefsBaseline });
+                             setHasAttemptedSave(false);
                              setIsEditingPreferences(false);
                            }}
                            disabled={isSavingSchedPrefs}
@@ -1072,14 +1110,22 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                          >
                            Cancel
                          </Button>
-                         {/* Save — primary green to match the platform's
-                             "Save Dates" CTA above and "Complete
-                             Registration" on Page 5c. */}
+                         {/* Save — Task 3 dirty-state gating: button is
+                             completely disabled (gray + cursor-not-
+                             allowed) until at least one field has
+                             changed from baseline AND the save isn't
+                             already in flight. Stops wasted DB calls
+                             when a teacher clicks Edit then Save
+                             without changing anything. */}
                          <Button
                            size="sm"
                            onClick={handleSaveSchedPrefs}
-                           disabled={isSavingSchedPrefs}
-                           className="bg-green-600 hover:bg-green-700 text-white"
+                           disabled={isSavingSchedPrefs || !isPrefsDirty}
+                           className={
+                             !isPrefsDirty || isSavingSchedPrefs
+                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
+                               : 'bg-green-600 hover:bg-green-700 text-white'
+                           }
                          >
                            {isSavingSchedPrefs ? 'Saving...' : 'Save'}
                          </Button>

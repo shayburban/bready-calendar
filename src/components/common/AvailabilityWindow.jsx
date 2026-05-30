@@ -18,6 +18,12 @@ const AvailabilityWindow = ({
   // Sidebar variants need the dropdowns gated by the Pencil edit toggle.
   // Defaults to interactive so Page 5c continues to work unchanged.
   disabled = false,
+  // Task 3 — submit-triggered validation. When false (the default), the
+  // red Alert + red field-border ring are NOT rendered, even if internal
+  // `error` is non-empty. Sidebar / Page-5c flip this to true only after
+  // the user attempts Save, so the form doesn't "yell" at the teacher
+  // before they've had a chance to type.
+  showErrors = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -144,23 +150,28 @@ const AvailabilityWindow = ({
     setShowCustomInput(false);
   };
 
+  // Task 3 — red border ring is gated on `showErrors` so it only appears
+  // post-Save-click, never as the user types.
   const getDurationBorderClass = () => {
-    return error && timeUnit && !duration ?
+    return showErrors && error && timeUnit && !duration ?
     'border-red-500 ring-2 ring-red-200' : '';
   };
 
   const getTimeUnitBorderClass = () => {
-    return error && duration && !timeUnit ?
+    return showErrors && error && duration && !timeUnit ?
     'border-red-500 ring-2 ring-red-200' : '';
   };
 
   return (
-    // Task 2 — `relative z-[999] pointer-events-auto` forces this row
-    // to the absolute top of the stacking context above whatever
-    // invisible container is bleeding down the page on Page 5c.
-    // `space-y-3` wraps the row + the new error Alert so layout stays
-    // tidy with the other selectors.
-    <div className={`space-y-2 relative z-[999] pointer-events-auto ${className}`}>
+    // No more z-[999] / pointer-events-auto on the wrapper. The Page 5c
+    // ghost-overlay issue was the always-mounted Toaster container at
+    // viewport-center missing `pointer-events-none` (now fixed at the
+    // toast component level), NOT a stacking-context problem here. The
+    // z-999 hack was actively layering this row above sibling dropdowns
+    // in the sidebar — exactly the Task 2 blocking the user reported.
+    // The `space-y-2` wrapper still groups the row with the (optional)
+    // error Alert so layout is tidy with sibling selectors.
+    <div className={`space-y-2 ${className}`}>
     <div className={`flex items-center gap-2`}>
         {/* First Dropdown - Duration Selection */}
         <div className="w-32">
@@ -215,11 +226,8 @@ const AvailabilityWindow = ({
         }
         </div>
 
-        {/* Second Dropdown - Time Unit Selection.
-            Inline style is the absolute-specificity floor: even if some
-            ancestor cascade ever forces `pointer-events: none` on us
-            (the symptom Page 5c was hitting), this overrides it. */}
-        <div className="w-40" style={{ position: 'relative', zIndex: 9999, pointerEvents: 'auto' }}>
+        {/* Second Dropdown - Time Unit Selection. */}
+        <div className="w-40">
           <Select
           value={timeUnit || ''}
           onValueChange={handleTimeUnitChange}
@@ -247,28 +255,21 @@ const AvailabilityWindow = ({
           </Select>
         </div>
         
-        {/* Trash Icon to clear selection — `relative z-[999]
-            pointer-events-auto` mirrors the row wrapper above so the
-            bin icon stays clickable on Page 5c even when scrolled to
-            the bottom (Task 2). */}
+        {/* Trash Icon to clear selection. */}
         {(duration || timeUnit) &&
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={handleDelete}
-        className="ml-1 relative z-[999] pointer-events-auto"
-        style={{ position: 'relative', zIndex: 9999, pointerEvents: 'auto' }}
-        aria-label="Remove"
-      >
+      <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1" aria-label="Remove">
                 <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
             </Button>
       }
     </div>
-      {/* Task 1 — Error banner that was previously missing. Identical
-          shape to AdvanceBookingSelector / BreakTimeSelector so the
-          three scheduling-preference fields surface validation the
-          same way on both Page 5c and the Calendar Sidebar. */}
-      {error &&
+      {/* Task 3 — submit-triggered validation. Alert only renders when
+          BOTH conditions hold:
+            (a) there is a current validation error, AND
+            (b) the caller has explicitly opted into showing errors —
+                i.e. the user clicked Save in the sidebar / Page 5c.
+          This keeps the form quiet while the teacher is still typing
+          and only "yells" after a deliberate save attempt. */}
+      {showErrors && error &&
         <Alert variant="destructive" className="p-2 text-xs">
           <AlertDescription>
             {error}

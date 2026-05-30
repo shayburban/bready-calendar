@@ -24,12 +24,13 @@ const AvailabilityWindow = ({ onDataChange, onValidityChange, initialData = {} }
   }
 
   return (
-    // Task 2 — `relative z-[999] pointer-events-auto` forces the entire
-    // Availability Window block to the top of the stacking context on
-    // Page 5c, so the Time Unit dropdown and the bin/reset icon stay
-    // clickable even when an invisible ancestor's transparent padding
-    // bleeds down the page near the bottom of the form.
-    <div className="space-y-4 relative z-[999] pointer-events-auto">
+    // No more z-[999] / pointer-events-auto. The original Page 5c
+    // cursor-flicker bug was the always-mounted Toaster container at
+    // viewport-center missing `pointer-events-none` — now fixed at the
+    // toast component level. Without that root-cause fix, no amount of
+    // ancestor z-index would have helped. With it, no z-index hack is
+    // needed here at all.
+    <div className="space-y-4">
       <div className="flex items-center gap-2">
         <h4 className="text-lg font-medium text-gray-900">Availability Window</h4>
         <TooltipProvider>

@@ -17,6 +17,10 @@ const AdvanceBookingSelector = ({
   // typography between sidebar and Page 5c without forking the control).
   hideHeading = false,
   disabled = false,
+  // Task 3 — submit-triggered validation. See common/AvailabilityWindow
+  // for the rationale: red Alert + red field border are hidden until
+  // the caller flips this to true post-Save-click.
+  showErrors = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -154,12 +158,12 @@ const AdvanceBookingSelector = ({
   };
 
   const getDurationBorderClass = () => {
-    return error && timeUnit && !duration ?
+    return showErrors && error && timeUnit && !duration ?
     'border-red-500 ring-2 ring-red-200' : '';
   };
 
   const getTimeUnitBorderClass = () => {
-    return error && duration && !timeUnit ?
+    return showErrors && error && duration && !timeUnit ?
     'border-red-500 ring-2 ring-red-200' : '';
   };
 
@@ -274,7 +278,7 @@ const AdvanceBookingSelector = ({
           </Button>
         }
       </div>
-       {error &&
+       {showErrors && error &&
       <Alert variant="destructive" className="p-2 text-xs">
           <AlertDescription>
             {error}

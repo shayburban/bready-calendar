@@ -16,6 +16,9 @@ const BreakTimeSelector = ({
   // without producing a duplicate of the built-in h4.
   hideHeading = false,
   disabled = false,
+  // Task 3 — submit-triggered validation. See common/AvailabilityWindow
+  // for the rationale.
+  showErrors = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -162,12 +165,12 @@ const BreakTimeSelector = ({
   };
 
   const getDurationBorderClass = () => {
-    return error && timeUnit && !duration ?
+    return showErrors && error && timeUnit && !duration ?
     'border-red-500 ring-2 ring-red-200' : '';
   };
 
   const getTimeUnitBorderClass = () => {
-    return error && duration && !timeUnit ?
+    return showErrors && error && duration && !timeUnit ?
     'border-red-500 ring-2 ring-red-200' : '';
   };
 
@@ -283,7 +286,7 @@ const BreakTimeSelector = ({
             </Button>
         }
       </div>
-       {error &&
+       {showErrors && error &&
       <Alert variant="destructive" className="p-2 text-xs">
           <AlertDescription>
             {error}

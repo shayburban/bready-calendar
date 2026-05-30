@@ -23,7 +23,7 @@
 // variant typography so the visible label/tooltip copy stays IDENTICAL to
 // Page 5c while typography matches whichever surface mounted us.
 
-import React from 'react';
+import React, { useRef } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
 import CommonAvailabilityWindow from '@/components/common/AvailabilityWindow';
@@ -83,11 +83,40 @@ export default function TeacherSchedulingPreferences({
   variant = 'page',
   disabled = false,
   className = '',
+  // Task 3 — submit-triggered validation. Sidebar / Page 5c flip this
+  // to true only after Save is clicked. Cascades to each selector so
+  // their error UI also gates on it.
+  showErrors = false,
+  // Task 3 — aggregate validity callback. Each child selector reports
+  // its own validity; we OR them into a single boolean and surface it.
+  // The host (sidebar) uses this to decide whether Save should actually
+  // persist or just show errors.
+  onValidityChange,
 }) {
   const current = value || {};
   const emit = (patch) => {
     if (typeof onChange !== 'function') return;
     onChange({ ...current, ...patch });
+  };
+
+  // Track per-field validity in refs (no re-render on update) and emit
+  // an aggregate via onValidityChange. The selectors emit
+  // `onValidationChange(true)` whenever their state is pristine OR
+  // fully-valid; `false` when partially filled / over limit.
+  const validityRef = useRef({
+    availability_window: true,
+    advance_booking_policy: true,
+    break_after_class_hours: true,
+  });
+  const lastEmittedRef = useRef(true);
+  const updateValidity = (field, isValid) => {
+    if (validityRef.current[field] === isValid) return;
+    validityRef.current[field] = isValid;
+    const aggregate = Object.values(validityRef.current).every(Boolean);
+    if (aggregate !== lastEmittedRef.current) {
+      lastEmittedRef.current = aggregate;
+      if (typeof onValidityChange === 'function') onValidityChange(aggregate);
+    }
   };
 
   // Spacing between sections matches each surface:
@@ -107,6 +136,8 @@ export default function TeacherSchedulingPreferences({
           value={current.availability_window || EMPTY_FIELD}
           onChange={(next) => emit({ availability_window: next })}
           disabled={disabled}
+          showErrors={showErrors}
+          onValidationChange={(isValid) => updateValidity('availability_window', isValid)}
         />
       </div>
 
@@ -121,6 +152,8 @@ export default function TeacherSchedulingPreferences({
           onChange={(next) => emit({ advance_booking_policy: next })}
           hideHeading
           disabled={disabled}
+          showErrors={showErrors}
+          onValidationChange={(isValid) => updateValidity('advance_booking_policy', isValid)}
         />
       </div>
 
@@ -135,6 +168,8 @@ export default function TeacherSchedulingPreferences({
           onChange={(next) => emit({ break_after_class_hours: next })}
           hideHeading
           disabled={disabled}
+          showErrors={showErrors}
+          onValidationChange={(isValid) => updateValidity('break_after_class_hours', isValid)}
         />
       </div>
     </div>
