@@ -215,8 +215,11 @@ const AvailabilityWindow = ({
         }
         </div>
 
-        {/* Second Dropdown - Time Unit Selection */}
-        <div className="w-40">
+        {/* Second Dropdown - Time Unit Selection.
+            Inline style is the absolute-specificity floor: even if some
+            ancestor cascade ever forces `pointer-events: none` on us
+            (the symptom Page 5c was hitting), this overrides it. */}
+        <div className="w-40" style={{ position: 'relative', zIndex: 9999, pointerEvents: 'auto' }}>
           <Select
           value={timeUnit || ''}
           onValueChange={handleTimeUnitChange}
@@ -249,7 +252,14 @@ const AvailabilityWindow = ({
             bin icon stays clickable on Page 5c even when scrolled to
             the bottom (Task 2). */}
         {(duration || timeUnit) &&
-      <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1 relative z-[999] pointer-events-auto" aria-label="Remove">
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={handleDelete}
+        className="ml-1 relative z-[999] pointer-events-auto"
+        style={{ position: 'relative', zIndex: 9999, pointerEvents: 'auto' }}
+        aria-label="Remove"
+      >
                 <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
             </Button>
       }

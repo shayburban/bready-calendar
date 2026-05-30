@@ -159,12 +159,16 @@ export default function ResponsiveHeaderContainer({
                     onClick={() => setIsMobileMenuOpen(false)}
                 />
                 
-                {/* Menu Panel */}
+                {/* Menu Panel — same defensive pointer-events-none as
+                    SlidingMenu so the always-mounted panel can never
+                    steal pointer events when its transform-off-screen
+                    state momentarily glitches. */}
                 <div className={`
                     fixed top-0 ${positionClass} h-full bg-white shadow-xl z-50
                     transform transition-transform duration-300 ease-in-out
                     ${translateClass}
                     ${isDesktop ? 'w-96' : 'w-80 max-w-[85vw]'}
+                    ${!isMobileMenuOpen ? 'pointer-events-none' : ''}
                 `}>
                     <div className="p-6 h-full overflow-y-auto">
                         {/* Header */}

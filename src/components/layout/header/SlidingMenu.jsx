@@ -25,8 +25,16 @@ const SlidingMenu = ({ isOpen, onClose, items, menuSide = 'right' }) => {
                 aria-hidden="true"
             />
             
-            {/* Menu Panel */}
-            <div className={`fixed top-0 ${positionClass} h-full bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${translateClass} w-80 max-w-[85vw]`}>
+            {/* Menu Panel — ALWAYS mounted, only translate-x-full kept
+                it off-screen when closed. That alone isn't enough: if
+                the transform briefly fails to apply (purge edge case,
+                animation interruption), the panel sits over the page
+                and silently steals pointer events. Adding
+                `pointer-events-none` when !isOpen makes it provably
+                non-interactive regardless of transform state — the
+                most likely cause of Page 5c's "cursor flickers
+                arrow<->pointer over Availability Window" bug. */}
+            <div className={`fixed top-0 ${positionClass} h-full bg-white shadow-xl z-50 transform transition-transform duration-300 ease-in-out ${translateClass} w-80 max-w-[85vw] ${!isOpen ? 'pointer-events-none' : ''}`}>
                 <div className="p-6 h-full overflow-y-auto">
                     {/* Header */}
                     <div className="flex items-center justify-between mb-6 pb-4 border-b">
