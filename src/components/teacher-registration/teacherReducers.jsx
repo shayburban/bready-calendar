@@ -362,15 +362,28 @@ export const availabilityInitialState = {
     acc[day] = [{ start: '', end: '', error: null }];
     return acc;
   }, {}),
+  // Bug fix — `preferenceType` MUST match the lowercase Select option
+  // values in common/AvailabilityWindow.jsx / AdvanceBookingSelector.jsx
+  // ('days' | 'weeks' | 'months'). Previously this was 'Weeks' (capital)
+  // which meant Select.value didn't match any SelectItem.value, so the
+  // Time Unit dropdown rendered an empty placeholder on Page 5c even
+  // though the reducer state held a default. Saving without touching
+  // these fields then persisted wrong-cased data.
   availabilityWindow: {
     preference: 2,
-    preferenceType: 'Weeks',
+    preferenceType: 'weeks',
   },
   farAdvanceBookingFromStudent: {
     preference: 4,
-    preferenceType: 'Weeks',
+    preferenceType: 'weeks',
   },
-  breakAfterClassInHours: 0
+  // Bug fix — was `0` (number); the BreakTimeSelector expects the
+  // {preference, preferenceType} object shape. Starting as `null` is the
+  // safest pristine value: BookingPreferences normalises to the empty
+  // pair before passing into the wrapper, and TeacherProfile.create
+  // receives a consistent shape regardless of whether the teacher
+  // interacts with the field.
+  breakAfterClassInHours: null
 };
 
 export const availabilityReducer = (state, action) => {
