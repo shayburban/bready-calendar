@@ -24,6 +24,12 @@ const AvailabilityWindow = ({
   // the user attempts Save, so the form doesn't "yell" at the teacher
   // before they've had a chance to type.
   showErrors = false,
+  // Rule 1 (sidebar) — When the sidebar detects that ANY of the three
+  // scheduling-preference rows has saved data in the DB baseline, it
+  // sets hideTrash=true on EVERY row. The trash icon is then suppressed
+  // globally so the teacher can't bulk-clear a saved value with one
+  // click. Default false preserves existing Page 5c behaviour.
+  hideTrash = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -255,8 +261,10 @@ const AvailabilityWindow = ({
           </Select>
         </div>
         
-        {/* Trash Icon to clear selection. */}
-        {(duration || timeUnit) &&
+        {/* Trash Icon to clear selection. Hidden when hideTrash=true
+            (Rule 1 — sidebar suppresses the bulk-clear control on
+            every row as soon as any row has saved DB data). */}
+        {(duration || timeUnit) && !hideTrash &&
       <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1" aria-label="Remove">
                 <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
             </Button>

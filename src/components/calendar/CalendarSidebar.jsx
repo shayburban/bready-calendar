@@ -219,11 +219,11 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // to true (pristine empty state is valid) and updated whenever any
   // field transitions.
   const [isPrefsValid, setIsPrefsValid] = useState(true);
-  // Save-activation rule (user spec): "the save button is inactive
-  // unless at least one of the Both fields are completed". A row counts
-  // as completed only when BOTH `preference` AND `preferenceType` are
-  // set. Partial pairs do NOT count toward activation but DO surface
-  // errors on a click attempt (via the existing showErrors cascade).
+  // Save-activation rule: "the save button is inactive unless at least
+  // one of the Both fields are completed". A row counts as completed
+  // only when BOTH `preference` AND `preferenceType` are set. Partial
+  // pairs do NOT count toward activation but DO surface errors on a
+  // click attempt (via the existing showErrors cascade).
   const isAnyPairComplete = useMemo(() => {
     const fields = [
       schedPrefs.availability_window,
@@ -234,6 +234,48 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       (f) => f && f.preference != null && f.preferenceType != null,
     );
   }, [schedPrefs]);
+
+  // Rule 2 (new) — Save is fully disabled when current schedPrefs
+  // matches the saved baseline. Re-introduces the dirty-state gate
+  // that was removed in commit cfabf6b; per the user's conflict-
+  // resolution policy the new rule overrides the prior "Save is
+  // always clickable" rule. Once the user changes any field, this
+  // flips true and the previously-shipped color/click logic takes
+  // over (gray-but-clickable for invalid states, green when valid).
+  const isPrefsDirty = useMemo(() => {
+    return JSON.stringify(schedPrefs) !== JSON.stringify(schedPrefsBaseline);
+  }, [schedPrefs, schedPrefsBaseline]);
+
+  // Rule 1 (new) — hide every trash icon on every row as soon as ANY
+  // row has saved DB data. Computed from the BASELINE (which mirrors
+  // the persisted state), not from the user's in-flight edit. If the
+  // baseline is fully empty (no prior save), trash icons follow the
+  // original "visible when row has at least one filled field" rule.
+  const hasAnySavedRow = useMemo(() => {
+    const fields = [
+      schedPrefsBaseline.availability_window,
+      schedPrefsBaseline.advance_booking_policy,
+      schedPrefsBaseline.break_after_class_hours,
+    ];
+    return fields.some(
+      (f) => f && (f.preference != null || f.preferenceType != null),
+    );
+  }, [schedPrefsBaseline]);
+
+  // Rule 3 (new) — when not in edit mode, fields MUST display DB data
+  // (the baseline). The explicit reverts in Cancel / Save / Pencil
+  // exit paths already achieve this; this effect is the defensive
+  // invariant guarantee. It re-syncs schedPrefs to baseline on every
+  // transition out of edit mode (and also picks up any baseline
+  // change while not editing, e.g. an async hydrate completing).
+  // While editing, the effect is a no-op so user edits aren't
+  // clobbered.
+  useEffect(() => {
+    if (isEditingPreferences) return;
+    if (JSON.stringify(schedPrefs) === JSON.stringify(schedPrefsBaseline)) return;
+    setSchedPrefs(schedPrefsBaseline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEditingPreferences, schedPrefsBaseline]);
 
   // One-shot hydration from TeacherProfile. Errors are non-fatal — log
   // them and leave the form empty so the user can still enter values
@@ -288,6 +330,9 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   //      just-saved values) and reset hasAttemptedSave.
   const handleSaveSchedPrefs = async () => {
     if (isSavingSchedPrefs) return;
+    // Rule 2 (new) — defensive guard matching the button's disabled
+    // state. No DB write when nothing changed since the last save.
+    if (!isPrefsDirty) return;
     setHasAttemptedSave(true);
     if (!isAnyPairComplete) return; // nothing to save
     if (!isPrefsValid) return; // surface errors but don't persist
@@ -1094,6 +1139,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                   onChange={setSchedPrefs}
                   disabled={!isEditingPreferences}
                   showErrors={hasAttemptedSave}
+                  hideTrash={hasAnySavedRow}
                   onValidityChange={setIsPrefsValid}
                 />
 
@@ -1126,28 +1172,28 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                          >
                            Cancel
                          </Button>
-                         {/* Save — user spec (updated):
-                             The button is ALWAYS clickable (cursor-
-                             allowed). Its colour reflects the current
-                             form state but does NOT gate the click.
-                             - Green (active look) → at least one row
-                               is a fully-filled pair AND no row is
-                               partial. Clicking persists to the DB.
-                             - Gray (inactive look) → any row is
-                               partial OR no row is a full pair.
-                               Clicking still fires the handler, which
-                               flips hasAttemptedSave true and surfaces
-                               the red Alert + red border on partial
-                               rows via the showErrors cascade. If
-                               nothing partial and nothing complete
-                               (pristine empty form), the click is a
-                               silent no-op — the button stays gray. */}
+                         {/* Save — combined spec:
+                             Rule 2 (new): the button is FULLY DISABLED
+                               (cursor-not-allowed) when schedPrefs ===
+                               baseline. Once any field changes from
+                               the saved state, the button unlocks and
+                               the previously-shipped color/click
+                               behaviour resumes.
+                             Previously-shipped Rule 2:
+                               - Unlocked + green when at least one row
+                                 is a fully-filled pair AND no row is
+                                 partial. Click persists to the DB.
+                               - Unlocked + gray (cursor-allowed) when
+                                 any row is partial OR no row is a full
+                                 pair. Click fires the handler, which
+                                 flips hasAttemptedSave true and lights
+                                 up partial rows in red. */}
                          <Button
                            size="sm"
                            onClick={handleSaveSchedPrefs}
-                           disabled={isSavingSchedPrefs}
+                           disabled={isSavingSchedPrefs || !isPrefsDirty}
                            className={
-                             isSavingSchedPrefs
+                             isSavingSchedPrefs || !isPrefsDirty
                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
                                : isAnyPairComplete && isPrefsValid
                                  ? 'bg-green-600 hover:bg-green-700 text-white'

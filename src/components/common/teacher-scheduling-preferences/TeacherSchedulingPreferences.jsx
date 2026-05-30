@@ -92,6 +92,10 @@ export default function TeacherSchedulingPreferences({
   // The host (sidebar) uses this to decide whether Save should actually
   // persist or just show errors.
   onValidityChange,
+  // Rule 1 (sidebar) — host passes true when ANY row has saved DB
+  // data; cascades to every child so all three trash icons hide. Page
+  // 5c never sets this so its behaviour is unchanged.
+  hideTrash = false,
 }) {
   const current = value || {};
   const emit = (patch) => {
@@ -137,6 +141,7 @@ export default function TeacherSchedulingPreferences({
           onChange={(next) => emit({ availability_window: next })}
           disabled={disabled}
           showErrors={showErrors}
+          hideTrash={hideTrash}
           onValidationChange={(isValid) => updateValidity('availability_window', isValid)}
         />
       </div>
@@ -153,6 +158,7 @@ export default function TeacherSchedulingPreferences({
           hideHeading
           disabled={disabled}
           showErrors={showErrors}
+          hideTrash={hideTrash}
           onValidationChange={(isValid) => updateValidity('advance_booking_policy', isValid)}
         />
       </div>
@@ -169,6 +175,7 @@ export default function TeacherSchedulingPreferences({
           hideHeading
           disabled={disabled}
           showErrors={showErrors}
+          hideTrash={hideTrash}
           onValidationChange={(isValid) => updateValidity('break_after_class_hours', isValid)}
         />
       </div>

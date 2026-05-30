@@ -19,6 +19,9 @@ const BreakTimeSelector = ({
   // Task 3 — submit-triggered validation. See common/AvailabilityWindow
   // for the rationale.
   showErrors = false,
+  // Rule 1 (sidebar) — global trash suppression when any row has
+  // saved DB data. See common/AvailabilityWindow for full rationale.
+  hideTrash = false,
 }) => {
   const [duration, setDuration] = useState(value?.preference || null);
   const [timeUnit, setTimeUnit] = useState(value?.preferenceType || null);
@@ -279,8 +282,9 @@ const BreakTimeSelector = ({
           </Select>
         </div>
         
-        {/* Trash Icon to clear selection */}
-        {(duration || timeUnit) &&
+        {/* Trash Icon to clear selection. Hidden when hideTrash=true
+            (Rule 1 — sidebar). */}
+        {(duration || timeUnit) && !hideTrash &&
         <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1" aria-label="Remove">
                 <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
             </Button>
