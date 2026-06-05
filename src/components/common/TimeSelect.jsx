@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ChevronDown } from 'lucide-react';
@@ -20,10 +20,31 @@ export const MINUTE_OPTIONS = ['00', '15', '30', '45'];
 // context propagates through Radix's portal). That means clicks inside the
 // time dropdown are recognized as "inside the modal" and don't dismiss the
 // surrounding Dialog — exactly the behavior the AvailabilityModal needs.
-const TimeSelect = ({ value, onChange, minTime, invalid, disabled, placeholder = 'HH:MM', triggerClassName = '' }) => {
+// Auto-focus-next-input — TimeSelect now forwardRef's an imperative
+// handle. Parents call `ref.current.openAndFocus()` to programmatically
+// focus + open the picker (used by the auto-focus-next-input wiring
+// in TimeAvailabilityRow / TeacherAvailabilityCard so picking a Start
+// time immediately opens the adjacent End time picker).
+//
+// `onValueCommit(next)` fires exactly once when the user finishes
+// picking BOTH hour and minute (i.e. on `pickMinute`). pickHour does
+// NOT fire it, so we don't auto-advance to End mid-pick.
+const TimeSelect = forwardRef(({ value, onChange, onValueCommit, minTime, invalid, disabled, placeholder = 'HH:MM', triggerClassName = '' }, ref) => {
   const [hour = '', minute = ''] = value ? value.split(':') : [];
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState('hour');
+  // The shadcn Button is forwardRef'd so this attaches to the
+  // underlying DOM button — used by openAndFocus() below.
+  const triggerRef = useRef(null);
+
+  useImperativeHandle(ref, () => ({
+    // Imperative API for chaining pickers. Focuses the trigger first
+    // (keyboard / a11y correctness) and then opens the popover.
+    openAndFocus: () => {
+      triggerRef.current?.focus();
+      setOpen(true);
+    },
+  }), []);
 
   const isAfter = (h, m) => {
     if (!minTime) return true;
@@ -51,14 +72,21 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled, placeholder =
 
   const pickMinute = (m) => {
     const h = hour || '00';
-    onChange(`${h}:${m}`);
+    const next = `${h}:${m}`;
+    onChange(next);
     setOpen(false);
+    // Fire AFTER state updates so the parent's onChange handler has
+    // settled the row's startTime before we chain to End. setTimeout(0)
+    // also gives Radix a tick to finish closing this popover so the
+    // next .openAndFocus() doesn't fight a closing animation.
+    if (onValueCommit) setTimeout(() => onValueCommit(next), 0);
   };
 
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
+          ref={triggerRef}
           type="button"
           variant="outline"
           disabled={disabled}
@@ -121,6 +149,8 @@ const TimeSelect = ({ value, onChange, minTime, invalid, disabled, placeholder =
       </PopoverContent>
     </Popover>
   );
-};
+});
+
+TimeSelect.displayName = 'TimeSelect';
 
 export default TimeSelect;

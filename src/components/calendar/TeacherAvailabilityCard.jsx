@@ -56,6 +56,10 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
+  // Auto-focus-next-input — the Start TimeSelect's onValueCommit calls
+  // endTimeRef.current?.openAndFocus() so picking a full HH:MM in Start
+  // immediately opens the adjacent End picker.
+  const endTimeRef = useRef(null);
 
   // Task 5 — overlap math. Two time ranges overlap iff `aStart < bEnd` AND
   // `bStart < aEnd`. Times are 'HH:MM' strings; we compare by minutes.
@@ -444,6 +448,14 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
                   setStartTime(newStart);
                 }
               }}
+              // Auto-focus & open the End picker after the user commits
+              // a full HH:MM Start time. TimeSelect's onValueCommit fires
+              // ONLY after pickMinute (not pickHour), so we don't chain
+              // to End mid-pick. setTimeout(0) inside TimeSelect lets
+              // Radix finish closing this popover before End opens.
+              onValueCommit={() => {
+                endTimeRef.current?.openAndFocus();
+              }}
               placeholder="Select time"
               triggerClassName="h-10 px-3"
             />
@@ -451,6 +463,7 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
           <div className="col-span-1 space-y-1">
             <label className="text-xs font-medium text-gray-700">End Time</label>
             <TimeSelect
+              ref={endTimeRef}
               value={endTime}
               onChange={(newEnd) => setEndTime(newEnd)}
               minTime={startTime}

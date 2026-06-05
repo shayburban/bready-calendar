@@ -103,8 +103,23 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
 // Start/End time row. End-time picker filters out any option <= start (strict
 // chronological validation). If the user changes Start to something at/after
 // the current End, End is cleared so they re-pick a valid value.
-const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
-  const isInvalid = !!(row.startTime && row.endTime && row.endTime <= row.startTime);
+//
+// Auto-focus-next-input — the Start TimeSelect's `onValueCommit` opens the
+// End picker via the imperative `openAndFocus()` handle on `endTimeRef`. Only
+// fires after the user has picked BOTH hour and minute on Start (pickHour
+// alone does NOT trigger it — see TimeSelect.jsx).
+//
+// Partial-pair validation — when the parent passes `showErrors=true`, the
+// EMPTY side of a partial row gets a red ring via TimeSelect's `invalid`
+// prop. The existing `endTime <= startTime` order check still applies to
+// both fields. Fully-empty rows are NOT highlighted (they are not invalid;
+// the user simply hasn't filled them yet).
+const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showErrors }) => {
+  const isInvalidOrder = !!(row.startTime && row.endTime && row.endTime <= row.startTime);
+  const isPartial = !!row.startTime !== !!row.endTime;
+  const startInvalid = isInvalidOrder || (showErrors && isPartial && !row.startTime);
+  const endInvalid = isInvalidOrder || (showErrors && isPartial && !row.endTime);
+  const endTimeRef = useRef(null);
   return (
     <div className="flex items-end gap-1 min-w-0">
       <div className="flex-1 min-w-0 space-y-1">
@@ -118,15 +133,23 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove }) => {
               onChange({ ...row, startTime: newStart });
             }
           }}
+          onValueCommit={() => {
+            // Auto-focus & open the End picker after the user commits
+            // a full HH:MM Start time. The setTimeout(0) handoff lets
+            // Radix finish closing the Start popover before End opens.
+            endTimeRef.current?.openAndFocus();
+          }}
+          invalid={startInvalid}
         />
       </div>
       <div className="flex-1 min-w-0 space-y-1">
         <label className="text-xs font-medium text-gray-700">End Time</label>
         <TimeSelect
+          ref={endTimeRef}
           value={row.endTime}
           onChange={(newEnd) => onChange({ ...row, endTime: newEnd })}
           minTime={row.startTime}
-          invalid={isInvalid}
+          invalid={endInvalid}
         />
       </div>
       <Button
@@ -783,14 +806,42 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // or the weekday picker when a range exists but no weekday is selected.
   const dateFieldError = showErrors && !canSave && !anyRowComplete;
   const weekdayError = showErrors && !canSave && anyRowComplete && activeWeekdays.length === 0;
-  const saveErrorMsg =
-    !showErrors || canSave
-      ? ''
-      : !anyRowComplete
-        ? 'Please choose a date range (start and end date, or tick "No end date") before saving.'
-        : activeWeekdays.length === 0
-          ? 'Select at least one weekday for the chosen date range.'
-          : 'Please complete the required availability fields before saving.';
+
+  // Partial-pair validation — start filled but end empty (or the other
+  // way around) for ANY time row or date row. Fully-empty rows are NOT
+  // partial; only the mixed-fill state is. Time rows are only checked
+  // when timeAvailEnabled (turning off Time Availability means a single
+  // empty row is intentional — no validation needed).
+  const isTimeRowPartial = (r) => !!r && (!!r.startTime !== !!r.endTime);
+  const isDateRowPartial = (r) =>
+    !!r && (!!r.startDate !== !!(r.endDate || noEndDate));
+  const hasPartialTimeRow = timeAvailEnabled && timeRanges.some(isTimeRowPartial);
+  const hasPartialDateRow =
+    isDateRowPartial(primaryRangeValue) ||
+    extraRows.some(isDateRowPartial);
+  const hasPartialPair = hasPartialTimeRow || hasPartialDateRow;
+
+  // saveErrorMsg precedence:
+  //   1. partial pair → "fill both sides" (NEW, takes priority because
+  //      partial pairs are a stricter failure than the legacy
+  //      "no row complete" gate — even if other rows are valid).
+  //   2. no row complete  → existing "choose a date range" copy.
+  //   3. no weekday       → existing "pick at least one weekday" copy.
+  //   4. fallback         → existing generic copy.
+  const saveErrorMsg = (() => {
+    if (!showErrors) return '';
+    if (hasPartialPair) {
+      return 'Each row needs both a start and an end. Please fill the highlighted fields before saving.';
+    }
+    if (canSave) return '';
+    if (!anyRowComplete) {
+      return 'Please choose a date range (start and end date, or tick "No end date") before saving.';
+    }
+    if (activeWeekdays.length === 0) {
+      return 'Select at least one weekday for the chosen date range.';
+    }
+    return 'Please complete the required availability fields before saving.';
+  })();
 
   // Revert every field in this tab to its initial state. The date ranges are
   // owned by the parent, so we ask it to reset those via onResetAvailabilityForm.
@@ -809,7 +860,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
   // Save Dates click: if requirements aren't met, surface the reason + red
   // fields (instead of doing nothing); otherwise save, then reset the form.
+  // Partial pairs (start without end, or vice versa) block the save FIRST
+  // so the existing canSave/weekday checks never get a chance to look at
+  // a half-filled row.
   const handleSaveClick = () => {
+    if (hasPartialPair) {
+      setShowErrors(true);
+      return;
+    }
     if (!canSave) {
       setShowErrors(true);
       if (anyRowComplete && activeWeekdays.length === 0) setIsAdvancedOpen(true);
@@ -907,19 +965,40 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                   <Info className="w-4 h-4 text-gray-400 cursor-help" />
                                 </span>
                             </label>
+                            {/* Open / Closed adopt the EXACT same color
+                                language as the sidebar's ActionTab
+                                (saikat .outlinepill .nav-link — see the
+                                ActionTab definition near the top of this
+                                file). Idle = white bg, light-gray
+                                #e5e5e5 border, muted #aeaeae text. Active
+                                = white bg, blue #0262c4 border, dark
+                                #3d3d3d text. Hover telegraphs the active
+                                cue for both states. variant="outline"
+                                keeps the shadcn Button structure
+                                (padding / radius / focus ring) — only
+                                colors and hover/transition are overridden. */}
                             <div className="flex space-x-2 mt-2">
                                 <Button
                                   size="sm"
+                                  variant="outline"
                                   onClick={() => setAvailabilityMode('open')}
-                                  className={availabilityMode === 'open' ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'}
+                                  className={`bg-white transition-colors ${
+                                    availabilityMode === 'open'
+                                      ? 'border-[#0262c4] text-[#3d3d3d] hover:bg-white hover:text-[#3d3d3d] hover:border-[#0262c4]'
+                                      : 'border-[#e5e5e5] text-[#aeaeae] hover:bg-white hover:text-[#3d3d3d] hover:border-[#0262c4]'
+                                  }`}
                                 >
                                   Open
                                 </Button>
                                 <Button
                                   size="sm"
-                                  variant={availabilityMode === 'closed' ? 'default' : 'outline'}
+                                  variant="outline"
                                   onClick={() => setAvailabilityMode('closed')}
-                                  className={availabilityMode === 'closed' ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}
+                                  className={`bg-white transition-colors ${
+                                    availabilityMode === 'closed'
+                                      ? 'border-[#0262c4] text-[#3d3d3d] hover:bg-white hover:text-[#3d3d3d] hover:border-[#0262c4]'
+                                      : 'border-[#e5e5e5] text-[#aeaeae] hover:bg-white hover:text-[#3d3d3d] hover:border-[#0262c4]'
+                                  }`}
                                 >
                                   Closed
                                 </Button>
@@ -934,7 +1013,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
               const value = isPrimary
                 ? primaryRangeValue
                 : { startDate: range.startDate, endDate: range.endDate };
-              const showRowError = dateFieldError && !rowComplete(value);
+              // Red ring on a date row when EITHER the existing
+              // "nothing complete" case fires, OR the row is now in
+              // a partial-pair state (start without end / end without
+              // start) and the user has attempted Save.
+              const showRowError =
+                (dateFieldError && !rowComplete(value)) ||
+                (showErrors && isDateRowPartial(value));
               return (
                 <div
                   key={range.id}
@@ -1018,6 +1103,9 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
               onRemove={() => removeTimeRange(row.id)}
               onAdd={addTimeRange}
               canRemove={true}
+              // showErrors lights up the partial side(s) of a
+              // start/end pair when the user has clicked Save.
+              showErrors={showErrors}
             />
             ))}
                         </div>
@@ -1091,8 +1179,16 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                             <Button variant="outline" className="w-full" onClick={resetAvailabilityFields}>Cancel</Button>
                             <Button
                               onClick={handleSaveClick}
-                              aria-disabled={!canSave}
-                              className={`w-full ${canSave ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'}`}
+                              // aria-disabled (not the native disabled
+                              // attribute) so the button STILL receives
+                              // the click that triggers the validation
+                              // error UI for partial-pair rows.
+                              aria-disabled={!canSave || hasPartialPair}
+                              className={`w-full ${
+                                (!canSave || hasPartialPair)
+                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
+                                  : 'bg-green-600 hover:bg-green-700 text-white'
+                              }`}
                             >
                               Save Dates
                             </Button>
