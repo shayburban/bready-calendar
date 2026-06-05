@@ -576,6 +576,39 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     if (onUpdateExtraRow) onUpdateExtraRow(id, rangeData);
   };
 
+  // Task 2 (first-row delete + fallback). The X button on the primary
+  // (first) date row now does:
+  //   • If any EXTRA row is fully complete (startDate + (endDate ||
+  //     noEndDate)) → splice the primary out by promoting that extra
+  //     row's values into the primary slot and removing the extra row
+  //     from the array (the rest shift up visually because the array
+  //     shrinks by one).
+  //   • Otherwise → reset the primary's fields to nulls so the picker
+  //     renders its default "DD.MM.YY" placeholders. The row is NOT
+  //     unmounted — we only clear its values, satisfying the
+  //     "must not delete the row component entirely" requirement.
+  const handlePrimaryRowDelete = () => {
+    const firstCompleteExtra = extraRows.find(
+      (r) => !!r.startDate && (!!r.endDate || noEndDate)
+    );
+    if (firstCompleteExtra) {
+      if (onPrimaryRangeChange) {
+        onPrimaryRangeChange({
+          startDate: firstCompleteExtra.startDate,
+          endDate: firstCompleteExtra.endDate,
+        });
+      }
+      if (onRemoveExtraRow) onRemoveExtraRow(firstCompleteExtra.id);
+      return;
+    }
+    // No complete extra rows → reset to empty. The parent's
+    // handlePrimaryRangeChange has been extended to accept this
+    // explicit {null, null} clear (Task 2).
+    if (onPrimaryRangeChange) {
+      onPrimaryRangeChange({ startDate: null, endDate: null });
+    }
+  };
+
   const updateTimeRange = (id, next) => {
     setTimeRanges((prev) => prev.map((r) => (r.id === id ? next : r)));
   };
@@ -1013,13 +1046,17 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
               const value = isPrimary
                 ? primaryRangeValue
                 : { startDate: range.startDate, endDate: range.endDate };
-              // Red ring on a date row when EITHER the existing
-              // "nothing complete" case fires, OR the row is now in
-              // a partial-pair state (start without end / end without
-              // start) and the user has attempted Save.
-              const showRowError =
-                (dateFieldError && !rowComplete(value)) ||
-                (showErrors && isDateRowPartial(value));
+              // The wrapper red ring now ONLY fires for the legacy
+              // "no row complete at all" case. The partial-pair case
+              // moved to per-field red rings on the empty side (Task 1
+              // explicit requirement: "apply a red border outline to
+              // the SPECIFIC empty input field in that partial pair").
+              const showRowError = dateFieldError && !rowComplete(value);
+              const rowPartial = isDateRowPartial(value);
+              const startInvalid =
+                showErrors && rowPartial && !value?.startDate;
+              const endInvalid =
+                showErrors && rowPartial && !(value?.endDate || noEndDate);
               return (
                 <div
                   key={range.id}
@@ -1027,7 +1064,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                 >
                   <DateRangePicker
                     value={value}
-                    onRemove={() => removeDateRange(range.id)}
+                    // Task 2 — the primary row uses the splice-or-reset
+                    // handler; extras use the existing row-removal path.
+                    // We intentionally DROP `isOnlyRow` so the primary's
+                    // X always routes through handlePrimaryRowDelete
+                    // (the picker's built-in isOnlyRow short-circuit
+                    // would otherwise clear only its internal state and
+                    // leave the parent's primaryRange untouched).
+                    onRemove={
+                      isPrimary
+                        ? handlePrimaryRowDelete
+                        : () => removeDateRange(range.id)
+                    }
                     onAdd={index === allRows.length - 1 ? addDateRange : null}
                     onRangeChange={(rangeData) =>
                       isPrimary
@@ -1035,8 +1083,10 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                         : handleRowRangeChange(range.id, rangeData)
                     }
                     noEndDate={noEndDate}
-                    hideRemove={isPrimary}
-                    isOnlyRow={allRows.length === 1}
+                    // Field-level invalid markers — only the empty side
+                    // of a partial pair lights up red.
+                    startInvalid={startInvalid}
+                    endInvalid={endInvalid}
                   />
                 </div>
               );
@@ -1119,10 +1169,25 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                           const previewTimes = mergeTimeRows(timeRanges);
                           return (
                             <div className="bg-gray-50 p-3 rounded-md text-sm text-gray-600 space-y-2">
+                              {/* Task 3 — explicit color-coded Open /
+                                  Closed keyword so the teacher can
+                                  read the impact of Save at a glance.
+                                  Green for Open, red for Closed; the
+                                  keyword reflects the live state of the
+                                  Open/Closed toggle at the top of the
+                                  Set Availability tab. */}
                               <h5 className="font-bold text-gray-800">
-                                {availabilityMode === 'closed'
-                                  ? 'Availability will be removed from the following dates & hours:'
-                                  : 'Changes will be made to the following dates & hours:'}
+                                You are setting your availability to{' '}
+                                <span
+                                  className={
+                                    availabilityMode === 'closed'
+                                      ? 'text-red-600 font-bold'
+                                      : 'text-green-600 font-bold'
+                                  }
+                                >
+                                  {availabilityMode === 'closed' ? 'Closed' : 'Open'}
+                                </span>{' '}
+                                for the following dates & hours:
                               </h5>
                               <div>
                                 <h6 className="font-semibold">Dates:</h6>

@@ -24,6 +24,14 @@ const DateRangePicker = ({
   onSingleChange,
   singleLabel = 'Start Date',
   singlePlaceholder = 'DD.MM.YY',
+  // Per-field red-ring markers used by the partial-pair validation
+  // pipeline (Task 1 in CalendarSidebar / TeacherAvailabilityCard).
+  // The caller turns these on only after the user has attempted Save
+  // with the matching side empty — never while the user is still
+  // filling fields. `invalid` is the single-date mode equivalent.
+  invalid = false,
+  startInvalid = false,
+  endInvalid = false,
 }) => {
   // When `value` is supplied the picker runs in controlled mode — internal
   // state stays in sync with the prop via the useEffect below. When `value`
@@ -270,7 +278,7 @@ const DateRangePicker = ({
                     startDate
                       ? 'bg-gray-50 font-semibold text-gray-900'
                       : 'bg-gray-50 font-normal text-gray-500'
-                  }`}
+                  } ${invalid ? 'ring-1 ring-red-500 border-red-500' : ''}`}
                 >
                   <span className="truncate">
                     {startDate ? format(startDate, 'dd.MM.yy') : singlePlaceholder}
@@ -371,7 +379,7 @@ const DateRangePicker = ({
                 startDate
                   ? 'bg-gray-50 font-semibold text-gray-900'
                   : 'bg-gray-50 font-normal text-gray-500'
-              }`}
+              } ${startInvalid ? 'ring-1 ring-red-500 border-red-500' : ''}`}
             >
               <span className="truncate">
                 {startDate ? format(startDate, 'dd.MM.yy') : 'DD.MM.YY'}
@@ -397,7 +405,7 @@ const DateRangePicker = ({
                 : endDate
                 ? 'bg-gray-50 font-semibold text-gray-900'
                 : 'bg-gray-50 font-normal text-gray-500'
-            }`}
+            } ${endInvalid ? 'ring-1 ring-red-500 border-red-500' : ''}`}
           >
             <span className="truncate">
               {noEndDate

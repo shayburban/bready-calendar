@@ -425,6 +425,13 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               onSingleChange={setChangeAvailDate}
               singleLabel="Select Date"
               singlePlaceholder="Select date"
+              // Task 1 — red border when the user clicked the gray
+              // "Change Availability" button with Date missing. The
+              // validationErrors array is the popup's existing source
+              // of truth for "what did the user forget"; we just
+              // surface that state on the field itself instead of
+              // only in the banner below.
+              invalid={validationErrors.includes('Select Date')}
             />
           </div>
           {/* Task 1 — Start Time / End Time now use the shared <TimeSelect>
@@ -456,6 +463,10 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               onValueCommit={() => {
                 endTimeRef.current?.openAndFocus();
               }}
+              // Task 1 — red ring when the user clicked Save with
+              // Start Time missing (driven by the popup's existing
+              // validationErrors set; never lit during normal typing).
+              invalid={validationErrors.includes('Start Time')}
               placeholder="Select time"
               triggerClassName="h-10 px-3"
             />
@@ -467,7 +478,14 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               value={endTime}
               onChange={(newEnd) => setEndTime(newEnd)}
               minTime={startTime}
-              invalid={!!(startTime && endTime && endTime <= startTime)}
+              // Task 1 — combine the existing chronological-order
+              // check with the missing-field marker so a single
+              // red ring covers both "End time before Start" and
+              // "End time empty after Save was clicked".
+              invalid={
+                !!(startTime && endTime && endTime <= startTime) ||
+                validationErrors.includes('End Time')
+              }
               placeholder="Select time"
               triggerClassName="h-10 px-3"
             />

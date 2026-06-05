@@ -147,6 +147,17 @@ export default function TeacherCalendarWeekly() {
   };
 
   const handlePrimaryRangeChange = (rangeData) => {
+    // Task 2 — explicit full-clear from the sidebar's first-row delete
+    // fallback. Accept BOTH-null but still reject partial-null so
+    // mid-edit picker states never leak into the persisted range.
+    if (
+      rangeData &&
+      rangeData.startDate === null &&
+      rangeData.endDate === null
+    ) {
+      setPrimaryRange({ startDate: null, endDate: null });
+      return;
+    }
     if (!rangeData?.startDate || !rangeData?.endDate) return;
     const ns = new Date(rangeData.startDate); ns.setHours(0, 0, 0, 0);
     const ne = new Date(rangeData.endDate); ne.setHours(0, 0, 0, 0);
