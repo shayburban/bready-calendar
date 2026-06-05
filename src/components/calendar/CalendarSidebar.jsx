@@ -846,24 +846,46 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // when timeAvailEnabled (turning off Time Availability means a single
   // empty row is intentional — no validation needed).
   const isTimeRowPartial = (r) => !!r && (!!r.startTime !== !!r.endTime);
-  const isDateRowPartial = (r) =>
-    !!r && (!!r.startDate !== !!(r.endDate || noEndDate));
+  // A date row is partial if EXACTLY one of (startDate, endDate) is
+  // missing AND noEndDate isn't covering the gap. Crucially:
+  //   • Both empty → clean (per spec: "every single row is either
+  //     completely filled out or completely empty (if an extra row
+  //     is clean)" — empty extras must NOT trip validation).
+  //   • Both filled → complete.
+  //   • startDate + noEndDate (no explicit endDate) → complete.
+  // The previous XOR shortcut wrongly flagged {null, null} as partial
+  // whenever noEndDate was on, because `!!(undefined || true) = true`
+  // gave true ≠ false. The explicit predicate below handles that
+  // edge case correctly.
+  const isDateRowPartial = (r) => {
+    if (!r) return false;
+    const hasStart = !!r.startDate;
+    const hasEnd = !!r.endDate;
+    if (!hasStart && !hasEnd) return false;        // clean
+    if (hasStart && (hasEnd || noEndDate)) return false; // complete
+    return true;                                   // half-filled = partial
+  };
   const hasPartialTimeRow = timeAvailEnabled && timeRanges.some(isTimeRowPartial);
   const hasPartialDateRow =
     isDateRowPartial(primaryRangeValue) ||
     extraRows.some(isDateRowPartial);
   const hasPartialPair = hasPartialTimeRow || hasPartialDateRow;
 
-  // saveErrorMsg precedence:
-  //   1. partial pair → "fill both sides" (NEW, takes priority because
-  //      partial pairs are a stricter failure than the legacy
-  //      "no row complete" gate — even if other rows are valid).
-  //   2. no row complete  → existing "choose a date range" copy.
-  //   3. no weekday       → existing "pick at least one weekday" copy.
-  //   4. fallback         → existing generic copy.
+  // saveErrorMsg precedence (most specific → most generic):
+  //   1. partial date row  → exact spec copy for the comprehensive
+  //      multi-row date validation (covers both primary and extras).
+  //   2. partial time row  → existing time-pair message (kept separate
+  //      so the date-specific fix doesn't regress time validation —
+  //      that flow's wording / behavior is unchanged).
+  //   3. no row complete   → existing "choose a date range" copy.
+  //   4. no weekday        → existing "pick at least one weekday" copy.
+  //   5. fallback          → existing generic copy.
   const saveErrorMsg = (() => {
     if (!showErrors) return '';
-    if (hasPartialPair) {
+    if (hasPartialDateRow) {
+      return 'Please fill in all missing date fields before saving.';
+    }
+    if (hasPartialTimeRow) {
       return 'Each row needs both a start and an end. Please fill the highlighted fields before saving.';
     }
     if (canSave) return '';
