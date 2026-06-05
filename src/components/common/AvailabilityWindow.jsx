@@ -101,19 +101,39 @@ const AvailabilityWindow = ({
     setError(validationError);
     if (onValidationChange) {
       const isPristine = duration === null && timeUnit === null;
+      // Pristine/empty rows are VALID and must never block Save.
       onValidationChange(isPristine || isValid && !validationError);
     }
-  }, [duration, timeUnit, onValidationChange]);
+    // Bug-fix — `onValidationChange` removed from deps. The composite
+    // hands us a NEW inline callback identity on every render; including
+    // it here made this effect run every render, not just on real input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, timeUnit]);
 
-  // Update parent component when values change
+  // Push value up to parent — Bug-fix:
+  //   • `onChange` removed from deps for the same identity-churn reason.
+  //   • We now only emit when local state actually DIFFERS from the
+  //     incoming `value`. That stops pristine siblings from re-emitting
+  //     EMPTY_FIELD on every render of the composite, which is exactly
+  //     what was clobbering sibling rows via the composite's stale-
+  //     snapshot merge (the root cause of the "Save stays grey"
+  //     bug — sibling pristine emits were overwriting the row the user
+  //     had just completed).
   useEffect(() => {
-    if (duration !== null && timeUnit !== null && !error || duration === null && timeUnit === null) {
-      onChange({
-        preference: duration,
-        preferenceType: timeUnit
-      });
+    const isComplete = duration !== null && timeUnit !== null && !error;
+    const isPristine = duration === null && timeUnit === null;
+    if (isComplete || isPristine) {
+      const pref = value?.preference ?? null;
+      const type = value?.preferenceType ?? null;
+      if (duration !== pref || timeUnit !== type) {
+        onChange({
+          preference: duration,
+          preferenceType: timeUnit
+        });
+      }
     }
-  }, [duration, timeUnit, error, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, timeUnit, error]);
 
   const handleDurationChange = (value) => {
     if (value === 'custom') {

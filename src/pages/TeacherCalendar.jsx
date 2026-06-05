@@ -35,7 +35,7 @@ import {
   MoreVertical,
   CheckCircle2
 } from 'lucide-react';
-import CalendarSidebar from '../components/calendar/CalendarSidebar';
+import ResponsiveCalendarSidebar from '../components/calendar/ResponsiveCalendarSidebar';
 import EventModal from '../components/calendar/EventModal';
 import AvailabilityModal from '../components/calendar/AvailabilityModal';
 import AddNewBookingOrAvailabilityModal from '../components/calendar/AddNewBookingOrAvailabilityModal';
@@ -951,7 +951,7 @@ export default function TeacherCalendar() {
       <div className="container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
           
-          <CalendarSidebar
+          <ResponsiveCalendarSidebar
             view={view}
             setView={setView}
             onLegendFilterChange={setActiveFilters}

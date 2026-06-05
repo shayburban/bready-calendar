@@ -101,19 +101,32 @@ const AdvanceBookingSelector = ({
     setError(validationError);
     if (onValidationChange) {
       const isPristine = duration === null && timeUnit === null;
+      // Pristine/empty rows are VALID and must never block Save.
       onValidationChange(isPristine || isValid && !validationError);
     }
-  }, [duration, timeUnit, onValidationChange]);
+    // Bug-fix — see common/AvailabilityWindow.jsx for rationale.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, timeUnit]);
 
-  // Update parent component when values change
+  // Push value up to parent — Bug-fix:
+  //   • `onChange` removed from deps to stop the per-render emit storm.
+  //   • Only emit when local state differs from incoming `value` so
+  //     pristine siblings can't clobber the row the user just edited.
   useEffect(() => {
-    if (duration !== null && timeUnit !== null && !error || duration === null && timeUnit === null) {
-      onChange({
-        preference: duration,
-        preferenceType: timeUnit
-      });
+    const isComplete = duration !== null && timeUnit !== null && !error;
+    const isPristine = duration === null && timeUnit === null;
+    if (isComplete || isPristine) {
+      const pref = value?.preference ?? null;
+      const type = value?.preferenceType ?? null;
+      if (duration !== pref || timeUnit !== type) {
+        onChange({
+          preference: duration,
+          preferenceType: timeUnit
+        });
+      }
     }
-  }, [duration, timeUnit, error, onChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [duration, timeUnit, error]);
 
   const handleDurationChange = (value) => {
     if (value === 'custom') {

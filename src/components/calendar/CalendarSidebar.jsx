@@ -274,8 +274,12 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     if (isEditingPreferences) return;
     if (JSON.stringify(schedPrefs) === JSON.stringify(schedPrefsBaseline)) return;
     setSchedPrefs(schedPrefsBaseline);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isEditingPreferences, schedPrefsBaseline]);
+    // Bug-fix — `schedPrefs` added to deps so any stray write while
+    // NOT editing (e.g. a late emit from a child) is re-pinned to
+    // baseline immediately, not just on the next baseline change.
+    // While editing, the early-return on isEditingPreferences keeps
+    // this a no-op so user edits aren't clobbered.
+  }, [isEditingPreferences, schedPrefsBaseline, schedPrefs]);
 
   // One-shot hydration from TeacherProfile. Errors are non-fatal — log
   // them and leave the form empty so the user can still enter values

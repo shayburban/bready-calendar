@@ -23,7 +23,7 @@ import {
   Edit,
   Info
 } from 'lucide-react';
-import CalendarSidebar from '../components/calendar/CalendarSidebar';
+import ResponsiveCalendarSidebar from '../components/calendar/ResponsiveCalendarSidebar';
 import WeeklyCalendarGrid from '../components/calendar/WeeklyCalendarGrid';
 import EventModal from '../components/calendar/EventModal';
 import AvailabilityModal from '../components/calendar/AvailabilityModal';
@@ -257,7 +257,7 @@ export default function TeacherCalendarWeekly() {
       <div className="container mx-auto px-6 py-6">
         <div className="flex flex-col lg:flex-row gap-6">
 
-          <CalendarSidebar
+          <ResponsiveCalendarSidebar
             view={view}
             setView={setView}
             onLegendFilterChange={setActiveFilters}

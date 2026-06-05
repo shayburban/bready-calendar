@@ -23,7 +23,7 @@
 // variant typography so the visible label/tooltip copy stays IDENTICAL to
 // Page 5c while typography matches whichever surface mounted us.
 
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
 import CommonAvailabilityWindow from '@/components/common/AvailabilityWindow';
@@ -98,10 +98,32 @@ export default function TeacherSchedulingPreferences({
   hideTrash = false,
 }) {
   const current = value || {};
-  const emit = (patch) => {
-    if (typeof onChange !== 'function') return;
-    onChange({ ...current, ...patch });
-  };
+
+  // Bug-fix — Keep latest onChange / value / onValidityChange in refs
+  // so the per-field callbacks below stay STABLE (no fresh inline-arrow
+  // identity each render) AND so the merge ALWAYS reads the freshest
+  // value, not a closure snapshot. Together those two properties are
+  // what stop sibling pristine rows from clobbering the row the user
+  // just edited — the root cause of the "Save stays grey with one or
+  // more completed rows" bug, and a contributor to the Cancel flicker /
+  // lingering-trash bugs.
+  const onChangeRef = useRef(onChange);
+  const valueRef = useRef(value);
+  useEffect(() => { onChangeRef.current = onChange; });
+  useEffect(() => { valueRef.current = value; });
+
+  const emitField = useCallback((field, next) => {
+    const fn = onChangeRef.current;
+    if (typeof fn !== 'function') return;
+    // Merge against the freshest value, NOT a render-time snapshot,
+    // so concurrent emits in the same commit can never overwrite
+    // each other.
+    fn({ ...(valueRef.current || {}), [field]: next });
+  }, []);
+
+  const handleWindow = useCallback((n) => emitField('availability_window', n), [emitField]);
+  const handleAdvance = useCallback((n) => emitField('advance_booking_policy', n), [emitField]);
+  const handleBreak = useCallback((n) => emitField('break_after_class_hours', n), [emitField]);
 
   // Track per-field validity in refs (no re-render on update) and emit
   // an aggregate via onValidityChange. The selectors emit
@@ -113,15 +135,27 @@ export default function TeacherSchedulingPreferences({
     break_after_class_hours: true,
   });
   const lastEmittedRef = useRef(true);
-  const updateValidity = (field, isValid) => {
+  const onValidityChangeRef = useRef(onValidityChange);
+  useEffect(() => { onValidityChangeRef.current = onValidityChange; });
+
+  const updateValidity = useCallback((field, isValid) => {
     if (validityRef.current[field] === isValid) return;
     validityRef.current[field] = isValid;
     const aggregate = Object.values(validityRef.current).every(Boolean);
     if (aggregate !== lastEmittedRef.current) {
       lastEmittedRef.current = aggregate;
-      if (typeof onValidityChange === 'function') onValidityChange(aggregate);
+      const fn = onValidityChangeRef.current;
+      if (typeof fn === 'function') fn(aggregate);
     }
-  };
+  }, []);
+
+  // Stable per-field validity handlers so each child's validation
+  // effect (whose deps are now `[duration, timeUnit]`) sees a steady
+  // onValidationChange identity — required for A2 in the selectors
+  // to work correctly.
+  const handleValidityWindow = useCallback((v) => updateValidity('availability_window', v), [updateValidity]);
+  const handleValidityAdvance = useCallback((v) => updateValidity('advance_booking_policy', v), [updateValidity]);
+  const handleValidityBreak = useCallback((v) => updateValidity('break_after_class_hours', v), [updateValidity]);
 
   // Spacing between sections matches each surface:
   //   sidebar  → tight space-y-4 to mirror the existing CalendarSidebar.
@@ -138,11 +172,11 @@ export default function TeacherSchedulingPreferences({
         />
         <CommonAvailabilityWindow
           value={current.availability_window || EMPTY_FIELD}
-          onChange={(next) => emit({ availability_window: next })}
+          onChange={handleWindow}
           disabled={disabled}
           showErrors={showErrors}
           hideTrash={hideTrash}
-          onValidationChange={(isValid) => updateValidity('availability_window', isValid)}
+          onValidationChange={handleValidityWindow}
         />
       </div>
 
@@ -154,12 +188,12 @@ export default function TeacherSchedulingPreferences({
         />
         <AdvanceBookingSelector
           value={current.advance_booking_policy || EMPTY_FIELD}
-          onChange={(next) => emit({ advance_booking_policy: next })}
+          onChange={handleAdvance}
           hideHeading
           disabled={disabled}
           showErrors={showErrors}
           hideTrash={hideTrash}
-          onValidationChange={(isValid) => updateValidity('advance_booking_policy', isValid)}
+          onValidationChange={handleValidityAdvance}
         />
       </div>
 
@@ -171,12 +205,12 @@ export default function TeacherSchedulingPreferences({
         />
         <BreakTimeSelector
           value={current.break_after_class_hours || EMPTY_FIELD}
-          onChange={(next) => emit({ break_after_class_hours: next })}
+          onChange={handleBreak}
           hideHeading
           disabled={disabled}
           showErrors={showErrors}
           hideTrash={hideTrash}
-          onValidationChange={(isValid) => updateValidity('break_after_class_hours', isValid)}
+          onValidationChange={handleValidityBreak}
         />
       </div>
     </div>
