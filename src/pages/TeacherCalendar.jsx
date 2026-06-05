@@ -43,6 +43,7 @@ import SyncedEventsModal from '../components/calendar/SyncedEventsModal';
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { goToCalendarView } from '@/lib/calendarViewNavigation';
 import { sampleEvents } from '@/data/sampleEvents';
 import {
   computeSiblingEvents,
@@ -1032,13 +1033,22 @@ export default function TeacherCalendar() {
                   <Button variant="ghost" size="sm">
                     <Settings className="w-4 h-4" />
                   </Button>
-                  <Select value={view} onValueChange={setView}>
+                  <Select
+                    value={view}
+                    onValueChange={(newView) => {
+                      // Same source as the sidebar dropdown — see
+                      // src/lib/calendarViewNavigation.js. Both
+                      // dropdowns now behave identically.
+                      goToCalendarView(newView);
+                      setView(newView);
+                    }}
+                  >
                     <SelectTrigger className="w-24">
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent 
-                      position="popper" 
-                      sideOffset={4} 
+                    <SelectContent
+                      position="popper"
+                      sideOffset={4}
                       onCloseAutoFocus={(e) => e.preventDefault()}
                     >
                       <SelectItem value="Month">Month</SelectItem>

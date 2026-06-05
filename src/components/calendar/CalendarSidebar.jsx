@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar as CalendarIcon, ChevronDown, Plus, X, Clock, Info, DollarSign, CheckCircle2, Pencil } from 'lucide-react';
 import { Calendar } from "@/components/ui/calendar";
 import { createPageUrl } from '@/utils';
+import { goToCalendarView } from '@/lib/calendarViewNavigation';
 import { Link } from 'react-router-dom';
 import { format } from "date-fns";
 import DateRangePicker from '../common/DateRangePicker';
@@ -51,18 +52,44 @@ const LegendItem = ({ color, text, icon, checked, isHeader, onCheckedChange, ite
       checked={checked}
       onCheckedChange={(newChecked) => onCheckedChange(itemKey, newChecked)}
       aria-label={`Toggle ${text} events`} // Accessibility
-      className="peer h-4 w-4 shrink-0 rounded-sm border border-primary ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground" />
+      // Saikat reference (style.css .checkCont/.checkmark, lines
+      // ~235–243): 21×21 white box (we use h-5/w-5 = 20px which is
+      // the closest Tailwind step), 3-px corner, 1-px #dfdfdf
+      // border, hover border #737373. Checked state keeps the bg
+      // WHITE and switches the tick to dark gray #757474 (the
+      // saikat tick is an angled gray rectangle border; here we
+      // recolor the existing lucide Check icon so the indicator
+      // matches visually without forking the shadcn primitive).
+      // `[&_svg]:h-3.5 [&_svg]:w-3.5` shrinks the inner lucide
+      // Check via descendant selector — higher specificity than
+      // the primitive's own `h-4 w-4` so tailwind-merge resolves
+      // to our smaller tick. Focus ring uses the saikat primary
+      // blue #0262c4 for keyboard accessibility.
+      className="peer h-5 w-5 shrink-0 rounded-[3px] border border-[#dfdfdf] bg-white hover:border-[#737373] ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0262c4] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-white data-[state=checked]:text-[#757474] [&_svg]:h-3.5 [&_svg]:w-3.5" />
     }
       </>
   }
   </li>;
 
 
+// Saikat reference (style.css .outlinepill .nav-link, lines ~73–76):
+//   default — bg #fff, border 1px #e5e5e5, text #aeaeae;
+//   active  — text #3d3d3d, border #0262c4.
+// Hover (not explicit in the reference) mirrors the active visual
+// cue so the tab telegraphs interactivity: border → #0262c4 and
+// text → #3d3d3d on hover. We pass `variant="outline"` to keep the
+// shadcn Button structure (padding / radius / focus ring) and then
+// override colors via className — tailwind-merge resolves to our
+// explicit hex values.
 const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
 <Button
-  variant={activeTab === tabName ? 'solid' : 'outline'}
+  variant="outline"
   onClick={() => setActiveTab(tabName)}
-  className={`w-full justify-center ${activeTab === tabName ? 'bg-blue-600 text-white hover:bg-blue-700' : ''}`}>
+  className={`w-full justify-center bg-white transition-colors ${
+    activeTab === tabName
+      ? 'border-[#0262c4] text-[#3d3d3d] hover:bg-white hover:text-[#3d3d3d] hover:border-[#0262c4]'
+      : 'border-[#e5e5e5] text-[#aeaeae] hover:bg-white hover:text-[#3d3d3d] hover:border-[#0262c4]'
+  }`}>
 
         {label}
     </Button>;
@@ -804,11 +831,10 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   };
 
   const handleViewChange = (newView) => {
-    if (newView === 'Month') {
-      window.location.href = createPageUrl('TeacherCalendar');
-    } else if (newView === 'Week') {
-      window.location.href = createPageUrl('TeacherCalendarWeekly');
-    }
+    // Navigation delegated to the shared helper so the sidebar
+    // dropdown and each page's header dropdown act IDENTICALLY
+    // (single source of truth — see src/lib/calendarViewNavigation.js).
+    goToCalendarView(newView);
     setView(newView);
   };
 
