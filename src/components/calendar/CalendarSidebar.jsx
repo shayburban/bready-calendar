@@ -36,6 +36,16 @@ const MASTER_CALENDAR_CATEGORIES = [
 { key: 'waiting', text: 'Waiting For Confirmation', color: 'bg-pink-200', perspectives: ['teacher-t'], defaultChecked: false }];
 
 
+// Task 3 — Shared sidebar checkbox style. Extracted from the Legend
+// item's saikat-aligned className (see style.css .checkCont/.checkmark
+// lines ~235-243) so EVERY checkbox in this sidebar uses the identical
+// 21-px white box, 1-px #dfdfdf border, hover #737373 border, gray
+// #757474 tick on white background, #0262c4 focus ring, and 3-px
+// radius. Re-using one constant guarantees a 100%-consistent design
+// system across the Legend, "No end date", the weekday filter, and
+// "Time Availability" toggles.
+const SIDEBAR_CHECKBOX_CLASS = "peer h-5 w-5 shrink-0 rounded-[3px] border border-[#dfdfdf] bg-white hover:border-[#737373] ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0262c4] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-white data-[state=checked]:text-[#757474] [&_svg]:h-3.5 [&_svg]:w-3.5";
+
 const LegendItem = ({ color, text, icon, checked, isHeader, onCheckedChange, itemKey }) =>
 <li className="flex items-center text-sm text-gray-700 py-1">
     {isHeader ?
@@ -52,20 +62,11 @@ const LegendItem = ({ color, text, icon, checked, isHeader, onCheckedChange, ite
       checked={checked}
       onCheckedChange={(newChecked) => onCheckedChange(itemKey, newChecked)}
       aria-label={`Toggle ${text} events`} // Accessibility
-      // Saikat reference (style.css .checkCont/.checkmark, lines
-      // ~235–243): 21×21 white box (we use h-5/w-5 = 20px which is
-      // the closest Tailwind step), 3-px corner, 1-px #dfdfdf
-      // border, hover border #737373. Checked state keeps the bg
-      // WHITE and switches the tick to dark gray #757474 (the
-      // saikat tick is an angled gray rectangle border; here we
-      // recolor the existing lucide Check icon so the indicator
-      // matches visually without forking the shadcn primitive).
-      // `[&_svg]:h-3.5 [&_svg]:w-3.5` shrinks the inner lucide
-      // Check via descendant selector — higher specificity than
-      // the primitive's own `h-4 w-4` so tailwind-merge resolves
-      // to our smaller tick. Focus ring uses the saikat primary
-      // blue #0262c4 for keyboard accessibility.
-      className="peer h-5 w-5 shrink-0 rounded-[3px] border border-[#dfdfdf] bg-white hover:border-[#737373] ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0262c4] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-white data-[state=checked]:text-[#757474] [&_svg]:h-3.5 [&_svg]:w-3.5" />
+      // Pulls the shared SIDEBAR_CHECKBOX_CLASS constant declared at
+      // the top of this file so the Legend, "No end date", weekday
+      // filter and "Time Availability" checkboxes all share one
+      // source of styling (Task 3 unification).
+      className={SIDEBAR_CHECKBOX_CLASS} />
     }
       </>
   }
@@ -900,25 +901,75 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   //   3. no row complete   → existing "choose a date range" copy.
   //   4. no weekday        → existing "pick at least one weekday" copy.
   //   5. fallback          → existing generic copy.
-  const saveErrorMsg = (() => {
-    if (!showErrors) return '';
-    if (hasPartialDateRow) {
-      return 'Please fill in all missing date fields before saving.';
+  // Task 2 — Dynamic, row-specific validation messages.
+  //
+  // The previous saveErrorMsg returned ONE generic sentence ("Please
+  // fill in all missing date fields before saving."). The spec asks
+  // for messages that explicitly name the view (Month / Week), the
+  // section (Date Availability / Time Availability), the row number,
+  // AND the kind of error (missing start, missing end, or time
+  // conflict). We build a list of every failing row in document
+  // order — primary first, extras next, then time rows — so the
+  // first message the user reads matches the first thing they would
+  // see scanning the form top-to-bottom.
+  //
+  // Auto-resolution still works automatically: the array is
+  // recomputed on every render from current state, so the moment the
+  // user fills a missing field or removes a partial row, the matching
+  // message disappears and the next one (if any) takes its place.
+  // When ALL issues are resolved the list becomes [] and the
+  // <ul>/<p> error block stops rendering entirely.
+  const viewLabel = view === 'Week' ? 'Week' : 'Month';
+  const sidebarValidationMessages = (() => {
+    if (!showErrors) return [];
+    const issues = [];
+
+    // Date rows — primary is Row 1, extras are Row 2..N.
+    const allDateRows = [
+      { row: primaryRangeValue, label: 1 },
+      ...extraRows.map((r, i) => ({ row: r, label: i + 2 })),
+    ];
+    allDateRows.forEach(({ row, label }) => {
+      if (!isDateRowPartial(row)) return;
+      const loc = `${viewLabel} view, Date Row ${label}`;
+      if (row?.startDate && !(row.endDate || noEndDate)) {
+        issues.push(`Missing end date in ${loc}`);
+      } else if (!row?.startDate && row?.endDate) {
+        issues.push(`Missing start date in ${loc}`);
+      }
+    });
+
+    // Time rows — chronological conflict takes priority over the
+    // partial-pair labels because if both fields are filled but
+    // ordered wrong, "Missing end time" would be confusing.
+    if (timeAvailEnabled) {
+      timeRanges.forEach((row, idx) => {
+        const loc = `${viewLabel} view, Time Row ${idx + 1}`;
+        if (row?.startTime && row?.endTime && row.endTime <= row.startTime) {
+          issues.push(`Time conflict in ${loc} (end must be after start)`);
+          return;
+        }
+        if (row?.startTime && !row?.endTime) {
+          issues.push(`Missing end time in ${loc}`);
+        } else if (!row?.startTime && row?.endTime) {
+          issues.push(`Missing start time in ${loc}`);
+        }
+      });
     }
-    if (hasInvalidTimeOrder) {
-      return 'End time must be later than start time. Please fix the highlighted time rows before saving.';
-    }
-    if (hasPartialTimeRow) {
-      return 'Each row needs both a start and an end. Please fill the highlighted fields before saving.';
-    }
-    if (canSave) return '';
+
+    if (issues.length > 0) return issues;
+
+    // Fallback — legacy generic messages still cover the cases that
+    // aren't tied to a specific row (no row complete at all, no
+    // weekday selected, generic "fill required fields").
+    if (canSave) return [];
     if (!anyRowComplete) {
-      return 'Please choose a date range (start and end date, or tick "No end date") before saving.';
+      return ['Please choose a date range (start and end date, or tick "No end date") before saving.'];
     }
     if (activeWeekdays.length === 0) {
-      return 'Select at least one weekday for the chosen date range.';
+      return ['Select at least one weekday for the chosen date range.'];
     }
-    return 'Please complete the required availability fields before saving.';
+    return ['Please complete the required availability fields before saving.'];
   })();
 
   // Revert every field in this tab to its initial state. The date ranges are
@@ -1145,6 +1196,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                   id="no-end-date"
                                   checked={noEndDate}
                                   onCheckedChange={(c) => setNoEndDate(c === true)}
+                                  className={SIDEBAR_CHECKBOX_CLASS}
                                 />
                                 <label htmlFor="no-end-date" className="text-sm font-medium text-gray-700">No end date</label>
                             </div>
@@ -1169,6 +1221,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                       checked={activeWeekdays.includes(opt.idx)}
                                       onCheckedChange={(c) => toggleWeekday(opt.idx, c === true)}
                                       aria-label={`Toggle ${opt.label}`}
+                                      className={SIDEBAR_CHECKBOX_CLASS}
                                     />
                                     {opt.label}
                                   </label>
@@ -1182,6 +1235,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                               id="time-avail"
                               checked={timeAvailEnabled}
                               onCheckedChange={(c) => setTimeAvailEnabled(c === true)}
+                              className={SIDEBAR_CHECKBOX_CLASS}
                             />
                             <label htmlFor="time-avail" className="text-sm font-medium text-gray-700">Time Availability</label>
                             <span
@@ -1305,17 +1359,44 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                               // button can NEVER stay bg-green-600
                               // while a validation error is live.
                               aria-disabled={!canSave || hasAnyValidationError}
+                              // Task 1 — inactive cursor reverts to the
+                              // default arrow (cursor-default) instead
+                              // of the prohibition icon (cursor-not-
+                              // allowed) so the button doesn't look
+                              // hard-blocked; the click still routes
+                              // to handleSaveClick → setShowErrors so
+                              // the user sees row-specific guidance
+                              // about why Save is inactive.
                               className={`w-full ${
                                 (!canSave || hasAnyValidationError)
-                                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
+                                  ? 'bg-gray-300 text-gray-500 cursor-default hover:bg-gray-300'
                                   : 'bg-green-600 hover:bg-green-700 text-white'
                               }`}
                             >
                               Save Dates
                             </Button>
                         </div>
-                        {saveErrorMsg && (
-                          <p className="text-sm text-red-600 -mt-2">{saveErrorMsg}</p>
+                        {sidebarValidationMessages.length > 0 && (
+                          // Task 2 — show one specific message per
+                          // failing row when there are multiple; a
+                          // single sentence when there's only one.
+                          // The list is recomputed each render so
+                          // fixing the offending field instantly
+                          // removes the corresponding bullet.
+                          sidebarValidationMessages.length === 1 ? (
+                            <p className="text-sm text-red-600 -mt-2">
+                              {sidebarValidationMessages[0]}
+                            </p>
+                          ) : (
+                            <div className="text-sm text-red-600 -mt-2">
+                              <p className="font-medium">Please fix the following:</p>
+                              <ul className="list-disc list-inside pl-1 space-y-0.5">
+                                {sidebarValidationMessages.map((msg, i) => (
+                                  <li key={i}>{msg}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )
                         )}
 
                         <div>
