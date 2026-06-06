@@ -13,6 +13,8 @@ import { Link } from 'react-router-dom';
 import { format } from "date-fns";
 import DateRangePicker from '../common/DateRangePicker';
 import TimeSelect from '../common/TimeSelect';
+import TimeRangeFields from '../common/TimeRangeFields';
+import { SIDEBAR_CHECKBOX_CLASS } from '../common/sidebarCheckboxClass';
 import CalendarTaskManagerPanel from './CalendarTaskManagerPanel';
 import CalendarSetPricePanel from './CalendarSetPricePanel';
 import CalendarNewBookingPanel from './CalendarNewBookingPanel';
@@ -36,15 +38,10 @@ const MASTER_CALENDAR_CATEGORIES = [
 { key: 'waiting', text: 'Waiting For Confirmation', color: 'bg-pink-200', perspectives: ['teacher-t'], defaultChecked: false }];
 
 
-// Task 3 — Shared sidebar checkbox style. Extracted from the Legend
-// item's saikat-aligned className (see style.css .checkCont/.checkmark
-// lines ~235-243) so EVERY checkbox in this sidebar uses the identical
-// 21-px white box, 1-px #dfdfdf border, hover #737373 border, gray
-// #757474 tick on white background, #0262c4 focus ring, and 3-px
-// radius. Re-using one constant guarantees a 100%-consistent design
-// system across the Legend, "No end date", the weekday filter, and
-// "Time Availability" toggles.
-const SIDEBAR_CHECKBOX_CLASS = "peer h-5 w-5 shrink-0 rounded-[3px] border border-[#dfdfdf] bg-white hover:border-[#737373] ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0262c4] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-white data-[state=checked]:text-[#757474] [&_svg]:h-3.5 [&_svg]:w-3.5";
+// SIDEBAR_CHECKBOX_CLASS has been extracted to
+// `../common/sidebarCheckboxClass` so the same visual language is now
+// shared with CalendarNewBookingPanel + CalendarTaskManagerPanel (see
+// the new shared module for full rationale).
 
 const LegendItem = ({ color, text, icon, checked, isHeader, onCheckedChange, itemKey }) =>
 <li className="flex items-center text-sm text-gray-700 py-1">
@@ -120,39 +117,21 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showEr
   const isPartial = !!row.startTime !== !!row.endTime;
   const startInvalid = isInvalidOrder || (showErrors && isPartial && !row.startTime);
   const endInvalid = isInvalidOrder || (showErrors && isPartial && !row.endTime);
-  const endTimeRef = useRef(null);
   return (
     <div className="flex items-end gap-1 min-w-0">
-      <div className="flex-1 min-w-0 space-y-1">
-        <label className="text-xs font-medium text-gray-700">Start Time</label>
-        <TimeSelect
-          value={row.startTime}
-          onChange={(newStart) => {
-            if (row.endTime && newStart >= row.endTime) {
-              onChange({ ...row, startTime: newStart, endTime: '' });
-            } else {
-              onChange({ ...row, startTime: newStart });
-            }
-          }}
-          onValueCommit={() => {
-            // Auto-focus & open the End picker after the user commits
-            // a full HH:MM Start time. The setTimeout(0) handoff lets
-            // Radix finish closing the Start popover before End opens.
-            endTimeRef.current?.openAndFocus();
-          }}
-          invalid={startInvalid}
-        />
-      </div>
-      <div className="flex-1 min-w-0 space-y-1">
-        <label className="text-xs font-medium text-gray-700">End Time</label>
-        <TimeSelect
-          ref={endTimeRef}
-          value={row.endTime}
-          onChange={(newEnd) => onChange({ ...row, endTime: newEnd })}
-          minTime={row.startTime}
-          invalid={endInvalid}
-        />
-      </div>
+      {/* Task 3 — shared TimeRangeFields component (also used by
+          CalendarNewBookingPanel's BookingForm). The bidirectional
+          filtering (Task 2), auto-focus-next, and per-field invalid
+          markers now live inside that component, identical for both
+          surfaces. The merge into the row state happens here so the
+          extra add/remove buttons + the row's id keep working. */}
+      <TimeRangeFields
+        startTime={row.startTime}
+        endTime={row.endTime}
+        onChange={(next) => onChange({ ...row, ...next })}
+        startInvalid={startInvalid}
+        endInvalid={endInvalid}
+      />
       <Button
         variant="ghost"
         size="sm"

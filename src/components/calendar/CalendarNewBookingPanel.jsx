@@ -25,7 +25,6 @@ import {
 } from '@/components/ui/tooltip';
 import {
   Calendar as CalendarIcon,
-  Clock,
   ChevronDown,
   Pencil,
   Trash2,
@@ -35,6 +34,14 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react';
+// Task 1 — same checkbox visual language as the Legend in
+// CalendarSidebar (single source of truth, see the shared module).
+import { SIDEBAR_CHECKBOX_CLASS } from '@/components/common/sidebarCheckboxClass';
+// Task 3 — Time Of Booking reuses the exact same Start/End fields as
+// the sidebar's Set Availability tab. Bidirectional filtering (Task 2)
+// + auto-focus-next + per-field invalid markers all come along for
+// free because both surfaces mount the same component.
+import TimeRangeFields from '@/components/common/TimeRangeFields';
 
 const TIP =
   "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever";
@@ -95,17 +102,11 @@ function DateField({ label }) {
   );
 }
 
-function TimeField({ label }) {
-  return (
-    <div className="flex-1 min-w-[9rem]">
-      <Label className="text-sm mb-1 block">{label}</Label>
-      <div className="relative">
-        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <FieldInput type="time" className="pl-9" />
-      </div>
-    </div>
-  );
-}
+// Task 3 — TimeField removed. Both Start/End Time inputs now come
+// from the shared <TimeRangeFields> component (the same one mounted
+// by the sidebar's Set Availability tab), giving the New Booking
+// flow identical dropdowns, identical chronological filtering, and
+// identical auto-focus-next behavior.
 
 function DisclosureRow({ label, children }) {
   const [open, setOpen] = useState(false);
@@ -128,47 +129,9 @@ function DisclosureRow({ label, children }) {
   );
 }
 
-function MiniMonthCalendar() {
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
-  const leading = [31];
-  const trailing = [1, 2, 3];
-  return (
-    <div className="bg-white rounded-md border p-3">
-      <div className="flex items-center justify-between mb-2">
-        <button className="text-gray-500 hover:text-gray-700">‹</button>
-        <div className="text-center">
-          <div className="font-bold text-lg">August</div>
-          <div className="text-xs text-gray-500">Wed Aug 03 2022</div>
-        </div>
-        <button className="text-gray-500 hover:text-gray-700">›</button>
-      </div>
-      <div className="grid grid-cols-7 text-center text-xs text-gray-500 mb-1">
-        {DAYS.map((d) => (
-          <div key={d}>{d}</div>
-        ))}
-      </div>
-      <div className="grid grid-cols-7 text-center text-sm gap-1">
-        {leading.map((d) => (
-          <div key={`l${d}`} className="text-gray-300">
-            {d}
-          </div>
-        ))}
-        {days.map((d) => (
-          <div
-            key={d}
-            className={`py-1 rounded ${d === 3 ? 'bg-blue-600 text-white' : 'text-gray-700 hover:bg-gray-100'}`}>
-            {d}
-          </div>
-        ))}
-        {trailing.map((d) => (
-          <div key={`t${d}`} className="text-gray-300">
-            {d}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+// Task 4 — MiniMonthCalendar removed. It was the only consumer of the
+// "View Monthly Calander" DisclosureRow, and that DisclosureRow is no
+// longer part of the booking flow (see BookingForm below).
 
 function DaysOfWeekCheckboxes() {
   const [checked, setChecked] = useState(() => new Set(DAYS));
@@ -184,7 +147,12 @@ function DaysOfWeekCheckboxes() {
       <div className="flex flex-wrap gap-3 mt-3">
         {DAYS.map((d) => (
           <label key={d} className="flex items-center gap-2 text-sm text-gray-700">
-            <Checkbox checked={checked.has(d)} onCheckedChange={() => toggle(d)} />
+            <Checkbox
+              checked={checked.has(d)}
+              onCheckedChange={() => toggle(d)}
+              // Task 1 — shared sidebar checkbox visual language.
+              className={SIDEBAR_CHECKBOX_CLASS}
+            />
             {d}
           </label>
         ))}
@@ -316,6 +284,13 @@ function CostSummary() {
 }
 
 function BookingForm({ finalCta }) {
+  // Task 3 — local state for the Time Of Booking row. Wired to the
+  // shared <TimeRangeFields> so the dropdowns, chronological filter
+  // (Task 2 bidirectional), auto-focus-next, and per-field invalid
+  // markers all behave identically to the sidebar's Set Availability
+  // tab.
+  const [bookingTime, setBookingTime] = useState({ startTime: '', endTime: '' });
+
   return (
     <div className="space-y-4">
       <p className="font-semibold text-gray-800 underline">
@@ -337,9 +312,9 @@ function BookingForm({ finalCta }) {
         <DateField label="End Date" />
       </div>
 
-      <DisclosureRow label="View Monthly Calander">
-        <MiniMonthCalendar />
-      </DisclosureRow>
+      {/* Task 4 — "View Monthly Calander" DisclosureRow + its
+          MiniMonthCalendar definition have been removed from this
+          panel as no longer required by the booking flow. */}
 
       <DisclosureRow
         label={
@@ -355,9 +330,12 @@ function BookingForm({ finalCta }) {
         Time Of Booking
         <InfoTip />
       </p>
-      <div className="flex flex-wrap gap-2">
-        <TimeField label="Start Time" />
-        <TimeField label="End Time" />
+      <div className="flex items-end gap-2 min-w-0">
+        <TimeRangeFields
+          startTime={bookingTime.startTime}
+          endTime={bookingTime.endTime}
+          onChange={setBookingTime}
+        />
       </div>
 
       <Alert variant="destructive" className="text-sm">

@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import FieldInput from '@/components/common/FieldInput';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+// Task 1 — single source of truth for sidebar checkbox styling
+// (see the shared module for the saikat-anchored rationale).
+import { SIDEBAR_CHECKBOX_CLASS } from '@/components/common/sidebarCheckboxClass';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import {
   Popover,
@@ -302,6 +305,8 @@ export default function CalendarTaskManagerPanel() {
                           titleFilters.filter((l) => l !== opt.label)
                         );
                     }}
+                    // Task 1 — shared sidebar checkbox visual language.
+                    className={SIDEBAR_CHECKBOX_CLASS}
                   />
                   <span
                     className={`inline-block w-3 h-3 rounded-full ${opt.color}`}

@@ -29,7 +29,7 @@ export const MINUTE_OPTIONS = ['00', '15', '30', '45'];
 // `onValueCommit(next)` fires exactly once when the user finishes
 // picking BOTH hour and minute (i.e. on `pickMinute`). pickHour does
 // NOT fire it, so we don't auto-advance to End mid-pick.
-const TimeSelect = forwardRef(({ value, onChange, onValueCommit, minTime, invalid, disabled, placeholder = 'HH:MM', triggerClassName = '' }, ref) => {
+const TimeSelect = forwardRef(({ value, onChange, onValueCommit, minTime, maxTime, invalid, disabled, placeholder = 'HH:MM', triggerClassName = '' }, ref) => {
   const [hour = '', minute = ''] = value ? value.split(':') : [];
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState('hour');
@@ -46,14 +46,23 @@ const TimeSelect = forwardRef(({ value, onChange, onValueCommit, minTime, invali
     },
   }), []);
 
-  const isAfter = (h, m) => {
-    if (!minTime) return true;
-    return `${h}:${m}` > minTime;
+  // Task 2 — Bidirectional chronological filter. `minTime` keeps the
+  // existing strict-greater-than behavior; `maxTime` adds a strict-less-
+  // than counterpart so that when the user picks End BEFORE Start, the
+  // Start dropdown only shows times that chronologically precede End.
+  // Strings are zero-padded 'HH:MM' so lexical < / > match numeric.
+  const isInRange = (h, m) => {
+    const t = `${h}:${m}`;
+    if (minTime && t <= minTime) return false;
+    if (maxTime && t >= maxTime) return false;
+    return true;
   };
+  // Backwards-compatible alias used elsewhere in this component.
+  const isAfter = (h, m) => isInRange(h, m);
 
-  const hourOptions = HOUR_OPTIONS.filter((h) => MINUTE_OPTIONS.some((m) => isAfter(h, m)));
+  const hourOptions = HOUR_OPTIONS.filter((h) => MINUTE_OPTIONS.some((m) => isInRange(h, m)));
   const minuteOptions = hour
-    ? MINUTE_OPTIONS.filter((m) => isAfter(hour, m))
+    ? MINUTE_OPTIONS.filter((m) => isInRange(hour, m))
     : MINUTE_OPTIONS;
 
   const handleOpenChange = (next) => {
