@@ -814,26 +814,31 @@ export default function TeacherCalendar() {
   }, []);
 
   const handlePrimaryRangeChange = (rangeData) => {
-    // Task 2 — explicit full-clear from the sidebar's first-row delete
-    // fallback. We accept BOTH-null but still reject partial-null so
-    // mid-edit picker states never leak into the persisted range.
-    if (
-      rangeData &&
-      rangeData.startDate === null &&
-      rangeData.endDate === null
-    ) {
-      setPrimaryRange({ startDate: null, endDate: null });
-      return;
-    }
-    if (!rangeData?.startDate || !rangeData?.endDate) return;
-    const ns = new Date(rangeData.startDate); ns.setHours(0, 0, 0, 0);
-    const ne = new Date(rangeData.endDate); ne.setHours(0, 0, 0, 0);
+    // Bug-fix — accept ANY combination (both-set, partial, fully
+    // cleared). The previous "reject partial-null" guard prevented
+    // mid-edit picker states (Start picked, End still blank) from
+    // reaching the sidebar's hasPartialDateRow validation, so the
+    // Save Dates button stayed green when it should have been gray.
+    // The sidebar's validation pipeline decides whether to gate Save
+    // based on the live state — this handler is now a pure setter
+    // that just normalizes Date instances to local-midnight and
+    // dedupes against the previous value.
+    if (!rangeData) return;
+    const toDay = (d) => {
+      if (!d) return null;
+      const dd = new Date(d);
+      dd.setHours(0, 0, 0, 0);
+      return dd;
+    };
+    const ns = toDay(rangeData.startDate);
+    const ne = toDay(rangeData.endDate);
     setPrimaryRange((prev) => {
-      if (prev?.startDate && prev?.endDate) {
-        const ps = new Date(prev.startDate); ps.setHours(0, 0, 0, 0);
-        const pe = new Date(prev.endDate); pe.setHours(0, 0, 0, 0);
-        if (ps.getTime() === ns.getTime() && pe.getTime() === ne.getTime()) return prev;
-      }
+      const ps = toDay(prev?.startDate);
+      const pe = toDay(prev?.endDate);
+      const eq = (a, b) =>
+        (a === null && b === null) ||
+        (a !== null && b !== null && a.getTime() === b.getTime());
+      if (eq(ps, ns) && eq(pe, ne)) return prev;
       return { startDate: ns, endDate: ne };
     });
   };

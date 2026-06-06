@@ -871,6 +871,26 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     extraRows.some(isDateRowPartial);
   const hasPartialPair = hasPartialTimeRow || hasPartialDateRow;
 
+  // Bug-fix — chronological time validation now feeds the global form
+  // state. Previously TimeAvailabilityRow detected `endTime <= startTime`
+  // locally and applied red rings to both inputs, but that flag never
+  // climbed up to gate the Save Dates button — a user could set
+  // Start=06:30 / End=00:00, see the rings, and STILL click a green
+  // button. The lifted derivation below covers both same-day order
+  // failures and the 00:00 edge case (since times are zero-padded
+  // 'HH:MM' strings, lexical compare matches numeric compare — so
+  // "00:00" < "06:30" correctly marks End=00:00 as before Start).
+  const hasInvalidTimeOrder = timeAvailEnabled && timeRanges.some(
+    (r) => !!r && !!r.startTime && !!r.endTime && r.endTime <= r.startTime,
+  );
+
+  // Single source of truth for "the form has at least one validation
+  // error that must block Save Dates". The button's aria-disabled +
+  // gray styling AND handleSaveClick's short-circuit BOTH read this
+  // so the chronological check is treated identically to partial
+  // pairs — no decoupled states.
+  const hasAnyValidationError = hasPartialPair || hasInvalidTimeOrder;
+
   // saveErrorMsg precedence (most specific → most generic):
   //   1. partial date row  → exact spec copy for the comprehensive
   //      multi-row date validation (covers both primary and extras).
@@ -884,6 +904,9 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     if (!showErrors) return '';
     if (hasPartialDateRow) {
       return 'Please fill in all missing date fields before saving.';
+    }
+    if (hasInvalidTimeOrder) {
+      return 'End time must be later than start time. Please fix the highlighted time rows before saving.';
     }
     if (hasPartialTimeRow) {
       return 'Each row needs both a start and an end. Please fill the highlighted fields before saving.';
@@ -915,11 +938,14 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
   // Save Dates click: if requirements aren't met, surface the reason + red
   // fields (instead of doing nothing); otherwise save, then reset the form.
-  // Partial pairs (start without end, or vice versa) block the save FIRST
-  // so the existing canSave/weekday checks never get a chance to look at
-  // a half-filled row.
+  // ANY validation error — partial date row, partial time row, OR a
+  // chronological time-order violation — blocks the save AT THE VERY
+  // TOP of the function and short-circuits via `return;` so the
+  // backend save path (handleSave) cannot run. `setShowErrors(true)`
+  // flips the global error state so the per-field red rings + the
+  // inline error message both light up in the same frame.
   const handleSaveClick = () => {
-    if (hasPartialPair) {
+    if (hasAnyValidationError) {
       setShowErrors(true);
       return;
     }
@@ -1268,11 +1294,19 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                               onClick={handleSaveClick}
                               // aria-disabled (not the native disabled
                               // attribute) so the button STILL receives
-                              // the click that triggers the validation
-                              // error UI for partial-pair rows.
-                              aria-disabled={!canSave || hasPartialPair}
+                              // the click that triggers handleSaveClick
+                              // → setShowErrors(true) → red rings +
+                              // inline error. `hasAnyValidationError`
+                              // is the single source of truth so any
+                              // failing field anywhere in the form
+                              // (partial date row, partial time row, or
+                              // chronological time-order violation)
+                              // forces the gray/inactive state. The
+                              // button can NEVER stay bg-green-600
+                              // while a validation error is live.
+                              aria-disabled={!canSave || hasAnyValidationError}
                               className={`w-full ${
-                                (!canSave || hasPartialPair)
+                                (!canSave || hasAnyValidationError)
                                   ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300'
                                   : 'bg-green-600 hover:bg-green-700 text-white'
                               }`}

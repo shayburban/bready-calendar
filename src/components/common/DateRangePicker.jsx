@@ -243,16 +243,26 @@ const DateRangePicker = ({
            (isBefore(date, end) || isEqual(date, end));
   };
 
-  // Notify parent of range changes — but only when the content actually
-  // changes. The dedup via `lastEmittedRef` prevents this effect from
-  // re-firing just because `onRangeChange` got a new function reference
-  // on a parent re-render (the typical inline-arrow case).
+  // Notify parent of range changes — including PARTIAL states (Bug-fix:
+  // the previous `if (!startDate || !endDate) return` hid in-progress
+  // single-side selections from the parent. The sidebar's partial-pair
+  // validation reads the parent's range state, so a user picking only
+  // Start would visually appear partial in the picker but the parent
+  // still saw the previous COMPLETE range — Save Dates stayed green
+  // and bypassed the partial check). Emitting partials lets the
+  // sidebar's hasPartialDateRow detector see ground truth and gate the
+  // Save button correctly.
+  //
+  // `lastEmittedRef` dedup now covers all four shape combinations
+  // (null/null, start/null, null/end, start/end) so an echo of any
+  // shape from the parent (the inline-arrow `onRangeChange={(rd) =>
+  // ...}` identity churn) still short-circuits this effect.
   useEffect(() => {
     // No range to emit in single-date mode — the picker emits via
     // onSingleChange from handleDateClick instead.
     if (singleDate) return;
-    if (!onRangeChange || !startDate || !endDate) return;
-    const sig = `${startDate.getTime()}-${endDate.getTime()}`;
+    if (!onRangeChange) return;
+    const sig = `${startDate ? startDate.getTime() : 'null'}-${endDate ? endDate.getTime() : 'null'}`;
     if (lastEmittedRef.current === sig) return;
     lastEmittedRef.current = sig;
     onRangeChange({ startDate, endDate });
