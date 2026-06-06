@@ -24,7 +24,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-  Calendar as CalendarIcon,
   ChevronDown,
   Pencil,
   Trash2,
@@ -34,6 +33,10 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react';
+// CalendarIcon dropped — the previous local DateField that used it has
+// been replaced by the global <DateRangeFields/>, which renders its
+// own date triggers (no leading icon by design, matching the sidebar's
+// Start/End Date pair).
 // Task 1 — same checkbox visual language as the Legend in
 // CalendarSidebar (single source of truth, see the shared module).
 import { SIDEBAR_CHECKBOX_CLASS } from '@/components/common/sidebarCheckboxClass';
@@ -42,6 +45,13 @@ import { SIDEBAR_CHECKBOX_CLASS } from '@/components/common/sidebarCheckboxClass
 // + auto-focus-next + per-field invalid markers all come along for
 // free because both surfaces mount the same component.
 import TimeRangeFields from '@/components/common/TimeRangeFields';
+// Current batch — Start/End Date in BookingForm now mount the global
+// DateRangeFields (which wraps the same DateRangePicker primitive the
+// sidebar's Set Availability tab uses), permanently retiring the
+// native HTML date input that caused the previous visual mismatch.
+// Customization rides through DateRangeFields' props so the global
+// primitive itself is untouched.
+import DateRangeFields from '@/components/common/DateRangeFields';
 // Task 2 (current batch) — toast notifications on Save buttons. Same
 // toast UI/animation as the My Availability (T) popup card, with
 // tab-specific success copy.
@@ -94,46 +104,13 @@ function LabeledInput({ label, placeholder, type = 'text', tip = true }) {
   );
 }
 
-function DateField({ label }) {
-  return (
-    <div className="flex-1 min-w-[9rem]">
-      <Label className="text-sm mb-1 block">{label}</Label>
-      <div className="relative">
-        {/* `pointer-events-none` on the icon lets clicks pass through
-            to the input — matching TimeSelect's fully-clickable
-            trigger surface. */}
-        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
-        {/* Task 2 — visual + behavioral unification with the Set
-            Availability tab's <TimeSelect> trigger:
-              • h-9                 — same height
-              • text-sm             — same type scale
-              • pl-9                — reserves the CalendarIcon's
-                                       left gutter
-              • pr-2                — matches TimeSelect's px-2 right
-                                       padding (TimeSelect's left is
-                                       also px-2; we have to keep
-                                       pl-9 for the icon, so we only
-                                       align the right side)
-              • transition-colors   — matches Button's smooth
-                                       hover/focus state transition
-              • hover:bg-gray-100   — same affordance as TimeSelect's
-                                       hover:bg-accent (which is a
-                                       light-gray accent in this
-                                       project's Tailwind config)
-            FieldInput's own fieldStateClasses already carry the
-            shared `bg-gray-50 border-gray-300` + filled/empty
-            font-weight + text color logic, and Input's defaults
-            give the focus-visible:ring-1 ring-ring focus state —
-            so border / background / typography / focus styling all
-            already match by construction. */}
-        <FieldInput
-          type="date"
-          className="pl-9 pr-2 h-9 text-sm transition-colors hover:bg-gray-100"
-        />
-      </div>
-    </div>
-  );
-}
+// DateField (native <input type="date"> wrapper) is gone.
+// Start Date + End Date now mount the global <DateRangeFields/>,
+// which wraps the same DateRangePicker primitive the sidebar's Set
+// Availability tab uses. That permanently retires the user-agent
+// calendar artifact, the shadow-sm baseline, the `ring-1` focus ring,
+// and the `py-1` vertical padding that previously stopped the date
+// inputs from matching the time inputs.
 
 // Task 3 — TimeField removed. Both Start/End Time inputs now come
 // from the shared <TimeRangeFields> component (the same one mounted
@@ -323,6 +300,12 @@ function BookingForm({ finalCta }) {
   // markers all behave identically to the sidebar's Set Availability
   // tab.
   const [bookingTime, setBookingTime] = useState({ startTime: '', endTime: '' });
+  // Start/End Date pair — owned LOCALLY here so any customization
+  // BookingForm wants (different defaults, different validation,
+  // different layout container) lives here, in this surface, and
+  // never bleeds into the global <DateRangeFields/> or the
+  // underlying <DateRangePicker/> primitive.
+  const [dateRange, setDateRange] = useState({ startDate: null, endDate: null });
 
   return (
     <div className="space-y-4">
@@ -340,10 +323,18 @@ function BookingForm({ finalCta }) {
         </SelectContent>
       </Select>
 
-      <div className="flex flex-wrap gap-2">
-        <DateField label="Start Date" />
-        <DateField label="End Date" />
-      </div>
+      {/* Global <DateRangeFields/> — same Popover-based calendar the
+          sidebar's Set Availability tab uses. The native HTML date
+          picker (and its browser-driven calendar indicator, shadow-sm,
+          ring-1 focus ring, py-1 padding) is permanently retired.
+          Surface-specific overrides ride through the wrapper's props
+          (className/startInvalid/endInvalid/noEndDate) — the global
+          primitive is never modified by this surface. */}
+      <DateRangeFields
+        startDate={dateRange.startDate}
+        endDate={dateRange.endDate}
+        onChange={setDateRange}
+      />
 
       {/* Task 4 — "View Monthly Calander" DisclosureRow + its
           MiniMonthCalendar definition have been removed from this
