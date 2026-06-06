@@ -6,7 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { User, Clock, DollarSign, Search } from 'lucide-react';
+import { User, DollarSign, Search } from 'lucide-react';
+// Task 1 — Start/End Time now mount the shared <TimeRangeFields/>
+// component (same one used by the sidebar's Set Availability tab and
+// the My Availability (T) popup card).
+import TimeRangeFields from '../common/TimeRangeFields';
 
 export default function BookingModal({ 
   isOpen, 
@@ -155,32 +159,23 @@ export default function BookingModal({
             </Select>
           </div>
 
-          {/* Time Selection */}
+          {/* Time Selection — Task 1: shared <TimeRangeFields/>.
+              triggerClassName="bg-transparent" makes the input blend
+              with the modal's white surface (vs TimeSelect's default
+              contrasting bg-gray-50). Placeholder locked to
+              "Select time" per the Task 1 spec. Bidirectional filter
+              + auto-focus-next come along for free. */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label className="flex items-center space-x-1">
-                <Clock className="w-4 h-4" />
-                <span>Start Time</span>
-              </Label>
-              <Input
-                type="time"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label className="flex items-center space-x-1">
-                <Clock className="w-4 h-4" />
-                <span>End Time</span>
-              </Label>
-              <Input
-                type="time"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-                className="mt-1"
-              />
-            </div>
+            <TimeRangeFields
+              startTime={startTime}
+              endTime={endTime}
+              onChange={({ startTime: s, endTime: e }) => {
+                setStartTime(s);
+                setEndTime(e);
+              }}
+              triggerClassName="h-10 px-3 bg-transparent"
+              placeholder="Select time"
+            />
           </div>
 
           {/* Pricing Info */}

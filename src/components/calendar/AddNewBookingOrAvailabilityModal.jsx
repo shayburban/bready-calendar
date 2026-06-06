@@ -30,11 +30,15 @@ import {
 } from '@/components/ui/tooltip';
 import {
   Calendar as CalendarIcon,
-  Clock,
   ChevronDown,
   Pencil,
   Trash2,
 } from 'lucide-react';
+// Task 1 — Start/End Time in both OpenAvailabilityPane and
+// NewBookingPane now mount the shared <TimeRangeFields/> component
+// (same one used by the sidebar's Set Availability tab and the My
+// Availability (T) popup card).
+import TimeRangeFields from '../common/TimeRangeFields';
 
 const TIP =
   "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever";
@@ -74,17 +78,11 @@ function DateField({ label = 'Date', value }) {
   );
 }
 
-function TimeField({ label }) {
-  return (
-    <div className="flex-1 min-w-[9rem]">
-      <Label className="text-sm mb-1 block">{label}</Label>
-      <div className="relative">
-        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <Input type="time" className="pl-9" />
-      </div>
-    </div>
-  );
-}
+// Task 1 — local TimeField helper removed. Both OpenAvailabilityPane
+// and NewBookingPane now mount the shared <TimeRangeFields/> directly,
+// so the modal's Time inputs match the sidebar's Set Availability
+// tab byte-for-byte (dropdowns, chronological filter, auto-focus-next,
+// invalid markers).
 
 function RepeatBlock({ showMeetingsAndCost }) {
   const [open, setOpen] = useState(false);
@@ -247,14 +245,23 @@ function CostSummary() {
 }
 
 function OpenAvailabilityPane({ onClose, selectedDate }) {
+  // Task 1 — local Start/End Time pair controlled by the shared
+  // <TimeRangeFields/>. triggerClassName="bg-transparent" blends with
+  // the modal's white surface; placeholder locked to "Select time".
+  const [availTime, setAvailTime] = useState({ startTime: '', endTime: '' });
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
         <DateField label="Date" value={selectedDate} />
       </div>
-      <div className="flex flex-wrap gap-2">
-        <TimeField label="Start Time" />
-        <TimeField label="End Time" />
+      <div className="flex items-end gap-2">
+        <TimeRangeFields
+          startTime={availTime.startTime}
+          endTime={availTime.endTime}
+          onChange={setAvailTime}
+          triggerClassName="h-10 px-3 bg-transparent"
+          placeholder="Select time"
+        />
       </div>
       <RepeatBlock showMeetingsAndCost={false} />
       <Alert variant="destructive" className="text-sm">
@@ -289,6 +296,9 @@ function OpenAvailabilityPane({ onClose, selectedDate }) {
 }
 
 function NewBookingPane({ onClose, selectedDate }) {
+  // Task 1 — local Start/End Time pair for the booking flow,
+  // controlled by the shared <TimeRangeFields/>.
+  const [bookingTime, setBookingTime] = useState({ startTime: '', endTime: '' });
   return (
     <div className="space-y-4">
       <Select>
@@ -325,9 +335,14 @@ function NewBookingPane({ onClose, selectedDate }) {
       <div className="flex flex-wrap gap-2">
         <DateField label="Date" value={selectedDate} />
       </div>
-      <div className="flex flex-wrap gap-2">
-        <TimeField label="Start Time" />
-        <TimeField label="End Time" />
+      <div className="flex items-end gap-2">
+        <TimeRangeFields
+          startTime={bookingTime.startTime}
+          endTime={bookingTime.endTime}
+          onChange={setBookingTime}
+          triggerClassName="h-10 px-3 bg-transparent"
+          placeholder="Select time"
+        />
       </div>
       <RepeatBlock showMeetingsAndCost />
       <Alert variant="destructive" className="text-sm">

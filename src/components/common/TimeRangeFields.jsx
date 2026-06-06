@@ -37,6 +37,17 @@ export default function TimeRangeFields({
   onChange,
   startInvalid = false,
   endInvalid = false,
+  // Passed through to BOTH TimeSelect triggers. Used by popup cards
+  // to blend the input bg with the surrounding card (Task 1 visual
+  // override — e.g. `bg-transparent` so it doesn't show the sidebar's
+  // contrasting `bg-gray-50` over a white modal). Tailwind-merge
+  // resolves conflicting bg/border/etc. utilities in favor of the
+  // override.
+  triggerClassName,
+  // Per-field placeholder text. Defaults to TimeSelect's own default
+  // ('HH:MM') to preserve the sidebar's existing copy. Popup cards
+  // override to 'Select time' (Task 1 spec).
+  placeholder,
 }) {
   const endTimeRef = useRef(null);
 
@@ -61,6 +72,8 @@ export default function TimeRangeFields({
             endTimeRef.current?.openAndFocus();
           }}
           invalid={startInvalid}
+          triggerClassName={triggerClassName}
+          {...(placeholder !== undefined ? { placeholder } : {})}
         />
       </div>
       <div className="flex-1 min-w-0 space-y-1">
@@ -73,6 +86,8 @@ export default function TimeRangeFields({
           minTime={startTime || undefined}
           onChange={(newEnd) => onChange({ startTime, endTime: newEnd })}
           invalid={endInvalid}
+          triggerClassName={triggerClassName}
+          {...(placeholder !== undefined ? { placeholder } : {})}
         />
       </div>
     </>

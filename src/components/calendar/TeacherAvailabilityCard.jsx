@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -24,7 +24,7 @@ import { format } from 'date-fns';
 import NavigationWithinLegend from './NavigationWithinLegend';
 import CalendarWithinCalendarCards from './CalendarWithinCalendarCards';
 import DateRangePicker from '../common/DateRangePicker';
-import TimeSelect from '../common/TimeSelect';
+import TimeRangeFields from '../common/TimeRangeFields';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,10 +56,9 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
-  // Auto-focus-next-input — the Start TimeSelect's onValueCommit calls
-  // endTimeRef.current?.openAndFocus() so picking a full HH:MM in Start
-  // immediately opens the adjacent End picker.
-  const endTimeRef = useRef(null);
+  // Auto-focus-next-input now lives INSIDE <TimeRangeFields/>; the
+  // shared component owns the End-picker ref internally so this
+  // popup no longer needs its own `endTimeRef`.
 
   // Task 5 — overlap math. Two time ranges overlap iff `aStart < bEnd` AND
   // `bStart < aEnd`. Times are 'HH:MM' strings; we compare by minutes.
@@ -443,51 +442,30 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
               "must be after Start" filter used in the sidebar.
               triggerClassName="h-10 px-3" makes the Time triggers match the
               DateRangePicker's h-10 px-3 trigger exactly (Task 3 alignment). */}
-          <div className="col-span-1 space-y-1">
-            <label className="text-xs font-medium text-gray-700">Start Time</label>
-            <TimeSelect
-              value={startTime}
-              onChange={(newStart) => {
-                if (endTime && newStart >= endTime) {
-                  setStartTime(newStart);
-                  setEndTime('');
-                } else {
-                  setStartTime(newStart);
-                }
+          {/* Task 1 — Start/End Time now mount the shared
+              <TimeRangeFields/> component (the same one used by the
+              sidebar's Set Availability tab). Bidirectional filter,
+              auto-focus-next, and per-field invalid markers all come
+              along for free.
+              triggerClassName="h-10 px-3 bg-transparent" overrides
+              TimeSelect's default contrasting `bg-gray-50` so the
+              input blends with the popup card's surface (placeholder
+              copy locked to "Select time" per the Task 1 spec). */}
+          <div className="col-span-2 md:col-span-2 grid grid-cols-2 gap-2">
+            <TimeRangeFields
+              startTime={startTime}
+              endTime={endTime}
+              onChange={({ startTime: s, endTime: e }) => {
+                setStartTime(s);
+                setEndTime(e);
               }}
-              // Auto-focus & open the End picker after the user commits
-              // a full HH:MM Start time. TimeSelect's onValueCommit fires
-              // ONLY after pickMinute (not pickHour), so we don't chain
-              // to End mid-pick. setTimeout(0) inside TimeSelect lets
-              // Radix finish closing this popover before End opens.
-              onValueCommit={() => {
-                endTimeRef.current?.openAndFocus();
-              }}
-              // Task 1 — red ring when the user clicked Save with
-              // Start Time missing (driven by the popup's existing
-              // validationErrors set; never lit during normal typing).
-              invalid={validationErrors.includes('Start Time')}
-              placeholder="Select time"
-              triggerClassName="h-10 px-3"
-            />
-          </div>
-          <div className="col-span-1 space-y-1">
-            <label className="text-xs font-medium text-gray-700">End Time</label>
-            <TimeSelect
-              ref={endTimeRef}
-              value={endTime}
-              onChange={(newEnd) => setEndTime(newEnd)}
-              minTime={startTime}
-              // Task 1 — combine the existing chronological-order
-              // check with the missing-field marker so a single
-              // red ring covers both "End time before Start" and
-              // "End time empty after Save was clicked".
-              invalid={
+              startInvalid={validationErrors.includes('Start Time')}
+              endInvalid={
                 !!(startTime && endTime && endTime <= startTime) ||
                 validationErrors.includes('End Time')
               }
+              triggerClassName="h-10 px-3 bg-transparent"
               placeholder="Select time"
-              triggerClassName="h-10 px-3"
             />
           </div>
         </div>

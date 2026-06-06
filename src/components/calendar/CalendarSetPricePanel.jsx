@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import FieldInput from '@/components/common/FieldInput';
+// Task 2 — toast notifications on Save (same toast UI/animation as
+// the My Availability (T) popup card — see TeacherAvailabilityCard
+// for the canonical pattern).
+import { toast } from '@/components/ui/use-toast';
 import {
   Select,
   SelectContent,
@@ -159,7 +163,17 @@ function HoursPane() {
       </div>
       <div className="flex gap-3">
         <Button variant="outline">Cancel</Button>
-        <Button className="bg-green-600 hover:bg-green-700">Save Price</Button>
+        <Button
+          className="bg-green-600 hover:bg-green-700"
+          onClick={() =>
+            toast({
+              title: 'Price settings successfully updated.',
+              description: 'Your pricing changes have been applied to the selected period.',
+            })
+          }
+        >
+          Save Price
+        </Button>
       </div>
       <CurrentPriceBlock showLastUpdate />
     </div>
@@ -211,7 +225,17 @@ function PackagesPane() {
       </div>
       <div className="flex gap-3">
         <Button variant="outline">Cancel</Button>
-        <Button className="bg-green-600 hover:bg-green-700">Save Price</Button>
+        <Button
+          className="bg-green-600 hover:bg-green-700"
+          onClick={() =>
+            toast({
+              title: 'Price settings successfully updated.',
+              description: 'Your pricing changes have been applied to the selected period.',
+            })
+          }
+        >
+          Save Price
+        </Button>
       </div>
       <CurrentPriceBlock showLastUpdate={false} />
     </div>

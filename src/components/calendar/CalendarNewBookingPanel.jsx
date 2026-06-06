@@ -42,6 +42,10 @@ import { SIDEBAR_CHECKBOX_CLASS } from '@/components/common/sidebarCheckboxClass
 // + auto-focus-next + per-field invalid markers all come along for
 // free because both surfaces mount the same component.
 import TimeRangeFields from '@/components/common/TimeRangeFields';
+// Task 2 (current batch) — toast notifications on Save buttons. Same
+// toast UI/animation as the My Availability (T) popup card, with
+// tab-specific success copy.
+import { toast } from '@/components/ui/use-toast';
 
 const TIP =
   "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever";
@@ -96,7 +100,13 @@ function DateField({ label }) {
       <Label className="text-sm mb-1 block">{label}</Label>
       <div className="relative">
         <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <FieldInput type="date" className="pl-9" />
+        {/* Task 3 — visual harmonization with the Set Availability
+            tab's <TimeSelect> trigger. FieldInput already shares
+            `bg-gray-50 border-gray-300` + the filled/empty font-weight
+            +text-color logic with TimeSelect; we add `h-9 text-sm` so
+            the height and type scale also match. The `pl-9` keeps the
+            CalendarIcon's reserved gutter. */}
+        <FieldInput type="date" className="pl-9 h-9 text-sm" />
       </div>
     </div>
   );
@@ -396,7 +406,17 @@ function BookingForm({ finalCta }) {
 
       <div className="flex gap-3">
         <Button variant="outline">Cancel</Button>
-        <Button className="bg-green-600 hover:bg-green-700">Save Sequence</Button>
+        <Button
+          className="bg-green-600 hover:bg-green-700"
+          onClick={() =>
+            toast({
+              title: 'New booking confirmed.',
+              description: 'The booking sequence has been added to your calendar.',
+            })
+          }
+        >
+          Save Sequence
+        </Button>
       </div>
 
       <Alert variant="destructive" className="text-sm">
@@ -491,7 +511,17 @@ function NewStudentPane() {
       <LabeledInput label="Student Name" placeholder="Enter Student Name" />
       <LabeledInput label="Student Email" placeholder="Enter Student Email" type="email" />
       <LabeledInput label="Student Phone Number" placeholder="Enter Student Phone No." />
-      <Button className="bg-green-600 hover:bg-green-700">Save To Contact List</Button>
+      <Button
+        className="bg-green-600 hover:bg-green-700"
+        onClick={() =>
+          toast({
+            title: 'Saved to contact list.',
+            description: 'The new student has been added to your contact list.',
+          })
+        }
+      >
+        Save To Contact List
+      </Button>
       <SelectedChip />
       <Alert variant="destructive" className="text-sm">
         <AlertDescription>

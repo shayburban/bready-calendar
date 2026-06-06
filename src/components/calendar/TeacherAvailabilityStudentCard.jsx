@@ -6,10 +6,14 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, Clock, AlertTriangle, X } from 'lucide-react';
+import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, AlertTriangle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import TabSelector from '../common/TabSelector';
 import { cn } from '@/lib/utils';
+// Task 1 — Start/End Time now mount the shared <TimeRangeFields/>
+// component (same one used by the sidebar's Set Availability tab and
+// the My Availability (T) popup card).
+import TimeRangeFields from '../common/TimeRangeFields';
 
 export default function TeacherAvailabilityStudentCard({ event, onClose }) {
     const initialDate = event?.dateString ? new Date(event.dateString) : new Date(2021, 6, 19);
@@ -18,6 +22,11 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
     const [showWarning, setShowWarning] = useState(true);
     const [repeatOpen, setRepeatOpen] = useState(false);
     const [activeDays, setActiveDays] = useState(['M', 'T1', 'W']);
+    // Task 1 — local state for the Start/End Time pair, controlled by
+    // the shared <TimeRangeFields/>. The previous markup used two
+    // uncontrolled text inputs with placeholder "Select Time" — now
+    // wired to the real picker.
+    const [bookingTime, setBookingTime] = useState({ startTime: '', endTime: '' });
 
     const timeSlots = [
         { value: '15:00 - 16:00', label: '15:00 - 16:00' },
@@ -114,21 +123,19 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
                 </SelectContent>
             </Select>
 
-            <div className="flex flex-wrap gap-2 mb-3">
-                <div className="flex-1 min-w-[140px]">
-                    <label className="text-xs font-medium text-gray-600">Start Time</label>
-                    <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                        <Input type="text" placeholder="Select Time" className="pl-9 bg-gray-50" />
-                    </div>
-                </div>
-                <div className="flex-1 min-w-[140px]">
-                    <label className="text-xs font-medium text-gray-600">End Time</label>
-                    <div className="relative">
-                        <Clock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-                        <Input type="text" placeholder="Select Time" className="pl-9 bg-gray-50" />
-                    </div>
-                </div>
+            {/* Task 1 — shared <TimeRangeFields/> with bg-transparent
+                trigger so the input blends with the popup card's white
+                surface (instead of TimeSelect's default contrasting
+                bg-gray-50). Placeholder locked to "Select time" per
+                the Task 1 spec. */}
+            <div className="flex items-end gap-2 mb-3">
+                <TimeRangeFields
+                    startTime={bookingTime.startTime}
+                    endTime={bookingTime.endTime}
+                    onChange={setBookingTime}
+                    triggerClassName="h-10 px-3 bg-transparent"
+                    placeholder="Select time"
+                />
             </div>
 
             <div className="mb-3">
