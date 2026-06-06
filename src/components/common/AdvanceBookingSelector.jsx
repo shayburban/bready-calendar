@@ -287,9 +287,10 @@ const AdvanceBookingSelector = ({
           </Select>
         </div>
         
-        {/* Trash Icon to clear selection. Hidden when hideTrash=true
-            (Rule 1 — sidebar). */}
-        {(duration || timeUnit) && !hideTrash &&
+        {/* Trash icon. Updated Task 1 — visible whenever the parent
+            allows it (Pencil edit mode on, or Page 5c). Clicking on
+            an already-empty row is a safe no-op. */}
+        {!hideTrash &&
         <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1" aria-label="Remove">
             <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
           </Button>

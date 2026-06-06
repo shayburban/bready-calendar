@@ -37,12 +37,33 @@ const toPair = (v) =>
 //     the SAME reducer state and persists the user's actual choices
 const BookingPreferences = ({ showErrors = false }) => {
   const { availability, dispatchAvailability } = useTeacher();
-  // `relative isolate` retained as a no-op safety net: it creates an
-  // isolated stacking context for the card so any future absolutely
-  // positioned overlay above cannot intercept these fields. Doesn't
-  // affect layout.
+  // Task 2 (current batch) — Page-5c pointer-events fix.
+  //
+  // `relative isolate` already creates an isolated stacking context
+  // for the card. We now ALSO add:
+  //
+  //   • z-10                — lifts the card above any sibling
+  //                            section in TeacherCalendarMain whose
+  //                            absolutely-positioned children might
+  //                            otherwise escape their intended ancestor
+  //                            and overlay the Availability Window
+  //                            row at the bottom of the page
+  //                            (CustomTimeInput inside
+  //                            TeacherSetCalendarAvailability uses
+  //                            `absolute z-50 top-full` — without an
+  //                            explicit lift here the dropdown layer
+  //                            from that earlier section could mask
+  //                            the trash button + Time Unit dropdown
+  //                            in this card once the user scrolled
+  //                            past it).
+  //   • pointer-events-auto — breaks any cascading
+  //                            pointer-events: none from a higher
+  //                            ancestor at this section boundary, so
+  //                            the inputs inside this card always
+  //                            receive clicks regardless of what's
+  //                            happening above them.
   return (
-    <Card className="shadow-sm relative isolate">
+    <Card className="shadow-sm relative isolate z-10 pointer-events-auto">
       <CardContent className="pt-6 space-y-8">
         <AvailabilityWindow
           showErrors={showErrors}

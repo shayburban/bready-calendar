@@ -364,12 +364,28 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   //      just-saved values) and reset hasAttemptedSave.
   const handleSaveSchedPrefs = async () => {
     if (isSavingSchedPrefs) return;
-    // Rule 2 (new) — defensive guard matching the button's disabled
-    // state. No DB write when nothing changed since the last save.
+    // Rule 2 — defensive guard matching the button's disabled state.
+    // No DB write when nothing changed since the last save. Silent
+    // no-op (no toast) because nothing actually went wrong.
     if (!isPrefsDirty) return;
     setHasAttemptedSave(true);
-    if (!isAnyPairComplete) return; // nothing to save
-    if (!isPrefsValid) return; // surface errors but don't persist
+    // Task 3 (current batch) — partial-pair click feedback. When the
+    // user clicks the visually-disabled Save button on a partial row,
+    // surface a destructive toast with the exact spec copy so they
+    // know WHY save is blocked. The red field borders cascade
+    // automatically via the showErrors → hasAttemptedSave wiring on
+    // each common selector.
+    if (!isPrefsValid) {
+      toast({
+        title: 'Cannot save scheduling preferences.',
+        description: 'Please complete both Number and Time Unit fields for your modified rows.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    // Nothing to persist (all rows pristine even after the dirty
+    // check — Case C territory). Silent no-op.
+    if (!isAnyPairComplete) return;
     setIsSavingSchedPrefs(true);
     try {
       const patch = {
@@ -1458,7 +1474,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                   onChange={setSchedPrefs}
                   disabled={!isEditingPreferences}
                   showErrors={hasAttemptedSave}
-                  hideTrash={hasAnySavedRow}
+                  // Updated Task 1 — trash icons now appear on EVERY
+                  // row the moment the Pencil edit mode is on, instead
+                  // of the previous Rule 1 "hide globally when any
+                  // saved row exists" guard. Pencil acts as the master
+                  // gate: edit mode → per-row resets exposed;
+                  // read-only → fields disabled + trash hidden.
+                  hideTrash={!isEditingPreferences}
                   onValidityChange={setIsPrefsValid}
                 />
 
@@ -1507,16 +1529,32 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                  pair. Click fires the handler, which
                                  flips hasAttemptedSave true and lights
                                  up partial rows in red. */}
+                         {/* Task 3 (current batch) — Save visually
+                             disabled when ANY validation gate fails
+                             (mid-save / no changes / any row partial /
+                             no row complete), but stays CLICKABLE via
+                             aria-disabled (NOT native disabled) so the
+                             click reaches handleSaveSchedPrefs and the
+                             toast + red-border error UI can surface.
+                             The cursor reverts to the default arrow on
+                             the disabled branch (cursor-default) so
+                             the button doesn't look hard-blocked. */}
                          <Button
                            size="sm"
                            onClick={handleSaveSchedPrefs}
-                           disabled={isSavingSchedPrefs || !isPrefsDirty}
+                           aria-disabled={
+                             isSavingSchedPrefs ||
+                             !isPrefsDirty ||
+                             !isPrefsValid ||
+                             !isAnyPairComplete
+                           }
                            className={
-                             isSavingSchedPrefs || !isPrefsDirty
-                               ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                               : isAnyPairComplete && isPrefsValid
-                                 ? 'bg-green-600 hover:bg-green-700 text-white'
-                                 : 'bg-gray-300 text-gray-500 hover:bg-gray-400'
+                             (isSavingSchedPrefs ||
+                               !isPrefsDirty ||
+                               !isPrefsValid ||
+                               !isAnyPairComplete)
+                               ? 'bg-gray-300 text-gray-500 cursor-default hover:bg-gray-300'
+                               : 'bg-green-600 hover:bg-green-700 text-white'
                            }
                          >
                            {isSavingSchedPrefs ? 'Saving...' : 'Save'}

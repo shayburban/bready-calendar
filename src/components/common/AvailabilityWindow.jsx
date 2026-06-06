@@ -281,10 +281,15 @@ const AvailabilityWindow = ({
           </Select>
         </div>
         
-        {/* Trash Icon to clear selection. Hidden when hideTrash=true
-            (Rule 1 — sidebar suppresses the bulk-clear control on
-            every row as soon as any row has saved DB data). */}
-        {(duration || timeUnit) && !hideTrash &&
+        {/* Trash icon. Updated Task 1 — visible whenever the parent
+            allows it (e.g. sidebar Pencil edit mode on, or Page 5c
+            registration where there's no read-only state). The
+            previous `(duration || timeUnit) && …` gate hid the icon
+            on empty rows, but the spec now wants ONE trash per row
+            independently of content — clicking on an already-empty
+            row is a safe no-op since handleDelete sets nulls to
+            nulls. */}
+        {!hideTrash &&
       <Button variant="ghost" size="icon" onClick={handleDelete} className="ml-1" aria-label="Remove">
                 <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
             </Button>
