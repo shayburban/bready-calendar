@@ -99,14 +99,37 @@ function DateField({ label }) {
     <div className="flex-1 min-w-[9rem]">
       <Label className="text-sm mb-1 block">{label}</Label>
       <div className="relative">
-        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        {/* Task 3 — visual harmonization with the Set Availability
-            tab's <TimeSelect> trigger. FieldInput already shares
-            `bg-gray-50 border-gray-300` + the filled/empty font-weight
-            +text-color logic with TimeSelect; we add `h-9 text-sm` so
-            the height and type scale also match. The `pl-9` keeps the
-            CalendarIcon's reserved gutter. */}
-        <FieldInput type="date" className="pl-9 h-9 text-sm" />
+        {/* `pointer-events-none` on the icon lets clicks pass through
+            to the input — matching TimeSelect's fully-clickable
+            trigger surface. */}
+        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 pointer-events-none" />
+        {/* Task 2 — visual + behavioral unification with the Set
+            Availability tab's <TimeSelect> trigger:
+              • h-9                 — same height
+              • text-sm             — same type scale
+              • pl-9                — reserves the CalendarIcon's
+                                       left gutter
+              • pr-2                — matches TimeSelect's px-2 right
+                                       padding (TimeSelect's left is
+                                       also px-2; we have to keep
+                                       pl-9 for the icon, so we only
+                                       align the right side)
+              • transition-colors   — matches Button's smooth
+                                       hover/focus state transition
+              • hover:bg-gray-100   — same affordance as TimeSelect's
+                                       hover:bg-accent (which is a
+                                       light-gray accent in this
+                                       project's Tailwind config)
+            FieldInput's own fieldStateClasses already carry the
+            shared `bg-gray-50 border-gray-300` + filled/empty
+            font-weight + text color logic, and Input's defaults
+            give the focus-visible:ring-1 ring-ring focus state —
+            so border / background / typography / focus styling all
+            already match by construction. */}
+        <FieldInput
+          type="date"
+          className="pl-9 pr-2 h-9 text-sm transition-colors hover:bg-gray-100"
+        />
       </div>
     </div>
   );

@@ -985,6 +985,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       return;
     }
     handleSave();
+    // Task 1 — toast notification on successful Save Dates. Same
+    // toast() function the My Availability (T) popup card uses
+    // (TeacherAvailabilityCard.jsx), so the UI, animation, stacking,
+    // and dismiss behavior are byte-for-byte identical — only the
+    // title + description copy is tab-specific. Fires AFTER
+    // handleSave() succeeds so the toast can never appear for a
+    // blocked save (any partial-pair / chronological-order failure
+    // returns earlier in this function).
+    toast({
+      title: 'Availability schedule successfully saved.',
+      description: 'Your availability has been updated for the selected period.',
+    });
     resetAvailabilityFields();
     // Task 1: record the successful-save timestamp and show the green
     // "Your Calendar is Updated" message for 30s. A back-to-back save
