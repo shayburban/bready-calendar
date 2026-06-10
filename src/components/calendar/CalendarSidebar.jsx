@@ -387,16 +387,17 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     //    is true.
     setHasAttemptedSave(true);
     // 4. Validation gate — partial pair (e.g. Number without Time
-    //    Unit) surfaces the destructive toast with the exact spec
-    //    copy and short-circuits before any DB call. Red field
-    //    borders + the per-row Alert cascade automatically via
-    //    showErrors → hasAttemptedSave wiring on each common selector.
+    //    Unit) short-circuits before any DB call. The floating
+    //    error toast was REMOVED in this batch per the spec; the
+    //    UI now relies EXCLUSIVELY on the inline per-row error
+    //    messages + red field borders that cascade automatically
+    //    via showErrors → hasAttemptedSave wiring on each common
+    //    selector. setHasAttemptedSave(true) was already fired at
+    //    step 3, so the inline Alerts + red borders are already
+    //    lit by the time control reaches this branch. The Option B
+    //    guard order and the dual-state Save button logic are
+    //    intentionally untouched.
     if (!isPrefsValid) {
-      toast({
-        title: 'Cannot save scheduling preferences.',
-        description: 'Please complete both Number and Time Unit fields for your modified rows.',
-        variant: 'destructive',
-      });
       return;
     }
     // 5. Preserved baseline — Case C territory (dirty + valid but no
