@@ -39,6 +39,18 @@ const AdvanceBookingSelector = ({
     }
   }, [showCustomInput]);
 
+  // After a successful Save, the parent flips `disabled` true (because
+  // isEditingPreferences becomes false). Close the custom-input mode
+  // so the field no longer shows the inline "Cancel" button — the
+  // saved custom value renders inside the regular Select trigger via
+  // the dynamic SelectItem injected at the bottom of SelectContent.
+  // Re-entering edit mode (Pencil) leaves showCustomInput=false; the
+  // user picks "Custom..." again only if they want to type a new
+  // value.
+  useEffect(() => {
+    if (disabled) setShowCustomInput(false);
+  }, [disabled]);
+
   // Task 1 — External value sync (Cancel revert). See identical
   // comment in common/AvailabilityWindow.jsx for the rationale.
   useEffect(() => {
@@ -250,6 +262,16 @@ const AdvanceBookingSelector = ({
                 <div className="max-h-48 overflow-y-auto">
                   {numberOptions.map((option) =>
                 <SelectItem key={option.value} value={option.value.toString()}>{option.label}</SelectItem>
+                )}
+                  {/* When the saved value is a CUSTOM number (one that
+                      isn't in the standard 1-10 list), inject it as a
+                      one-off SelectItem so the Select trigger can
+                      display it after Save → exit-edit collapses
+                      showCustomInput. Without this, Radix Select would
+                      fall back to the placeholder text because the
+                      value wouldn't match any item. */}
+                  {duration && !numberOptions.some((o) => o.value === duration) && (
+                <SelectItem key={`custom-${duration}`} value={duration.toString()}>{duration}</SelectItem>
                 )}
                 </div>
                 <SelectSeparator className="my-1" />
