@@ -261,8 +261,17 @@ const BreakTimeSelector = ({
                 <SelectItem key={option.value} value={option.value.toString()}>{option.label}</SelectItem>
                 )}
                 </div>
-                <SelectSeparator className="my-1" />
-                <SelectItem value="custom">Custom...</SelectItem>
+                {/* "Custom..." SelectItem + the SelectSeparator above
+                    it were removed per the spec. The custom-input
+                    rendering branch (`showCustomInput ? <Input/> :
+                    <Select/>`), the showCustomInput state, the
+                    handleCustomInputChange handler, and the
+                    `if (value === 'custom')` branch inside
+                    handleDurationChange are intentionally left in
+                    place — none of them is reachable now (no UI path
+                    sets value to 'custom'), but removing them would
+                    be a logic change. Per the spec: ONLY remove the
+                    Custom number, no other code is touched. */}
               </SelectContent>
             </Select>
           }
