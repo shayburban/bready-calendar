@@ -363,18 +363,34 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   //   6. On success, refresh the baseline (so Cancel reverts to the
   //      just-saved values) and reset hasAttemptedSave.
   const handleSaveSchedPrefs = async () => {
+    // 1. Block if already mid-save (prevents double-clicks during the
+    //    in-flight TeacherProfile.update / create).
     if (isSavingSchedPrefs) return;
-    // Rule 2 — defensive guard matching the button's disabled state.
-    // No DB write when nothing changed since the last save. Silent
-    // no-op (no toast) because nothing actually went wrong.
-    if (!isPrefsDirty) return;
+    // 2. Option B guard — silent no-op ONLY when truly clean: nothing
+    //    changed AND nothing partial. The previous `!isPrefsDirty`
+    //    short-circuit fired too early, swallowing the click before
+    //    setHasAttemptedSave could fire. That swallow was visible
+    //    when a row's internal state was partial (e.g. Number filled
+    //    but Time Unit empty) — the common selector's emit gate
+    //    `if (isComplete || isPristine)` doesn't push partial state
+    //    to the parent, so the parent's schedPrefs stayed at baseline
+    //    and isPrefsDirty was false. With the new gate, we only
+    //    treat that as silent when ALSO isPrefsValid (no row is
+    //    partial). Otherwise the click falls through to step 3.
+    if (!isPrefsDirty && isPrefsValid) return;
+    // 3. The click bypassed the truly-clean gate, so we MUST surface
+    //    the situation: either light up the red border / Alert
+    //    cascade for invalid input, or proceed to save valid input.
+    //    Flipping hasAttemptedSave THIS early is the fix for the
+    //    diagnosed bug — the showErrors prop on every common selector
+    //    now activates regardless of whether the parent's isPrefsDirty
+    //    is true.
     setHasAttemptedSave(true);
-    // Task 3 (current batch) — partial-pair click feedback. When the
-    // user clicks the visually-disabled Save button on a partial row,
-    // surface a destructive toast with the exact spec copy so they
-    // know WHY save is blocked. The red field borders cascade
-    // automatically via the showErrors → hasAttemptedSave wiring on
-    // each common selector.
+    // 4. Validation gate — partial pair (e.g. Number without Time
+    //    Unit) surfaces the destructive toast with the exact spec
+    //    copy and short-circuits before any DB call. Red field
+    //    borders + the per-row Alert cascade automatically via
+    //    showErrors → hasAttemptedSave wiring on each common selector.
     if (!isPrefsValid) {
       toast({
         title: 'Cannot save scheduling preferences.',
@@ -383,8 +399,10 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
       });
       return;
     }
-    // Nothing to persist (all rows pristine even after the dirty
-    // check — Case C territory). Silent no-op.
+    // 5. Preserved baseline — Case C territory (dirty + valid but no
+    //    row is a complete pair, i.e. all rows cleared after edit).
+    //    Existing behaviour: silent no-op. NOT changed by this batch
+    //    to keep the strict zero-regression guarantee.
     if (!isAnyPairComplete) return;
     setIsSavingSchedPrefs(true);
     try {
@@ -1529,36 +1547,54 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                                  pair. Click fires the handler, which
                                  flips hasAttemptedSave true and lights
                                  up partial rows in red. */}
-                         {/* Task 3 (current batch) — Save visually
-                             disabled when ANY validation gate fails
-                             (mid-save / no changes / any row partial /
-                             no row complete), but stays CLICKABLE via
-                             aria-disabled (NOT native disabled) so the
-                             click reaches handleSaveSchedPrefs and the
-                             toast + red-border error UI can surface.
-                             The cursor reverts to the default arrow on
-                             the disabled branch (cursor-default) so
-                             the button doesn't look hard-blocked. */}
-                         <Button
-                           size="sm"
-                           onClick={handleSaveSchedPrefs}
-                           aria-disabled={
-                             isSavingSchedPrefs ||
-                             !isPrefsDirty ||
-                             !isPrefsValid ||
-                             !isAnyPairComplete
-                           }
-                           className={
-                             (isSavingSchedPrefs ||
-                               !isPrefsDirty ||
-                               !isPrefsValid ||
-                               !isAnyPairComplete)
-                               ? 'bg-gray-300 text-gray-500 cursor-default hover:bg-gray-300'
-                               : 'bg-green-600 hover:bg-green-700 text-white'
-                           }
-                         >
-                           {isSavingSchedPrefs ? 'Saving...' : 'Save'}
-                         </Button>
+                         {/* Dual-state Save button (Option B):
+                             State A — Clean & pristine (untouched +
+                               isPrefsValid). Native `disabled={true}`
+                               so the click is HARD-blocked at the DOM
+                               level — no toast, no errors, nothing
+                               happens. This matches the spec's
+                               "fire no errors" requirement exactly.
+                             State B — Partial / invalid (any row
+                               half-filled, isPrefsValid=false). NO
+                               native disabled — aria-disabled only.
+                               Click reaches handleSaveSchedPrefs,
+                               which sets hasAttemptedSave(true)
+                               (now BEFORE the dirty check) and
+                               toasts. Red borders cascade via
+                               showErrors → hasAttemptedSave wiring.
+                             Mid-save & Case C (dirty + valid but no
+                               complete pair) — native disabled too,
+                               since the handler is a silent no-op
+                               in both states anyway and there's no
+                               value in routing the click.
+                             Green active — dirty + valid + at least
+                               one complete pair. */}
+                         {(() => {
+                           const isStateA_clean = !isPrefsDirty && isPrefsValid;
+                           const isStateB_partial = !isPrefsValid;
+                           const isCaseC_empty = isPrefsDirty && isPrefsValid && !isAnyPairComplete;
+                           // Native disabled — hard blocks the click.
+                           // State B is the ONLY non-green state that
+                           // must NOT carry native disabled.
+                           const nativeDisabled = isSavingSchedPrefs || isStateA_clean || isCaseC_empty;
+                           // Visual gray covers every non-green state.
+                           const looksDisabled = nativeDisabled || isStateB_partial;
+                           return (
+                             <Button
+                               size="sm"
+                               onClick={handleSaveSchedPrefs}
+                               disabled={nativeDisabled}
+                               aria-disabled={looksDisabled}
+                               className={
+                                 looksDisabled
+                                   ? 'bg-gray-300 text-gray-500 cursor-default hover:bg-gray-300'
+                                   : 'bg-green-600 hover:bg-green-700 text-white'
+                               }
+                             >
+                               {isSavingSchedPrefs ? 'Saving...' : 'Save'}
+                             </Button>
+                           );
+                         })()}
                     </div>
         }
             </div>
