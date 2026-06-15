@@ -8,6 +8,7 @@ import {
   isOnGrid,
   gridCandidates,
   corridor,
+  toViewer,
   GRID_MS,
   HOLD_TTL_MIN_DEFAULT,
 } from '@/lib/scheduling/timekit';
@@ -88,6 +89,11 @@ describe('TimeKit grid (R1/R3)', () => {
   it('GRID_MS is 15 minutes', () => {
     expect(GRID_MS).toBe(15 * 60 * 1000);
   });
+
+  it('gridCandidates throws on a non-finite bound (prevents an infinite loop when W is null)', () => {
+    const from = at('2026-06-15T10:00:00Z');
+    expect(() => gridCandidates(from, Number.POSITIVE_INFINITY)).toThrow(/finite/);
+  });
 });
 
 describe('TimeKit corridor (R4/R5)', () => {
@@ -123,5 +129,39 @@ describe('TimeKit corridor (R4/R5)', () => {
 
   it('rejects an unknown mode', () => {
     expect(() => corridor(teacher, 'bogus', t0)).toThrow();
+  });
+
+  it('day-unit L uses calendar math for nearEdge (still + HOLD_TTL in instant mode)', () => {
+    const dayNotice = {
+      minNotice: { value: 2, unit: 'day' },
+      teacherTz: 'America/New_York',
+      holdTtlMin: 10,
+    };
+    const { nearEdge } = corridor(dayNotice, 'instant', t0);
+    // 2 calendar days in the teacher zone, then + HOLD_TTL (exact minutes).
+    const expected = addExact(addCalendar(t0, 2, 'day', 'America/New_York'), 10, 'minute');
+    expect(nearEdge).toBe(expected);
+  });
+});
+
+describe('TimeKit toViewer — display-only, per-viewer day column (R-display §1.2 ex.e)', () => {
+  it('one instant lands on a different weekday for different viewers', () => {
+    // Israel (UTC+2 winter) Sunday 2026-01-04 01:00 local == 2026-01-03 23:00Z.
+    const instant = DateTime.fromObject(
+      { year: 2026, month: 1, day: 4, hour: 1, minute: 0 },
+      { zone: 'Asia/Jerusalem' }
+    ).toMillis();
+
+    const il = toViewer(instant, 'Asia/Jerusalem');
+    expect(il.weekday).toBe(7); // luxon: Sunday
+    expect(il.localDate).toBe('2026-01-04');
+
+    const ny = toViewer(instant, 'America/New_York');
+    expect(ny.weekday).toBe(6); // Saturday — different day column, same instant
+    expect(ny.localDate).toBe('2026-01-03');
+
+    // Same underlying instant for both views.
+    expect(il.instant).toBe(instant);
+    expect(ny.instant).toBe(instant);
   });
 });

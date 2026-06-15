@@ -143,7 +143,14 @@ export const snapDown = (instant) => Math.floor(instant / GRID_MS) * GRID_MS;
 export const isOnGrid = (instant) => instant % GRID_MS === 0;
 
 // gridCandidates: every quarter-hour start within [from, to] inclusive.
+// Both bounds MUST be finite — a non-finite `to` (e.g. an unbounded farEdge
+// when W is null) would loop forever, so callers must cap the window first
+// (offer generation caps `to` at the last availability end). Throw loudly
+// rather than hang.
 export const gridCandidates = (from, to) => {
+  if (!Number.isFinite(from) || !Number.isFinite(to)) {
+    throw new Error('gridCandidates: from/to must be finite instants (cap the window first)');
+  }
   const out = [];
   if (to < from) return out;
   for (let t = snapUp(from); t <= to; t += GRID_MS) out.push(t);
