@@ -1,10 +1,10 @@
 -- 0007_scheduling_schema.sql
 -- Instant-booking scheduling tables (FINAL BUILDER PROMPT v7, §1.1).
 --
--- STATUS: authored Stage 4a; apply via the Management API
---   POST https://api.supabase.com/v1/projects/nxjhjakhqsxkifkluahu/database/query
---   Authorization: Bearer <SUPABASE_ACCESS_TOKEN>   (see reference_supabase_management_api)
--- or the Supabase MCP apply_migration once authorized.
+-- STATUS: APPLIED to project nxjhjakhqsxkifkluahu on 2026-06-15 via the
+--   Management API (POST /v1/projects/{ref}/database/query, HTTP 201). Verified
+--   live: 5 tables + 4 bookings columns created; pair-atomicity, Break×15, and
+--   15-min-grid CHECKs confirmed to reject bad input and accept valid rows.
 --
 -- ADDITIVE ONLY (Constraint 4 / R23b): new tables + new nullable booking columns.
 -- No existing row is mutated, trimmed, or dropped. Idempotent: re-running is a
