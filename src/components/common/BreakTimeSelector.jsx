@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info, Trash2 } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { schedulingRulesEnabled } from '@/lib/scheduling/flags';
 
 const BreakTimeSelector = ({
   value = { preference: null, preferenceType: null },
@@ -63,11 +64,11 @@ const BreakTimeSelector = ({
         value: i + 1,
         label: (i + 1).toString()
       }));
-    } else {
-      // For minutes: MULTIPLES OF 15 ONLY (spec R3/R19) so the configured
-      // break equals the effective break on the 15-minute booking grid.
-      // 5 and 10 were removed for this reason — an off-grid break would
-      // snap up and silently differ from what the teacher set.
+    } else if (schedulingRulesEnabled()) {
+      // SCHEDULING_RULES on: MULTIPLES OF 15 ONLY (spec R3/R19) so the
+      // configured break equals the effective break on the 15-minute grid.
+      // 5 and 10 are excluded — an off-grid break would snap up and silently
+      // differ from what the teacher set.
       return [
       { value: 15, label: '15' },
       { value: 30, label: '30' },
@@ -76,6 +77,18 @@ const BreakTimeSelector = ({
       { value: 75, label: '75' },
       { value: 90, label: '90' },
       { value: 105, label: '105' },
+      { value: 120, label: '120' }];
+    } else {
+      // SCHEDULING_RULES off: legacy option set, byte-identical to today
+      // (Constraint 3 / §1.3 — the settings rules are inert when off).
+      return [
+      { value: 5, label: '5' },
+      { value: 10, label: '10' },
+      { value: 15, label: '15' },
+      { value: 30, label: '30' },
+      { value: 45, label: '45' },
+      { value: 60, label: '60' },
+      { value: 90, label: '90' },
       { value: 120, label: '120' }];
 
     }

@@ -32,6 +32,7 @@ import AdvanceBookingSelector from '@/components/common/AdvanceBookingSelector';
 import BreakTimeSelector from '@/components/common/BreakTimeSelector';
 import { windowExceedsNotice } from '@/lib/scheduling/normalize';
 import { MSG, TOOLTIPS } from '@/lib/scheduling/messages';
+import { schedulingRulesEnabled } from '@/lib/scheduling/flags';
 
 // Tooltip copy — upgraded to the richer, example-laden §7 copy (single source
 // in @/lib/scheduling/messages). Same fields/options; just clearer guidance.
@@ -146,8 +147,10 @@ export default function TeacherSchedulingPreferences({
   // applicable when both pairs are fully set; otherwise pair-atomicity handles
   // it and this stays inert. NOTE: the server's L >= W rejection remains the
   // SOLE authority — this guard only disables Save early in the UI.
+  // Gated behind SCHEDULING_RULES: when the flag is off the validation rule is
+  // INERT (§1.3 / Constraint 3 — both-off byte-identical to today).
   const wln = windowExceedsNotice(current.availability_window, current.advance_booking_policy);
-  const windowLtNotice = wln.applicable && !wln.ok;
+  const windowLtNotice = schedulingRulesEnabled() && wln.applicable && !wln.ok;
   const crossFieldOkRef = useRef(true);
 
   // Combined validity = every per-field valid AND no W<=L violation.
