@@ -15,8 +15,8 @@
 //   off / on   → Test-only checkout machinery (settings null; no grid). Not production.
 //   on  / on   → Production target: the full document.
 //
-// Values come from Vite env (import.meta.env.VITE_*). Truthy = "1" or "true"
-// (case-insensitive). Anything else (incl. undefined) = off.
+// Values come from Vite env. Truthy = "1" or "true" (case-insensitive).
+// Anything else (incl. undefined) = off.
 
 const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 
@@ -25,11 +25,22 @@ const TRUTHY = new Set(['1', 'true', 'yes', 'on']);
 // without mutating the read-only import.meta.env object.
 let overrides = null;
 
-const readEnv = (key) => {
-  // import.meta.env is statically replaced by Vite at build time; guard for
-  // non-Vite runtimes (e.g. a bare node test without the define plugin).
+// STATIC member access so Vite replaces these at build time (a dynamic
+// `import.meta.env[key]` is NOT guaranteed to be inlined and can read as
+// undefined in a production bundle — which would pin the flags permanently
+// off). The try/catch covers non-Vite runtimes (e.g. a bare node import)
+// where `import.meta.env` is undefined.
+const rawSchedulingRules = () => {
   try {
-    return import.meta.env?.[key];
+    return import.meta.env.VITE_SCHEDULING_RULES;
+  } catch {
+    return undefined;
+  }
+};
+
+const rawInstantBooking = () => {
+  try {
+    return import.meta.env.VITE_INSTANT_BOOKING;
   } catch {
     return undefined;
   }
@@ -40,12 +51,12 @@ const isTruthy = (raw) =>
 
 export const schedulingRulesEnabled = () => {
   if (overrides) return !!overrides.SCHEDULING_RULES;
-  return isTruthy(readEnv('VITE_SCHEDULING_RULES'));
+  return isTruthy(rawSchedulingRules());
 };
 
 export const instantBookingEnabled = () => {
   if (overrides) return !!overrides.INSTANT_BOOKING;
-  return isTruthy(readEnv('VITE_INSTANT_BOOKING'));
+  return isTruthy(rawInstantBooking());
 };
 
 // Convenience: the current matrix cell, useful for branching + logging.

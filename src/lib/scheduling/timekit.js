@@ -203,8 +203,6 @@ export const toViewer = (instant, viewerTz) => {
 //     (pre-transition) offset, i.e. the first of the two occurrences.
 // Both produce a single, stable, valid UtcInstant.
 
-const RESOLVE = { year: 'year', month: 'month', day: 'day' };
-
 // materializeOccurrences(recurrence, from, to): expand an AvailabilityRecurrence
 // to absolute instants over [from, to]. RRULE chooses WHICH calendar dates;
 // luxon turns (anchor_tz, wall-clock, date) into the exact UTC instant — so the
@@ -300,5 +298,3 @@ export const assertGridRegularity = (viewerTz, renderedMinutes = []) => {
 
 // Re-export for callers that need to parse/validate an RRULE string elsewhere.
 export const parseRRule = (s) => rrulestr(s);
-
-export { RESOLVE };
