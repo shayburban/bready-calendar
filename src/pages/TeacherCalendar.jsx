@@ -43,6 +43,11 @@ import SyncedEventsModal from '../components/calendar/SyncedEventsModal';
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { supabase } from '@/api/supabaseClient';
+import { instantBookingEnabled } from '@/lib/scheduling/flags';
+import { detectViewerTz } from '@/lib/scheduling/timekit';
+import { availabilityToRows } from '@/lib/scheduling/availabilityToRows';
+import { setAvailabilityOneOff } from '@/lib/scheduling/availabilityApi';
 import { goToCalendarView } from '@/lib/calendarViewNavigation';
 import { sampleEvents } from '@/data/sampleEvents';
 import {
@@ -746,6 +751,24 @@ export default function TeacherCalendar() {
     setSavedAvailabilitySlots((prev) => {
       const next = applySaveAvailability(prev, slots, mode);
       persistAvailabilitySlots(next);
+      // ADDITIVE (scheduling): mirror the full FUTURE availability set to Supabase
+      // (set_availability_one_off, 0012) so the public picker (bookable_slots) has
+      // real data. Flag-gated + fire-and-forget + non-blocking — localStorage above
+      // stays the source for the teacher's own calendar UI and is unaffected by a
+      // sync failure. Wall-clock is converted to absolute UTC via TimeKit (R24/R20).
+      if (instantBookingEnabled()) {
+        (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const teacherId = session?.user?.id;
+            if (teacherId) {
+              await setAvailabilityOneOff(teacherId, availabilityToRows(next, detectViewerTz() || 'UTC'));
+            }
+          } catch (e) {
+            console.warn('Supabase availability sync skipped:', e?.message || e);
+          }
+        })();
+      }
       return next;
     });
   };

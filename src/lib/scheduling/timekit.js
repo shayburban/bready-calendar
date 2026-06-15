@@ -68,6 +68,23 @@ export const addCalendar = (instant, n, unit, anchorTz) => {
   return dt.plus({ [unit]: n }).toMillis();
 };
 
+// wallClockToUtcISO: serialize a wall-clock (local date "YYYY-MM-DD" + "HH:MM"
+// in an IANA zone) to an absolute UTC ISO-8601 instant — the persistence form
+// for one-off availability the teacher paints in their own zone (R24/R25 one-off
+// path). A serialization-boundary helper: the output is an absolute instant
+// string for the DB, never fed back into an in-module comparison. Throws on
+// invalid input, like addCalendar.
+export const wallClockToUtcISO = (dateISO, timeHHMM, tz) => {
+  if (!tz || typeof tz !== 'string') {
+    throw new Error('wallClockToUtcISO: tz (IANA id) is required');
+  }
+  const dt = DateTime.fromISO(`${dateISO}T${timeHHMM}`, { zone: tz });
+  if (!dt.isValid) {
+    throw new Error(`wallClockToUtcISO: invalid "${dateISO}T${timeHHMM}" @ ${tz} (${dt.invalidReason})`);
+  }
+  return dt.toUTC().toISO({ suppressMilliseconds: true });
+};
+
 // ---------------------------------------------------------------------------
 // Settings normalization helpers (used by corridor; mirrors normalize.js units)
 // ---------------------------------------------------------------------------

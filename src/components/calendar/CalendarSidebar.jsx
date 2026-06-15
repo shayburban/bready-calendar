@@ -23,6 +23,9 @@ import { AppRole } from '@/api/entities';
 import { TeacherProfile } from '@/api/entities';
 import { toast } from '@/components/ui/use-toast';
 import TeacherSchedulingPreferences from '@/components/common/teacher-scheduling-preferences/TeacherSchedulingPreferences';
+import { supabase } from '@/api/supabaseClient';
+import { schedulingRulesEnabled } from '@/lib/scheduling/flags';
+import { detectViewerTz } from '@/lib/scheduling/timekit';
 
 // Master category definitions - static internal structure
 // Each category has a 'perspectives' array indicating which role_ids (from AppRole) it applies to.
@@ -421,6 +424,37 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
           created_by: me?.email,
         });
         if (created?.id) setSchedProfileId(created.id);
+      }
+      // ADDITIVE (scheduling): mirror the settings to the Supabase scheduling
+      // backend (upsert_teacher_schedule_settings, 0008) so the instant-booking
+      // corridor (W/L/B) is real. Gated by schedulingRulesEnabled(); fully
+      // non-blocking — the base44 write above stays the source for the existing
+      // UI and is never affected by a sync failure. The server re-enforces the
+      // strict W > L rule (R19) as the sole authority.
+      if (schedulingRulesEnabled()) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const teacherId = session?.user?.id;
+          if (teacherId) {
+            const valOf = (p) => p?.preference ?? p?.value ?? null;
+            const unitOf = (p) => {
+              const u = p?.preferenceType ?? p?.unit ?? null;
+              return u ? String(u).toLowerCase() : null;
+            };
+            await supabase.rpc('upsert_teacher_schedule_settings', {
+              p_teacher_id: teacherId,
+              p_window_value: valOf(schedPrefs.availability_window),
+              p_window_unit: unitOf(schedPrefs.availability_window),
+              p_notice_value: valOf(schedPrefs.advance_booking_policy),
+              p_notice_unit: unitOf(schedPrefs.advance_booking_policy),
+              p_break_value: valOf(schedPrefs.break_after_class_hours),
+              p_break_unit: unitOf(schedPrefs.break_after_class_hours),
+              p_teacher_iana_tz: detectViewerTz() || 'UTC',
+            });
+          }
+        } catch (e) {
+          console.warn('Supabase settings sync skipped:', e?.message || e);
+        }
       }
       // Save succeeded — promote the just-saved values to baseline so
       // a subsequent Pencil → Cancel reverts to these, not to the
