@@ -105,6 +105,20 @@ export const checkoutReducer = (s, action) => {
       if (s.state !== STATES.EXPIRED) return s;
       return { ...initialCheckout(), state: STATES.HOLDING, slot: s.slot };
 
+    // RESTORE — resume a checkout persisted across the OAuth full-page redirect
+    // (R6/R8). Restores the hold + slot; jumps straight to rebinding when the
+    // returning student is known, else holds so they re-affirm identity. Only
+    // from idle, so it can never clobber an in-flight checkout.
+    case 'RESTORE':
+      if (s.state !== STATES.IDLE || !action.slot || !action.hold) return s;
+      return {
+        ...initialCheckout(),
+        slot: action.slot,
+        hold: action.hold,
+        studentId: action.studentId || null,
+        state: action.studentId ? STATES.REBINDING : STATES.HELD,
+      };
+
     // abandon — registration ≠ booking (R8): dropping out leaves NO booking.
     case 'ABANDON':
       return initialCheckout();

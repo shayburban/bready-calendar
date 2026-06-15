@@ -160,8 +160,15 @@ export function useCheckout({ currentStudentId = null } = {}) {
   const rehold = useCallback(() => dispatch({ type: 'REHOLD' }), []);
   const abandon = useCallback(() => { clearCheckout(); dispatch({ type: 'ABANDON' }); }, []);
 
+  // Resume a checkout persisted across the OAuth redirect (R6/R8). RESTORE jumps
+  // to rebinding when the student is known, so the rebind effect drives it home.
+  const resume = useCallback((ctx) => {
+    if (!ctx || !ctx.slot || !ctx.hold) return;
+    dispatch({ type: 'RESTORE', slot: ctx.slot, hold: ctx.hold, studentId: ctx.studentId || null });
+  }, []);
+
   // remaining hold time (ms) for the countdown UI; server stays authority.
   const remainingMs = state.hold ? Math.max(0, state.hold.expiresAt - nowMs) : 0;
 
-  return { state, remainingMs, start, proceedToIdentity, persistForAuthHandoff, cancelAuth, rehold, abandon };
+  return { state, remainingMs, start, proceedToIdentity, persistForAuthHandoff, cancelAuth, rehold, abandon, resume };
 }

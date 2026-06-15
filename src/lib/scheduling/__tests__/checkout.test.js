@@ -85,6 +85,29 @@ describe('checkout reducer — edge cases (§8)', () => {
   });
 });
 
+describe('checkout reducer — RESTORE after OAuth redirect (R6/R8)', () => {
+  it('resumes into rebinding when the returning student is known', () => {
+    const s = R(initialCheckout(), { type: 'RESTORE', slot, hold: { id: 'h1', expiresAt: 999 }, studentId: 'stu9' });
+    expect(s.state).toBe(STATES.REBINDING);
+    expect(s.hold.id).toBe('h1');
+    expect(s.studentId).toBe('stu9');
+    expect(s.slot).toEqual(slot);
+  });
+  it('resumes into held when no student is attached yet', () => {
+    const s = R(initialCheckout(), { type: 'RESTORE', slot, hold: { id: 'h1' } });
+    expect(s.state).toBe(STATES.HELD);
+  });
+  it('is ignored unless idle (never clobbers an in-flight checkout)', () => {
+    const held = drive([{ type: 'SLOT_CLICK', slot }, { type: 'HOLD_OK', hold }]);
+    const r = R(held, { type: 'RESTORE', slot, hold: { id: 'x' }, studentId: 's' });
+    expect(r.state).toBe(STATES.HELD);
+    expect(r.hold).toEqual(hold);
+  });
+  it('is a no-op without slot or hold', () => {
+    expect(R(initialCheckout(), { type: 'RESTORE' }).state).toBe(STATES.IDLE);
+  });
+});
+
 describe('mapRpcError (§4 → §7)', () => {
   it('maps known tokens, ignoring Postgres noise', () => {
     expect(mapRpcError({ message: 'ERROR: P0001: SLOT_TAKEN' }).code).toBe('SLOT_TAKEN');

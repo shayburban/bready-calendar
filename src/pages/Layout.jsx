@@ -6,6 +6,8 @@ import Header from '../components/layout/Header';
 import Footer from '../components/layout/Footer';
 import GlobalAdminBanner from '../components/common/GlobalAdminBanner';
 import { cssVariables } from '../components/design-system/Colors';
+import CheckoutResumeHost from '@/components/scheduling/CheckoutResumeHost';
+import { instantBookingEnabled } from '@/lib/scheduling/flags';
 
 export default function Layout({ children, currentPageName }) {
   const [bannerActive, setBannerActive] = useState(false);
@@ -186,6 +188,10 @@ export default function Layout({ children, currentPageName }) {
       
       {/* Global Admin Banner - renders independently */}
       <GlobalAdminBanner />
+
+      {/* Instant-booking checkout resume (R6/R8) — inert unless a checkout was
+          persisted across the OAuth redirect; flag-gated, off by default. */}
+      {instantBookingEnabled() && <CheckoutResumeHost />}
 
       <Header topOffset={bannerOffset} />
       <main 

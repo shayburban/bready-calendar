@@ -42,15 +42,28 @@ const Centered = ({ icon, title, sub }) => (
   </div>
 );
 
-export default function CheckoutModal({ open, slot, currentStudentId = null, teacherTz, onClose }) {
-  const { state, remainingMs, start, proceedToIdentity, persistForAuthHandoff, cancelAuth, rehold, abandon } =
+export default function CheckoutModal({ open, slot, resumeCtx = null, currentStudentId = null, authReady = true, teacherTz, onClose }) {
+  const { state, remainingMs, start, proceedToIdentity, persistForAuthHandoff, cancelAuth, rehold, abandon, resume } =
     useCheckout({ currentStudentId });
   const [authView, setAuthView] = useState('register');
 
-  // Start the hold once when the modal opens with a slot (only from a clean idle).
+  // Start a FRESH hold when opened with a slot — but never while resuming a
+  // persisted checkout (that path restores the existing hold instead, R10/R6).
   useEffect(() => {
-    if (open && slot && state.state === STATES.IDLE) start(slot);
-  }, [open, slot, state.state, start]);
+    if (open && slot && !resumeCtx && state.state === STATES.IDLE) start(slot);
+  }, [open, slot, resumeCtx, state.state, start]);
+
+  // Resume after the OAuth redirect once auth is known (R6/R8): restore the
+  // persisted hold + slot and let the rebind/pay/commit effects carry it home.
+  useEffect(() => {
+    if (open && resumeCtx && authReady && state.state === STATES.IDLE) {
+      resume({
+        slot: resumeCtx.slot,
+        hold: { id: resumeCtx.hold.id, expiresAt: Date.parse(resumeCtx.hold.expiresAt) },
+        studentId: currentStudentId,
+      });
+    }
+  }, [open, resumeCtx, authReady, currentStudentId, state.state, resume]);
 
   // Persist before the OAuth redirect so the hold survives the page reload (R6/R8).
   useEffect(() => {

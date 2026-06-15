@@ -200,7 +200,7 @@ export default function StudentDashboard() {
                       <div className="flex items-center justify-between mt-2">
                         <span className="text-sm font-semibold">${t.hourly_rate}/hr</span>
                         <Button size="sm" variant="outline" asChild>
-                          <Link to={createPageUrl('BookingCalendar')}>Book</Link>
+                          <Link to={`${createPageUrl('BookingCalendar')}?teacherId=${encodeURIComponent(t.user_id)}&subject=${encodeURIComponent((t.subjects || [])[0] || 'Lesson')}&rate=${t.hourly_rate || 0}&duration=60`}>Book</Link>
                         </Button>
                       </div>
                     </div>
