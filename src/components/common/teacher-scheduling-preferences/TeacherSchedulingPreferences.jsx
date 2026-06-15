@@ -26,16 +26,18 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Info } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import CommonAvailabilityWindow from '@/components/common/AvailabilityWindow';
 import AdvanceBookingSelector from '@/components/common/AdvanceBookingSelector';
 import BreakTimeSelector from '@/components/common/BreakTimeSelector';
+import { windowExceedsNotice } from '@/lib/scheduling/normalize';
+import { MSG, TOOLTIPS } from '@/lib/scheduling/messages';
 
-// Tooltip copy — VERBATIM from Page 5c (see
-// teacher-registration/teacher-calendar/AvailabilityWindow.jsx and the
-// built-in headings inside AdvanceBookingSelector / BreakTimeSelector).
-const TOOLTIP_AVAILABILITY_WINDOW = 'How far in the future can students book with you?';
-const TOOLTIP_ADVANCE_BOOKING = 'Minimum time required before a lesson can be booked';
-const TOOLTIP_BREAK = 'Buffer time between consecutive lessons';
+// Tooltip copy — upgraded to the richer, example-laden §7 copy (single source
+// in @/lib/scheduling/messages). Same fields/options; just clearer guidance.
+const TOOLTIP_AVAILABILITY_WINDOW = TOOLTIPS.availabilityWindow;
+const TOOLTIP_ADVANCE_BOOKING = TOOLTIPS.advanceBooking;
+const TOOLTIP_BREAK = TOOLTIPS.breakAfterClass;
 
 const HeadingWithTooltip = ({ title, tooltip, variant }) => {
   const headingClass =
@@ -138,16 +140,41 @@ export default function TeacherSchedulingPreferences({
   const onValidityChangeRef = useRef(onValidityChange);
   useEffect(() => { onValidityChangeRef.current = onValidityChange; });
 
-  const updateValidity = useCallback((field, isValid) => {
-    if (validityRef.current[field] === isValid) return;
-    validityRef.current[field] = isValid;
-    const aggregate = Object.values(validityRef.current).every(Boolean);
+  // R19 — STRICT cross-field guard: the booking window (W) must be strictly
+  // greater than the minimum notice (L). Uses the SHARED normalization so the
+  // client and server can never disagree at a cross-unit boundary. Only
+  // applicable when both pairs are fully set; otherwise pair-atomicity handles
+  // it and this stays inert. NOTE: the server's L >= W rejection remains the
+  // SOLE authority — this guard only disables Save early in the UI.
+  const wln = windowExceedsNotice(current.availability_window, current.advance_booking_policy);
+  const windowLtNotice = wln.applicable && !wln.ok;
+  const crossFieldOkRef = useRef(true);
+
+  // Combined validity = every per-field valid AND no W<=L violation.
+  const emitAggregate = useCallback(() => {
+    const aggregate =
+      Object.values(validityRef.current).every(Boolean) && crossFieldOkRef.current;
     if (aggregate !== lastEmittedRef.current) {
       lastEmittedRef.current = aggregate;
       const fn = onValidityChangeRef.current;
       if (typeof fn === 'function') fn(aggregate);
     }
   }, []);
+
+  const updateValidity = useCallback(
+    (field, isValid) => {
+      if (validityRef.current[field] === isValid) return;
+      validityRef.current[field] = isValid;
+      emitAggregate();
+    },
+    [emitAggregate]
+  );
+
+  // Re-emit whenever the cross-field result flips (W or L edited).
+  useEffect(() => {
+    crossFieldOkRef.current = !windowLtNotice;
+    emitAggregate();
+  }, [windowLtNotice, emitAggregate]);
 
   // Stable per-field validity handlers so each child's validation
   // effect (whose deps are now `[duration, timeUnit]`) sees a steady
@@ -162,9 +189,14 @@ export default function TeacherSchedulingPreferences({
   //   page     → space-y-8 to match BookingPreferences on Page 5c.
   const spacing = variant === 'sidebar' ? 'space-y-4' : 'space-y-8';
 
+  // R19 — highlight the offending fields (Window + Notice) only after a Save
+  // attempt (showErrors), via a red ring on each group.
+  const offendingRing =
+    showErrors && windowLtNotice ? 'ring-2 ring-red-200 rounded-md p-2 -m-2' : '';
+
   return (
     <div className={`${spacing} ${className}`}>
-      <div className="space-y-2">
+      <div className={`space-y-2 ${offendingRing}`}>
         <HeadingWithTooltip
           title="Availability Window"
           tooltip={TOOLTIP_AVAILABILITY_WINDOW}
@@ -180,12 +212,13 @@ export default function TeacherSchedulingPreferences({
         />
       </div>
 
-      <div className="space-y-2">
+      <div className={`space-y-2 ${offendingRing}`}>
         <HeadingWithTooltip
           title="How far in advance can students book?"
           tooltip={TOOLTIP_ADVANCE_BOOKING}
           variant={variant}
         />
+        <p className="text-xs text-gray-500">{TOOLTIPS.advanceBookingHelper}</p>
         <AdvanceBookingSelector
           value={current.advance_booking_policy || EMPTY_FIELD}
           onChange={handleAdvance}
@@ -196,6 +229,14 @@ export default function TeacherSchedulingPreferences({
           onValidationChange={handleValidityAdvance}
         />
       </div>
+
+      {/* R19 — strict W > L guard message. Shown only after a Save attempt;
+          the aggregate validity above already disabled Save. */}
+      {showErrors && windowLtNotice && (
+        <Alert variant="destructive" className="p-2 text-xs">
+          <AlertDescription>{MSG.window_lt_notice}</AlertDescription>
+        </Alert>
+      )}
 
       <div className="space-y-2">
         <HeadingWithTooltip

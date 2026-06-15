@@ -64,15 +64,18 @@ const BreakTimeSelector = ({
         label: (i + 1).toString()
       }));
     } else {
-      // For minutes: 5, 10, 15, 30, 45, 60, 90, 120
+      // For minutes: MULTIPLES OF 15 ONLY (spec R3/R19) so the configured
+      // break equals the effective break on the 15-minute booking grid.
+      // 5 and 10 were removed for this reason — an off-grid break would
+      // snap up and silently differ from what the teacher set.
       return [
-      { value: 5, label: '5' },
-      { value: 10, label: '10' },
       { value: 15, label: '15' },
       { value: 30, label: '30' },
       { value: 45, label: '45' },
       { value: 60, label: '60' },
+      { value: 75, label: '75' },
       { value: 90, label: '90' },
+      { value: 105, label: '105' },
       { value: 120, label: '120' }];
 
     }
