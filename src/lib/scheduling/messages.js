@@ -33,3 +33,12 @@ export const TOOLTIPS = {
     'Buffer time between your lessons. Example: set 1 hour, and a lesson ending at 13:00 means the next lesson can start no earlier than 14:00. Your availability stays on your calendar — it’s just not bookable during the buffer. Breaks are set in 15-minute steps to match the booking grid.',
   editorHelper: 'Times snap to 15-minute steps (:00, :15, :30, :45).',
 };
+
+// §7 yellow synced-warning copy (R15). Teacher-only — synced event names are
+// NEVER shown to students (R15g). {event} / {range} filled via fillMessage.
+export const SYNCED = {
+  paintWarn: '⚠ This time overlaps your calendar event “{event}” ({range}). Students will be able to book it. Open anyway?',
+  laterWarn: '⚠ Your event “{event}” overlaps open availability — students can still book this time. Close this availability?',
+  badge: 'Overlaps “{event}”',
+  bookingFlag: '⚠ This lesson overlaps your calendar event “{event}”.',
+};
