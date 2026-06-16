@@ -42,7 +42,7 @@ const Centered = ({ icon, title, sub }) => (
   </div>
 );
 
-export default function CheckoutModal({ open, slot, resumeCtx = null, currentStudentId = null, authReady = true, teacherTz, viewerTz, onClose }) {
+export default function CheckoutModal({ open, slot, resumeCtx = null, currentStudentId = null, authReady = true, viewerTz, onClose }) {
   const { state, remainingMs, start, proceedToIdentity, persistForAuthHandoff, cancelAuth, rehold, abandon, resume } =
     useCheckout({ currentStudentId });
   const [authView, setAuthView] = useState('register');
@@ -99,8 +99,7 @@ export default function CheckoutModal({ open, slot, resumeCtx = null, currentStu
             <div className="rounded-lg border p-4 space-y-1">
               <p className="font-semibold">{slot?.subject || 'Lesson'}</p>
               <p className="text-sm">{fmtSlot(slot?.startUtc, viewerTz)} · {slot?.durationMinutes} min</p>
-              <p className="text-xs text-muted-foreground">Your time{viewerTz ? ` · ${viewerTz}` : ''}</p>
-              {teacherTz && teacherTz !== viewerTz ? <p className="text-xs text-muted-foreground">Teacher’s time: {fmtSlot(slot?.startUtc, teacherTz)} · {teacherTz}</p> : null}
+              <p className="text-xs text-muted-foreground">Shown in your time zone{viewerTz ? ` · ${viewerTz}` : ''}</p>
               {slot?.amount != null ? <p className="text-sm font-medium">Total: {slot.amount}</p> : null}
             </div>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
