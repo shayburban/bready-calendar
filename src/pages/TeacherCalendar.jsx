@@ -44,10 +44,22 @@ import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { supabase } from '@/api/supabaseClient';
-import { instantBookingEnabled } from '@/lib/scheduling/flags';
+import { instantBookingEnabled, schedulingRulesEnabled } from '@/lib/scheduling/flags';
 import { detectViewerTz } from '@/lib/scheduling/timekit';
 import { availabilityToRows } from '@/lib/scheduling/availabilityToRows';
 import { setAvailabilityOneOff } from '@/lib/scheduling/availabilityApi';
+import { syncedStripes, parseWallRange, intervalsOverlap } from '@/lib/scheduling/syncedOverlap';
+import { SYNCED, fillMessage } from '@/lib/scheduling/messages';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import { goToCalendarView } from '@/lib/calendarViewNavigation';
 import { sampleEvents } from '@/data/sampleEvents';
 import {
@@ -215,6 +227,70 @@ const buildEventTooltip = (events, type) => {
     .join(', ');
 };
 
+// --- Stage 8: teacher-only yellow synced layer (R14–R15, planes P3/P4) -------
+// PURE display annotation. Synced events NEVER affect bookability (R14): they are
+// not an input to EffectiveBookable or any write checkpoint. These helpers only
+// DESCRIBE same-day wall-clock overlaps so the teacher's calendar can warn in
+// yellow. Synced event NAMES are teacher-only (R15g). Everything is live —
+// nothing is stored — so an external calendar move/delete clears it on re-render.
+
+// sample-event type -> the synced-striping "kind" (R15b). Only availability,
+// booked and (waiting=)pending blocks are annotated; completed / cancelled /
+// not-reviewed are retrospective and cast no bookable time.
+const SYNCED_BLOCK_KIND = { availability: 'availability', booked: 'booked', waiting: 'pending' };
+
+// Per-day yellow note: Map<blockId, Set<eventName>> for the chips that overlap a
+// synced event that day, or null when there is nothing to flag (R15b).
+const syncedNoteForDay = (dayEvents) => {
+  const toInterval = (e, extra) => {
+    const r = parseWallRange(e.time);
+    if (!r) return null;
+    return { id: e.id ?? null, start: r.start, end: r.end, ...extra };
+  };
+  const synced = dayEvents
+    .filter((e) => e.type === 'synced')
+    .map((e) => toInterval(e, { name: e.description || 'Synced calendar event' }))
+    .filter(Boolean);
+  if (synced.length === 0) return null;
+  const blocks = dayEvents
+    .filter((e) => SYNCED_BLOCK_KIND[e.type])
+    .map((e) => toInterval(e, { kind: SYNCED_BLOCK_KIND[e.type] }))
+    .filter(Boolean);
+  if (blocks.length === 0) return null;
+  const byBlock = new Map();
+  for (const s of syncedStripes(synced, blocks)) {
+    if (s.blockId == null) continue;
+    if (!byBlock.has(s.blockId)) byBlock.set(s.blockId, new Set());
+    if (s.eventName) byBlock.get(s.blockId).add(s.eventName);
+  }
+  return byBlock.size > 0 ? byBlock : null;
+};
+
+// Paint-time check (R15a): the synced events a set of to-be-opened availability
+// slots would overlap, as [{ name, range }] (deduped). Synced sampleEvents are
+// keyed by day-of-month, matching how the grid renders them.
+const syncedOverlapsForSlots = (slots) => {
+  if (!Array.isArray(slots)) return [];
+  const out = [];
+  const seen = new Set();
+  for (const slot of slots) {
+    if (!slot || !slot.date || !slot.startTime || !slot.endTime) continue;
+    const dom = Number(String(slot.date).split('-')[2]);
+    const slotRange = parseWallRange(`${slot.startTime} - ${slot.endTime}`);
+    if (!slotRange) continue;
+    for (const ev of sampleEvents) {
+      if (ev.type !== 'synced' || ev.date !== dom) continue;
+      const evRange = parseWallRange(ev.time);
+      if (!evRange) continue;
+      if (intervalsOverlap(slotRange.start, slotRange.end, evRange.start, evRange.end) && !seen.has(ev.id)) {
+        seen.add(ev.id);
+        out.push({ name: ev.description || 'Synced calendar event', range: ev.time });
+      }
+    }
+  }
+  return out;
+};
+
 export default function TeacherCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('Month');
@@ -262,6 +338,9 @@ export default function TeacherCalendar() {
   // through the last currently-visible month (including months loaded via
   // Show More Months) instead of stopping at primaryRange.endDate.
   const [noEndDate, setNoEndDate] = useState(false);
+  // Stage 8 (R15a): a pending "open availability over a synced event?" confirm.
+  // Holds { slots, mode, overlaps:[{name,range}] } while the yellow dialog shows.
+  const [pendingPaintSave, setPendingPaintSave] = useState(null);
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -594,7 +673,7 @@ export default function TeacherCalendar() {
   // Unified day-event renderer: 1-3 events show normally; 4+ show first 2 +
   // overflow row with "+N more" + colored dots, and a popover listing every
   // hidden event (chronological) on click/tap.
-  const renderUnifiedDayEvents = (allEvents, monthDate) => {
+  const renderUnifiedDayEvents = (allEvents, monthDate, syncedNote = null) => {
     if (!allEvents || allEvents.length === 0) return null;
     const startOf = (e) => (e.time || '').split(' - ')[0];
     const sorted = [...allEvents].sort((a, b) => startOf(a).localeCompare(startOf(b)));
@@ -613,17 +692,31 @@ export default function TeacherCalendar() {
       }
       return <span className={`inline-block w-2 h-2 rounded-full flex-shrink-0 ${dotColor}`} />;
     };
-    const renderRow = (e) => (
-      <div
-        key={e.id}
-        title={eventTooltip(e)}
-        onClick={() => openEventModal(e, monthDate)}
-        className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-      >
-        {renderDot(e.type)}
-        <span className="truncate flex-1 min-w-0">{e.time}</span>
-      </div>
-    );
+    const renderRow = (e) => {
+      // Stage 8 (R15b): yellow the chip when this block overlaps a synced event.
+      // Teacher-only badge text via SYNCED.badge; never affects bookability (R14).
+      const overlapNames = syncedNote ? syncedNote.get(e.id) : null;
+      const overlaps = !!overlapNames && overlapNames.size > 0;
+      const title = overlaps
+        ? `${eventTooltip(e)} · ${fillMessage(SYNCED.badge, { event: [...overlapNames].join(', ') })}`
+        : eventTooltip(e);
+      return (
+        <div
+          key={e.id}
+          title={title}
+          onClick={() => openEventModal(e, monthDate)}
+          className={`flex items-center gap-1 border rounded px-1.5 py-1 text-[11px] text-gray-700 cursor-pointer transition-colors ${
+            overlaps
+              ? 'bg-amber-50 border-amber-400 ring-1 ring-amber-300 hover:bg-amber-100'
+              : 'bg-white border-gray-200 hover:bg-gray-50'
+          }`}
+        >
+          {renderDot(e.type)}
+          <span className="truncate flex-1 min-w-0">{e.time}</span>
+          {overlaps && <span className="text-amber-500 flex-shrink-0" aria-hidden="true">⚠</span>}
+        </div>
+      );
+    };
 
     if (sorted.length <= 3) {
       return <div className="space-y-1">{sorted.map(renderRow)}</div>;
@@ -747,7 +840,10 @@ export default function TeacherCalendar() {
   // removes any saved slot matching the supplied (date, [startTime, endTime])
   // tuples — slots without time fields wildcard-match every saved slot on
   // that date.
-  const handleSaveAvailability = (slots, mode) => {
+  // Apply a Save Dates result to the local store (+ mirror to Supabase). This is
+  // the original, unchanged save path; the paint-time synced confirm (R15a) wraps
+  // it below.
+  const commitSaveAvailability = (slots, mode) => {
     setSavedAvailabilitySlots((prev) => {
       const next = applySaveAvailability(prev, slots, mode);
       persistAvailabilitySlots(next);
@@ -771,6 +867,21 @@ export default function TeacherCalendar() {
       }
       return next;
     });
+  };
+
+  // Paint-time synced confirm (R15a, P3): opening availability over a synced
+  // calendar event is always allowed (R14 — synced NEVER blocks), but the teacher
+  // is warned first; proceeding creates PLAIN availability (no flag, no field).
+  // Flag-gated — with SCHEDULING_RULES off this is the original direct save.
+  const handleSaveAvailability = (slots, mode) => {
+    if (schedulingRulesEnabled() && mode === 'open') {
+      const overlaps = syncedOverlapsForSlots(slots);
+      if (overlaps.length > 0) {
+        setPendingPaintSave({ slots, mode, overlaps });
+        return;
+      }
+    }
+    commitSaveAvailability(slots, mode);
   };
 
   // Convert a Date / ISO-ish value to the YYYY-MM-DD shape used as the
@@ -1171,6 +1282,11 @@ export default function TeacherCalendar() {
                           time: `${slot.startTime} - ${slot.endTime}`,
                         }));
                         const eventsByType = getEventsByTypeForDay([...dayEvents, ...savedAvailEvents]);
+                        // Stage 8 (R15b): teacher-only yellow note (P3) for chips that overlap
+                        // a synced event today. Flag-gated; never affects bookability (R14).
+                        const syncedNote = schedulingRulesEnabled()
+                          ? syncedNoteForDay([...dayEvents, ...savedAvailEvents])
+                          : null;
                         const isAvailabilityDay =
                           !!cellDate && isDateInAvailabilityRange(cellDate);
                         const startHandleIds = getStartHandleIds(cellDate);
@@ -1233,7 +1349,7 @@ export default function TeacherCalendar() {
                               </Button>
                             )}
 
-                            {renderUnifiedDayEvents([...dayEvents, ...savedAvailEvents], monthDate)}
+                            {renderUnifiedDayEvents([...dayEvents, ...savedAvailEvents], monthDate, syncedNote)}
                           </div>
                         );
                       })}
@@ -1283,6 +1399,38 @@ export default function TeacherCalendar() {
         onClose={() => setShowAddModal(false)}
         selectedDate={selectedAddDate}
       />
+
+      {/* Stage 8 (R15a): paint-time synced-overlap confirm. Yellow, teacher-only,
+          never blocks — "Open anyway" creates plain availability (R14/R15a). */}
+      {pendingPaintSave && (
+        <AlertDialog open onOpenChange={(o) => { if (!o) setPendingPaintSave(null); }}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2">
+                <span className="text-amber-500" aria-hidden="true">⚠</span> Calendar event overlap
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {fillMessage(SYNCED.paintWarn, {
+                  event: pendingPaintSave.overlaps.map((o) => o.name).join(', '),
+                  range: pendingPaintSave.overlaps.map((o) => o.range).join(', '),
+                })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setPendingPaintSave(null)}>Keep editing</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-green-600 hover:bg-green-700"
+                onClick={() => {
+                  commitSaveAvailability(pendingPaintSave.slots, pendingPaintSave.mode);
+                  setPendingPaintSave(null);
+                }}
+              >
+                Open anyway
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
     </div>
   );
 }

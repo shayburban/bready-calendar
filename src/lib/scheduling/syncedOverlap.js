@@ -23,6 +23,37 @@ export const overlapRegion = (aStart, aEnd, bStart, bEnd) => {
   return start < end ? { start, end } : null;
 };
 
+// --- Wall-clock adapters (DISPLAY-ONLY, R15b) -------------------------------
+// The teacher calendar stores synced events + availability/booked/pending chips
+// as same-day wall-clock 'HH:MM - HH:MM'. Because both sides of a striping
+// comparison sit on the SAME rendered day, minutes-of-day is a sufficient,
+// tz-free coordinate for the purely VISUAL yellow layer. This is never an input
+// to bookability — that is always an absolute UTC instant (R24). Keep these out
+// of any P1/P2 path; the public surface must not import this module (R15g).
+
+// 'HH:MM' → minutes-of-day (0..1439), or null when unparseable / out of range.
+export const minutesOfDay = (hhmm) => {
+  if (typeof hhmm !== 'string') return null;
+  const m = hhmm.trim().match(/^(\d{1,2}):(\d{2})$/);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+};
+
+// 'HH:MM - HH:MM' → { start, end } in minutes-of-day, or null. A non-positive
+// span returns null so a malformed chip can never yield a phantom overlap.
+export const parseWallRange = (range) => {
+  if (typeof range !== 'string') return null;
+  const parts = range.split(' - ');
+  if (parts.length !== 2) return null;
+  const start = minutesOfDay(parts[0]);
+  const end = minutesOfDay(parts[1]);
+  if (start == null || end == null || end <= start) return null;
+  return { start, end };
+};
+
 const finite = (x) => Number.isFinite(x);
 
 // syncedStripes: the yellow stripes where synced events overlap the teacher's own
