@@ -37,6 +37,7 @@ export default function InstantBookingView() {
   const amount = rate != null ? Math.round((rate * duration) / 60) : 0;
 
   const [currentStudentId, setCurrentStudentId] = useState(null);
+  const [userLoaded, setUserLoaded] = useState(false);
   const [slots, setSlots] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -49,6 +50,7 @@ export default function InstantBookingView() {
     (async () => {
       try { const u = await User.me(); if (alive) setCurrentStudentId(u?.id || null); }
       catch { if (alive) setCurrentStudentId(null); }
+      finally { if (alive) setUserLoaded(true); }
     })();
     return () => { alive = false; };
   }, []);
@@ -120,6 +122,7 @@ export default function InstantBookingView() {
         open={!!selectedSlot}
         slot={selectedSlot}
         currentStudentId={currentStudentId}
+        authReady={userLoaded}
         onClose={closeModal}
       />
     </div>

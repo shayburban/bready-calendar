@@ -106,8 +106,8 @@ export default function CheckoutModal({ open, slot, resumeCtx = null, currentStu
               <Clock className="h-4 w-4" /> Held for <span className="font-mono font-semibold text-foreground">{fmtCountdown(remainingMs)}</span>
             </div>
             {state.message ? <p className="text-sm text-red-600 text-center">{state.message}</p> : null}
-            <Button className="w-full btn-pill-green" onClick={proceedToIdentity}>
-              Continue to book
+            <Button className="w-full btn-pill-green" onClick={proceedToIdentity} disabled={!authReady}>
+              {authReady ? 'Continue to book' : 'Loading…'}
             </Button>
           </div>
         );
