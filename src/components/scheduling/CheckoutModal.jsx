@@ -24,10 +24,10 @@ const fmtCountdown = (ms) => {
 
 // Display only (§5d / R-display) — the viewer's local zone. Full dual-zone
 // (teacher + viewer side by side) lands in Stage 7; never feeds a comparison.
-const fmtSlot = (startUtc) => {
+const fmtSlot = (startUtc, tz) => {
   try {
     return new Date(startUtc).toLocaleString(undefined, {
-      weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+      timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
   } catch {
     return startUtc;
@@ -42,7 +42,7 @@ const Centered = ({ icon, title, sub }) => (
   </div>
 );
 
-export default function CheckoutModal({ open, slot, resumeCtx = null, currentStudentId = null, authReady = true, teacherTz, onClose }) {
+export default function CheckoutModal({ open, slot, resumeCtx = null, currentStudentId = null, authReady = true, teacherTz, viewerTz, onClose }) {
   const { state, remainingMs, start, proceedToIdentity, persistForAuthHandoff, cancelAuth, rehold, abandon, resume } =
     useCheckout({ currentStudentId });
   const [authView, setAuthView] = useState('register');
@@ -98,8 +98,9 @@ export default function CheckoutModal({ open, slot, resumeCtx = null, currentStu
           <div className="space-y-5">
             <div className="rounded-lg border p-4 space-y-1">
               <p className="font-semibold">{slot?.subject || 'Lesson'}</p>
-              <p className="text-sm">{fmtSlot(slot?.startUtc)} · {slot?.durationMinutes} min</p>
-              {teacherTz ? <p className="text-xs text-muted-foreground">Teacher’s time zone: {teacherTz}</p> : null}
+              <p className="text-sm">{fmtSlot(slot?.startUtc, viewerTz)} · {slot?.durationMinutes} min</p>
+              <p className="text-xs text-muted-foreground">Your time{viewerTz ? ` · ${viewerTz}` : ''}</p>
+              {teacherTz && teacherTz !== viewerTz ? <p className="text-xs text-muted-foreground">Teacher’s time: {fmtSlot(slot?.startUtc, teacherTz)} · {teacherTz}</p> : null}
               {slot?.amount != null ? <p className="text-sm font-medium">Total: {slot.amount}</p> : null}
             </div>
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -124,7 +125,7 @@ export default function CheckoutModal({ open, slot, resumeCtx = null, currentStu
       case STATES.BOOKED:
         return (
           <div className="space-y-5">
-            <Centered icon={<CheckCircle2 className="h-10 w-10 text-green-600" />} title="You're booked!" sub={`${slot?.subject || 'Lesson'} · ${fmtSlot(slot?.startUtc)}`} />
+            <Centered icon={<CheckCircle2 className="h-10 w-10 text-green-600" />} title="You're booked!" sub={`${slot?.subject || 'Lesson'} · ${fmtSlot(slot?.startUtc, viewerTz)}`} />
             <Button className="w-full btn-pill-green" onClick={() => onClose?.()}>Done</Button>
           </div>
         );
