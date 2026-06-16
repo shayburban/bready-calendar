@@ -57,3 +57,9 @@ export const createReschedule = ({ bookingId, proposedStartUtc, proposedBy }) =>
 
 export const respondReschedule = (rescheduleId, action) =>
   callRpc('respond_reschedule', { p_reschedule_id: rescheduleId, p_action: action });
+
+// Stage 6a — the caller's lessons. bookings/reschedule_pending have RLS on with
+// no policies, so this reads through the SECURITY DEFINER get_my_bookings RPC
+// (0013). Each row carries viewer_role + any PENDING reschedule proposal.
+export const fetchMyBookings = (userId) =>
+  callRpc('get_my_bookings', { p_user_id: userId });

@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+import { instantBookingEnabled } from '@/lib/scheduling/flags';
+import LiveLessonsPanel from '@/components/scheduling/LiveLessonsPanel';
 
 const statusStyles = {
   confirmed: 'bg-green-100 text-green-700',
@@ -123,6 +125,8 @@ export default function StudentDashboard() {
           <StatCard icon={Users} color="text-purple-600" label="Tutors" value={uniqueTeachers} />
           <StatCard icon={DollarSign} color="text-orange-600" label="Invested" value={`$${totalSpent}`} />
         </div>
+
+        {instantBookingEnabled() && <LiveLessonsPanel />}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
