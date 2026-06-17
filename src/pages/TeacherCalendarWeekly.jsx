@@ -24,6 +24,7 @@ import {
   Info
 } from 'lucide-react';
 import ResponsiveCalendarSidebar from '../components/calendar/ResponsiveCalendarSidebar';
+import { syncedOverlapsForSlots } from '@/lib/calendarSyncedOverlap';
 import WeeklyCalendarGrid from '../components/calendar/WeeklyCalendarGrid';
 import EventModal from '../components/calendar/EventModal';
 import AvailabilityModal from '../components/calendar/AvailabilityModal';
@@ -293,6 +294,7 @@ export default function TeacherCalendarWeekly() {
             onSaveAvailability={handleSaveAvailability}
             onNoEndDateChange={handleNoEndDateChange}
             onResetAvailabilityForm={resetAvailabilityForm}
+            detectSyncedOverlap={syncedOverlapsForSlots}
           />
 
           {/* Main Calendar Area */}

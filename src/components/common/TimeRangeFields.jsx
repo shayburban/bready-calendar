@@ -29,6 +29,19 @@
 import React, { useRef } from 'react';
 import TimeSelect from './TimeSelect';
 
+// Next 15-minute grid time strictly after `start` ('HH:MM'), or '' when start is
+// at/after the last grid slot (23:45). Used to default End to a valid FUTURE time
+// the instant Start is picked (autoFillEnd) so End can never sit before Start.
+const GRID_STEP_MIN = 15;
+const defaultEndFor = (start) => {
+  if (typeof start !== 'string') return '';
+  const [h, m] = start.split(':').map((n) => parseInt(n, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return '';
+  const next = h * 60 + m + GRID_STEP_MIN;
+  if (next > 23 * 60 + 45) return '';
+  return `${String(Math.floor(next / 60)).padStart(2, '0')}:${String(next % 60).padStart(2, '0')}`;
+};
+
 export default function TimeRangeFields({
   startTime,
   endTime,
@@ -37,6 +50,10 @@ export default function TimeRangeFields({
   onChange,
   startInvalid = false,
   endInvalid = false,
+  // Phase 4.1 — when true, picking Start auto-fills End with the next valid
+  // 15-min slot whenever End is empty or would land at/before Start (used by the
+  // Set Availability rows). When false, the legacy "clear End" behavior is kept.
+  autoFillEnd = false,
   // Passed through to BOTH TimeSelect triggers. Used by popup cards
   // to blend the input bg with the surrounding card (Task 1 visual
   // override — e.g. `bg-transparent` so it doesn't show the sidebar's
@@ -62,7 +79,16 @@ export default function TimeRangeFields({
           // upper bound is applied.
           maxTime={endTime || undefined}
           onChange={(newStart) => {
-            if (endTime && newStart >= endTime) {
+            if (autoFillEnd) {
+              // Phase 4.1 — Start always yields a VALID future End: keep a
+              // still-valid End, otherwise default to the next 15-min slot
+              // (e.g. 14:45 -> 15:00). End can never end up at/before Start.
+              if (!endTime || newStart >= endTime) {
+                onChange({ startTime: newStart, endTime: defaultEndFor(newStart) });
+              } else {
+                onChange({ startTime: newStart, endTime });
+              }
+            } else if (endTime && newStart >= endTime) {
               onChange({ startTime: newStart, endTime: '' });
             } else {
               onChange({ startTime: newStart, endTime });

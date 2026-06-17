@@ -134,6 +134,7 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showEr
         onChange={(next) => onChange({ ...row, ...next })}
         startInvalid={startInvalid}
         endInvalid={endInvalid}
+        autoFillEnd
       />
       <Button
         variant="ghost"
@@ -198,7 +199,7 @@ const formatReviewDate = (d) => {
   return format(new Date(d), 'd MMMM yyyy');
 };
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange, onResetAvailabilityForm }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange, onResetAvailabilityForm, detectSyncedOverlap }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   // Active weekday indices for the "Advanced date selection" filter. Default
@@ -784,44 +785,18 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     return mergeSnappedRanges(snapped);
   };
 
-  const handleSave = () => {
+  // Build the slot list from the current ranges / weekdays / times. PURE — no
+  // side effects — so it drives BOTH the Save Dates emit AND the reactive
+  // pre-save synced-overlap warning (Phase 1) off the EXACT same slots that get
+  // persisted. Mirrors the snap-then-merge pipeline (see
+  // docs/availability-merge-architecture.md §2). Returns [] when nothing valid.
+  const buildSlots = () => {
     const ranges = [primaryRangeValue, ...extraRows]
       .filter((r) => r && r.startDate && (r.endDate || noEndDate));
-    if (ranges.length === 0) return;
-
-    // Merge overlapping/adjacent rows so e.g. 09:30-14:30 + 13:30-18:30 +
-    // 09:45-11:30 collapses to a single 09:30-18:30 block.
+    if (ranges.length === 0) return [];
     const validTimes = timeAvailEnabled ? mergeTimeRows(timeRanges) : [];
-
-    // Reflect the merged result back into the sidebar so the user sees the
-    // collapsed rows after Save Dates. Preserve existing IDs where possible
-    // and fill in the rest with fresh ones.
-    if (timeAvailEnabled && validTimes.length > 0) {
-      const existingIds = timeRanges.map((r) => r.id);
-      let nextId = Math.max(0, ...existingIds) + 1;
-      const merged = validTimes.map((t, idx) => ({
-        id: existingIds[idx] !== undefined ? existingIds[idx] : nextId++,
-        startTime: t.startTime,
-        endTime: t.endTime,
-      }));
-      const same =
-        merged.length === timeRanges.length &&
-        merged.every(
-          (r, i) =>
-            r.startTime === timeRanges[i].startTime &&
-            r.endTime === timeRanges[i].endTime
-        );
-      if (!same) setTimeRanges(merged);
-    }
-
-    // Snap-then-merge (v4 + v3): each row's start/end is first snapped to
-    // its closest active weekday, then survivors are folded. Rows with no
-    // matching weekday vanish here, so the slot stream we emit cannot
-    // contain dates the user actually unchecked. See
-    // docs/availability-merge-architecture.md §2.
     const finalRanges = computeFinalRanges(ranges);
-    if (finalRanges.length === 0) return;
-
+    if (finalRanges.length === 0) return [];
     const dateKeys = [];
     finalRanges.forEach((range) => {
       const start = new Date(range.startDate); start.setHours(0, 0, 0, 0);
@@ -844,30 +819,53 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
         cur.setDate(cur.getDate() + 1);
       }
     });
-    if (dateKeys.length === 0) return;
-
-    let slots;
+    if (dateKeys.length === 0) return [];
     if (availabilityMode === 'open') {
       // Full-day default: when Time Availability is unchecked OR no valid
       // time rows are filled in, treat the entire day as open (00:00-23:59).
       if (timeAvailEnabled && validTimes.length > 0) {
-        slots = dateKeys.flatMap((date) =>
+        return dateKeys.flatMap((date) =>
           validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
         );
-      } else {
-        slots = dateKeys.map((date) => ({ date, startTime: '00:00', endTime: '23:59' }));
       }
-    } else {
-      // Closed mode: if user specified times, target those exact slots;
-      // otherwise emit a date-only entry that wildcard-matches all slots
-      // saved on that date.
-      slots = dateKeys.flatMap((date) =>
-        validTimes.length
-          ? validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
-          : [{ date }]
-      );
+      return dateKeys.map((date) => ({ date, startTime: '00:00', endTime: '23:59' }));
+    }
+    // Closed mode: if user specified times, target those exact slots;
+    // otherwise emit a date-only entry that wildcard-matches all slots
+    // saved on that date.
+    return dateKeys.flatMap((date) =>
+      validTimes.length
+        ? validTimes.map((t) => ({ date, startTime: t.startTime, endTime: t.endTime }))
+        : [{ date }]
+    );
+  };
+
+  const handleSave = () => {
+    // Merge overlapping/adjacent time rows for DISPLAY so e.g. 09:30-14:30 +
+    // 13:30-18:30 + 09:45-11:30 collapses to a single 09:30-18:30 chip. This is
+    // a display side-effect only; the emitted slots come from buildSlots()
+    // (which applies the same mergeTimeRows internally).
+    const validTimes = timeAvailEnabled ? mergeTimeRows(timeRanges) : [];
+    if (timeAvailEnabled && validTimes.length > 0) {
+      const existingIds = timeRanges.map((r) => r.id);
+      let nextId = Math.max(0, ...existingIds) + 1;
+      const merged = validTimes.map((t, idx) => ({
+        id: existingIds[idx] !== undefined ? existingIds[idx] : nextId++,
+        startTime: t.startTime,
+        endTime: t.endTime,
+      }));
+      const same =
+        merged.length === timeRanges.length &&
+        merged.every(
+          (r, i) =>
+            r.startTime === timeRanges[i].startTime &&
+            r.endTime === timeRanges[i].endTime
+        );
+      if (!same) setTimeRanges(merged);
     }
 
+    const slots = buildSlots();
+    if (slots.length === 0) return;
     if (onSaveAvailability) onSaveAvailability(slots, availabilityMode);
   };
 
@@ -879,6 +877,19 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   ];
   const reviewRanges = computeFinalRanges(reviewRangeRows);
   const canSave = reviewRanges.length > 0;
+
+  // Phase 1 (synced pre-save warning) — reactive overlap detection on the LIVE
+  // form inputs, using the EXACT slots Save Dates would persist (buildSlots).
+  // Only meaningful when OPENING availability, and gated by SCHEDULING_RULES so
+  // it tracks the calendar's yellow layer. The detector (provided by the host
+  // calendar) reads the teacher's synced calendar events; with no detector or
+  // the flag off, this stays inert. Drives the inline warning box (below the
+  // summary) AND the adaptive success toast (Phase 3). Synced NEVER blocks (R14).
+  const syncedOverlaps =
+    schedulingRulesEnabled() && availabilityMode === 'open' && typeof detectSyncedOverlap === 'function'
+      ? detectSyncedOverlap(buildSlots())
+      : [];
+  const hasSyncedOverlap = Array.isArray(syncedOverlaps) && syncedOverlaps.length > 0;
 
   // ── Set Availability form: validation + reset (additive). handleSave above is
   //    unchanged and still guards, so an invalid save can never persist. ──
@@ -1062,9 +1073,13 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     // handleSave() succeeds so the toast can never appear for a
     // blocked save (any partial-pair / chronological-order failure
     // returns earlier in this function).
+    // Phase 3 — single unified toast that adapts to the overlap state captured
+    // at click time. Clean save → standard copy; overlapped save → ⚠ note.
     toast({
       title: 'Availability schedule successfully saved.',
-      description: 'Your availability has been updated for the selected period.',
+      description: hasSyncedOverlap
+        ? '⚠ Note: This availability overlaps with a synced calendar event.'
+        : 'Your availability has been updated for the selected period.',
     });
     resetAvailabilityFields();
     // Task 1: record the successful-save timestamp and show the green
@@ -1401,6 +1416,17 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
                             </div>
                           );
                         })()}
+
+                        {/* Phase 1 — inline synced-overlap warning. Sits strictly
+                            BELOW the Dates/Timings summary (untouched above) and
+                            ABOVE the action buttons. Informational only: Save Dates
+                            still commits (synced NEVER blocks, R14). */}
+                        {hasSyncedOverlap && (
+                          <div className="rounded-md border border-amber-400 bg-amber-50 p-3 text-sm text-amber-800 flex items-start gap-2">
+                            <span aria-hidden="true">⚠</span>
+                            <span>Warning: This selection overlaps with a synced calendar event.</span>
+                          </div>
+                        )}
 
                         <div className="flex gap-2">
                             <Button variant="outline" className="w-full" onClick={resetAvailabilityFields}>Cancel</Button>
