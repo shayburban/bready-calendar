@@ -113,7 +113,7 @@ const MONTHS_STEP = 2;
 // Each row's dot is colored from the event's own type so mixed pickers stay
 // visually differentiated. Pass `header` to override the default
 // "Select <headerLabel> event" template (used by the mixed picker).
-function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTypeLabel = false, syncedNote = null }) {
+function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTypeLabel = false, syncedNote = null, onCloseAvailability = null }) {
   const [open, setOpen] = useState(false);
   // Open the "+x more" picker on hover (not only on click). A short close delay
   // lets the pointer travel from the chip onto the (portaled) content without it
@@ -186,6 +186,19 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
                     <span className="text-gray-500 truncate min-w-0">{TYPE_HEADER_LABEL[e.type] || e.type}</span>
                   )}
                   {overlaps && <span className="text-amber-500 flex-shrink-0 ml-auto" aria-hidden="true">⚠</span>}
+                  {/* R15c — one-click close for an overlapping OPEN availability item. */}
+                  {onCloseAvailability && overlaps && e.type === 'availability' && e.slot && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      title="Close this availability (it overlaps a synced event)"
+                      aria-label="Close this availability"
+                      onClick={(ev) => { ev.stopPropagation(); setOpen(false); onCloseAvailability(e.slot); }}
+                      className="flex-shrink-0 text-amber-600 hover:text-red-600 font-bold leading-none cursor-pointer px-0.5"
+                    >
+                      ✕
+                    </span>
+                  )}
                 </div>
                 {/* Line 2 (only when present): the orange reschedule
                     label gets its own row. whitespace-normal + break-words
@@ -643,6 +656,21 @@ export default function TeacherCalendar() {
           {renderDot(e.type)}
           <span className="truncate flex-1 min-w-0">{e.time}</span>
           {overlaps && <span className="text-amber-500 flex-shrink-0" aria-hidden="true">⚠</span>}
+          {/* R15c — one-click close for an OPEN availability slot that overlaps a
+              synced event. Only on deletable saved availability (carries `slot`);
+              stopPropagation so it doesn't open the modal. */}
+          {overlaps && e.type === 'availability' && e.slot && (
+            <span
+              role="button"
+              tabIndex={0}
+              title="Close this availability (it overlaps a synced event)"
+              aria-label="Close this availability"
+              onClick={(ev) => { ev.stopPropagation(); handleCloseAvailability(e.slot); }}
+              className="flex-shrink-0 text-amber-600 hover:text-red-600 font-bold leading-none cursor-pointer px-0.5"
+            >
+              ✕
+            </span>
+          )}
         </div>
       );
     };
@@ -688,6 +716,7 @@ export default function TeacherCalendar() {
           items={hidden}
           showTypeLabel
           syncedNote={syncedNote}
+          onCloseAvailability={handleCloseAvailability}
           onSelect={(e) => openEventModal(e, monthDate)}
         />
       </div>
@@ -790,6 +819,37 @@ export default function TeacherCalendar() {
       // real data. Flag-gated + fire-and-forget + non-blocking — localStorage above
       // stays the source for the teacher's own calendar UI and is unaffected by a
       // sync failure. Wall-clock is converted to absolute UTC via TimeKit (R24/R20).
+      if (instantBookingEnabled()) {
+        (async () => {
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const teacherId = session?.user?.id;
+            if (teacherId) {
+              await setAvailabilityOneOff(teacherId, availabilityToRows(next, detectViewerTz() || 'UTC'));
+            }
+          } catch (e) {
+            console.warn('Supabase availability sync skipped:', e?.message || e);
+          }
+        })();
+      }
+      return next;
+    });
+  };
+
+  // R15c — one-click TEACHER-INITIATED close of an open availability slot that
+  // overlaps a synced calendar event. A normal manual edit (the system never
+  // auto-closes, R15): remove the exact saved slot, persist locally, and mirror
+  // the new FUTURE set to Supabase so bookable_slots stops offering it. Booked
+  // lessons are never touched — only `availability` chips expose this control.
+  const handleCloseAvailability = (slot) => {
+    if (!slot || !slot.date || !slot.startTime || !slot.endTime) return;
+    setSavedAvailabilitySlots((prev) => {
+      const next = prev.filter(
+        (s) => !(s.date === slot.date && s.startTime === slot.startTime && s.endTime === slot.endTime)
+      );
+      persistAvailabilitySlots(next);
+      // Same flag-gated, fire-and-forget Supabase mirror as the save path, so a
+      // closed slot leaves the public picker too (not just the local calendar).
       if (instantBookingEnabled()) {
         (async () => {
           try {
@@ -1204,6 +1264,7 @@ export default function TeacherCalendar() {
                           role: 'T',
                           date: day.date,
                           time: `${slot.startTime} - ${slot.endTime}`,
+                          slot, // raw {date,startTime,endTime} — enables the R15c one-click close
                         }));
                         const eventsByType = getEventsByTypeForDay([...dayEvents, ...savedAvailEvents]);
                         // Stage 8 (R15b): teacher-only yellow note (P3) for chips that overlap
