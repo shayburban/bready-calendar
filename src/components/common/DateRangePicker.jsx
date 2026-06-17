@@ -137,9 +137,11 @@ const DateRangePicker = ({
   const monthYear = currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // Two distinct flows depending on which field opened the calendar:
-  //   - Start picker (selectingStart === true): update startDate only. Clear
-  //     endDate only if the new start is after the existing end (range would
-  //     become invalid).
+  //   - Start picker (selectingStart === true): set startDate, then ALWAYS
+  //     clear endDate and OPEN the End picker so the user explicitly chooses
+  //     their End — selecting a Start never auto-populates or auto-keeps an End
+  //     (Bug 1). Exception: when "No end date" is active there is no End to
+  //     pick, so we just set the Start and close.
   //   - End picker (selectingStart === false): update endDate only. Never
   //     touch startDate just because the range was already complete — the
   //     prior version's `(startDate && endDate)` short-circuit caused the
@@ -162,24 +164,20 @@ const DateRangePicker = ({
     if (selectingStart) {
       setStartDate(selectedDate);
 
-      if (endDate && isBefore(endDate, selectedDate)) {
-        // New start is after the existing end — the old end is no longer
-        // valid; clear it and keep the calendar open for the user to pick
-        // a fresh end.
-        setEndDate(null);
-        setSelectingStart(false);
+      if (noEndDate) {
+        // "No end date" is active — there is no End to choose. Set the Start
+        // and close; the preserved endDate is left untouched so unchecking
+        // "No end date" can restore it.
+        setSelectingStart(true);
+        setIsCalendarOpen(false);
         return;
       }
 
-      if (!endDate) {
-        // No end yet — keep calendar open and continue with end selection.
-        setSelectingStart(false);
-        return;
-      }
-
-      // Existing end is still valid; we're done.
-      setSelectingStart(true);
-      setIsCalendarOpen(false);
+      // Bug 1 — selecting a Start Date must NOT auto-populate or auto-keep an
+      // End. Clear any End and OPEN the End picker (keep the calendar open,
+      // switched to end-selection) so the user fluidly chooses their own End.
+      setEndDate(null);
+      setSelectingStart(false);
       return;
     }
 
