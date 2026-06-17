@@ -134,7 +134,7 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showEr
         onChange={(next) => onChange({ ...row, ...next })}
         startInvalid={startInvalid}
         endInvalid={endInvalid}
-        autoFillEnd
+        manualEnd
       />
       <Button
         variant="ghost"
