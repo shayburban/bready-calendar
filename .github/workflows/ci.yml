@@ -1,0 +1,52 @@
+name: CI
+
+# Verification harness (scheduling spec §10). Runs on every push / PR so the
+# time-correctness + booking-logic checks scale with COMMITS, not with traffic
+# (§10.1) and stay free at any user count. ubuntu Node 20 ships full-ICU, so the
+# Pacific/Lord_Howe (30-min DST) case in T-B runs here even though it skips on an
+# ICU-light local runtime (§10 / T-G intent).
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# A newer commit on the same ref cancels the in-flight run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: lint · test · build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20 (full-ICU)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # T1 architecture guard (§10.3): no Date.now() / new Date() / raw time math
+      # or anchorless addCalendar inside src/lib/scheduling/** (except timekit.js
+      # + __tests__). The whole-repo lint is intentionally NOT run here — the
+      # legacy base44 surface carries pre-existing prop-types / unused-vars noise
+      # that is out of scope for the scheduling work.
+      - name: Scheduling lint (T1 — no raw time)
+        run: npx eslint "src/lib/scheduling/**/*.js" "eslint-rules/**/*.js"
+
+      # Full vitest suite: TimeKit core/DST/zones (T-A/T-B/T-C/T-D), recurrence
+      # (T-recur), toViewer, EffectiveBookable, offers, checkout, the T1 rule
+      # test, and the synced-overlap layer.
+      - name: Tests (vitest)
+        run: npm test
+
+      - name: Production build
+        run: npm run build
