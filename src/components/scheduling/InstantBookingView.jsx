@@ -11,7 +11,7 @@ import { useLocation } from 'react-router-dom';
 import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { fetchBookableSlots } from '@/lib/scheduling/bookingApi';
-import { detectViewerTz } from '@/lib/scheduling/timekit';
+import { detectViewerTz, toViewer, assertGridRegularity } from '@/lib/scheduling/timekit';
 import { User } from '@/api/entities';
 import CheckoutModal from '@/components/scheduling/CheckoutModal';
 
@@ -73,6 +73,20 @@ export default function InstantBookingView() {
     })();
     return () => { alive = false; };
   }, [teacherId, duration, reloadKey]);
+
+  // R24 runtime invariant (§10.1) — fail-loud, no-op on the happy path. Asserts
+  // the quarter-hour grid stays regular in the viewer's zone (the UTC offset and
+  // every rendered slot minute are multiples of 15). Wrapped so a violation
+  // alerts via the console but can NEVER crash the public picker.
+  useEffect(() => {
+    if (!slots.length) return;
+    try {
+      const minutes = slots.map((s) => toViewer(Date.parse(s.start_utc), viewerTz).minute);
+      assertGridRegularity(viewerTz, minutes);
+    } catch (e) {
+      console.error('[scheduling] grid-regularity invariant violated (R24):', e?.message || e);
+    }
+  }, [slots, viewerTz]);
 
   // Group by day in the student's zone (a slot lands on the student's local day).
   const dayGroups = useMemo(() => {
