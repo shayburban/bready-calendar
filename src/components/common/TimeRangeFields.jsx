@@ -74,27 +74,30 @@ export default function TimeRangeFields({
         <label className="text-xs font-medium text-gray-700">Start Time</label>
         <TimeSelect
           value={startTime}
-          // Task 2 reverse filter — only show options strictly less
-          // than the chosen End. `undefined` when End is empty so no
-          // upper bound is applied.
-          maxTime={endTime || undefined}
+          // Reverse filter (pick End first, then narrow Start). DISABLED in
+          // autoFill mode: there End is DERIVED from Start on completion, so
+          // constraining Start by a freshly-derived End would (wrongly) collapse
+          // the Start MINUTE options to :00 (Bug 1.1). Non-autoFill keeps it.
+          maxTime={autoFillEnd ? undefined : (endTime || undefined)}
           onChange={(newStart) => {
-            if (autoFillEnd) {
-              // Phase 4.1 — Start always yields a VALID future End: keep a
-              // still-valid End, otherwise default to the next 15-min slot
-              // (e.g. 14:45 -> 15:00). End can never end up at/before Start.
-              if (!endTime || newStart >= endTime) {
-                onChange({ startTime: newStart, endTime: defaultEndFor(newStart) });
-              } else {
-                onChange({ startTime: newStart, endTime });
-              }
-            } else if (endTime && newStart >= endTime) {
+            // Only clear an End the new Start would invalidate; never DERIVE End
+            // here. In autoFill mode the +15 default is applied on COMPLETION
+            // (onValueCommit) — applying it on the HOUR pick pinned End early and
+            // restricted the Start minute grid.
+            if (endTime && newStart >= endTime) {
               onChange({ startTime: newStart, endTime: '' });
             } else {
               onChange({ startTime: newStart, endTime });
             }
           }}
-          onValueCommit={() => {
+          onValueCommit={(committedStart) => {
+            // Start fully chosen (hour + minute). autoFill: default End to Start +
+            // 15 min WHEN End is empty or now invalid (so a deliberately-set longer
+            // End survives a Start re-edit), then auto-open the End picker. End is
+            // therefore always present and strictly after Start (Bug 1.2 / 1.3).
+            if (autoFillEnd && (!endTime || committedStart >= endTime)) {
+              onChange({ startTime: committedStart, endTime: defaultEndFor(committedStart) });
+            }
             endTimeRef.current?.openAndFocus();
           }}
           invalid={startInvalid}

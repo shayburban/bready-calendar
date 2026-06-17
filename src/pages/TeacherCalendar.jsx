@@ -113,7 +113,7 @@ const MONTHS_STEP = 2;
 // Each row's dot is colored from the event's own type so mixed pickers stay
 // visually differentiated. Pass `header` to override the default
 // "Select <headerLabel> event" template (used by the mixed picker).
-function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTypeLabel = false }) {
+function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTypeLabel = false, syncedNote = null }) {
   const [open, setOpen] = useState(false);
   // Open the "+x more" picker on hover (not only on click). A short close delay
   // lets the pointer travel from the chip onto the (portaled) content without it
@@ -161,12 +161,17 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
         <div className="py-1">
           {sortedItems.map((e) => {
             const rowDotColor = TYPE_DOT_COLOR[e.type] || 'bg-gray-400';
+            // Bug 2 — mirror the main-grid synced overlap styling (amber + ⚠ +
+            // tooltip) onto the items INSIDE the "+X more" popover (R15b).
+            const overlapNames = syncedNote ? syncedNote.get(e.id) : null;
+            const overlaps = !!overlapNames && overlapNames.size > 0;
             return (
               <button
                 key={e.id}
                 type="button"
+                title={overlaps ? fillMessage(SYNCED.badge, { event: [...overlapNames].join(', ') }) : undefined}
                 onClick={() => { setOpen(false); onSelect(e); }}
-                className="w-full block px-3 py-2 text-xs text-left hover:bg-gray-50"
+                className={`w-full block px-3 py-2 text-xs text-left ${overlaps ? 'bg-amber-100 hover:bg-amber-200' : 'hover:bg-gray-50'}`}
               >
                 {/* Line 1: dot + (role) + time + optional type label.
                     min-w-0 + truncate on the type label keeps the row
@@ -180,6 +185,7 @@ function EventPickerPopover({ chip, headerLabel, header, items, onSelect, showTy
                   {showTypeLabel && (
                     <span className="text-gray-500 truncate min-w-0">{TYPE_HEADER_LABEL[e.type] || e.type}</span>
                   )}
+                  {overlaps && <span className="text-amber-500 flex-shrink-0 ml-auto" aria-hidden="true">⚠</span>}
                 </div>
                 {/* Line 2 (only when present): the orange reschedule
                     label gets its own row. whitespace-normal + break-words
@@ -647,16 +653,27 @@ export default function TeacherCalendar() {
 
     const visible = sorted.slice(0, 2);
     const hidden = sorted.slice(2);
+    // Bug 2 — also surface the synced-overlap warning on the "+X more" trigger
+    // so the teacher notices it WITHOUT opening the popover (the items inside
+    // get amber + ⚠ via the syncedNote prop below).
+    const hiddenOverlaps = !!syncedNote && hidden.some((e) => (syncedNote.get(e.id)?.size || 0) > 0);
     return (
       <div className="space-y-1">
         {visible.map(renderRow)}
         <EventPickerPopover
           chip={
             <div
-              title={`${hidden.length} more event${hidden.length === 1 ? '' : 's'}`}
-              className="flex items-center gap-1 bg-white border border-gray-200 rounded px-1.5 py-1 text-[11px] text-gray-600 cursor-pointer hover:bg-gray-50 transition-colors"
+              title={hiddenOverlaps
+                ? 'Some hidden events overlap a synced calendar event'
+                : `${hidden.length} more event${hidden.length === 1 ? '' : 's'}`}
+              className={`flex items-center gap-1 border rounded px-1.5 py-1 text-[11px] cursor-pointer transition-colors ${
+                hiddenOverlaps
+                  ? 'bg-amber-50 border-amber-400 text-amber-800 hover:bg-amber-100'
+                  : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
             >
               <span className="flex-shrink-0">+{hidden.length} more</span>
+              {hiddenOverlaps && <span className="flex-shrink-0" aria-hidden="true">⚠</span>}
               <span className="flex items-center gap-1 ml-auto flex-shrink-0">
                 {Array.from(new Set(hidden.map((e) => e.type))).map((type) => (
                   <span
@@ -670,6 +687,7 @@ export default function TeacherCalendar() {
           header="Hidden events"
           items={hidden}
           showTypeLabel
+          syncedNote={syncedNote}
           onSelect={(e) => openEventModal(e, monthDate)}
         />
       </div>
