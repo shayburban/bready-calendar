@@ -22,6 +22,9 @@ Spec references are to "FINAL BUILDER PROMPT v7" (rules R1–R27, §1–§11).
   `src/lib/scheduling/syncedOverlap.js` and `src/lib/calendarSyncedOverlap.js`.
 - Stage 9 (partial): **GitHub Actions CI** (`.github/workflows/ci.yml`) runs the T1
   scheduling lint + full vitest suite + build on every push/PR (full‑ICU Node 20).
+  The suite is now **160 tests / 1 skip**, including T‑F/T‑G (cross‑lib + tz‑data)
+  and the **RTL T‑window‑guard** component test (see §6). The only §10 item still
+  outstanding is the Playwright two‑zone **T‑E** (needs browser binaries).
 - **R26/R27 retention sweeps are scheduled** via `pg_cron` (migration `0015`):
   `sched-expire-reschedules` every 5 min, `sched-purge-holds` daily 03:10 UTC. Verified
   registered + the functions execute cleanly.
@@ -147,26 +150,42 @@ other flow changes — the commit step already requires a successful payment ref
 
 ## 6. Verification harness — remaining §10 tests
 
-**What exists today.** 138 unit tests (TimeKit core/DST/zones T‑A/T‑B/T‑C/T‑D,
-recurrence T‑recur, toViewer, EffectiveBookable, offers, checkout, the T1 rule test,
-synced overlap) run in CI on full‑ICU Node 20.
+**What exists today.** 160 unit/component tests run in CI on full‑ICU Node 20:
+TimeKit core/DST/zones (T‑A/T‑B/T‑C/T‑D), recurrence (T‑recur), toViewer,
+cross‑library agreement + tz‑data sanity (T‑F/T‑G), EffectiveBookable, offers,
+checkout, the T1 rule test, synced overlap, and the **RTL T‑window‑guard**
+component test (below).
 
-**Blockers / to finish.**
-- **T‑window‑guard (RTL).** Needs `@testing-library/react` + `jsdom` (not installed)
-  and a jsdom vitest environment (per‑file `// @vitest-environment jsdom` pragma). Then
-  render the settings UI and assert Save is disabled + `msg.window_lt_notice` shows when
-  `normalize(W) ≤ normalize(L)` (cross‑unit cases). NOTE: the underlying `normalize.js`
-  is already unit‑tested; this is the component‑level guard. Rendering
-  `TeacherSchedulingPreferences` requires mocking `User.me()` / `TeacherProfile` + the
-  Supabase client.
+- ✅ **T‑window‑guard (RTL) — DONE.**
+  `src/components/common/teacher-scheduling-preferences/__tests__/TeacherSchedulingPreferences.window-guard.test.jsx`.
+  Renders the real `TeacherSchedulingPreferences` under a per‑file
+  `// @vitest-environment jsdom` pragma (added dev deps `@testing-library/react`
+  + `@testing-library/dom` + `jsdom`; added `@vitejs/plugin-react` to
+  `vitest.config.js` so component tests use the app's automatic JSX runtime —
+  node tests stay on the `node` env and are unchanged). Asserts the strict
+  W > L guard **disables Save** (via `onValidityChange(false)`, which is what the
+  host sidebar/Page‑5c uses to gate Save) and **shows `msg.window_lt_notice`**,
+  across the spec's cross‑unit cases (1 day vs 2 h passes; 1 day vs 1 day
+  blocked; 1 week vs 8 days blocked), plus flag‑off inertness (Constraint 3) and
+  the `showErrors` nuance (Save disabled immediately; notice surfaces on Save
+  click). The three Radix‑Select leaf selectors are stubbed (they only feed
+  per‑field validity, `true` for valid pairs); the guard logic + shared
+  `normalize.js` are the real thing. Also asserts the shared normalization
+  rejects every L ≥ W case — the SAME table the server's L ≥ W rejection reuses
+  (migration `0008`), proving the client guard is not the authority.
+- ✅ **T‑F / T‑G — DONE.** `timekit.crosslib.test.js`: luxon `toViewer` agrees
+  with a raw‑Intl reference across the collision‑matrix zones × 3 DST seasons,
+  and every zone offset is a 15‑minute multiple (R24 data invariant).
+
+**Still blocked / to finish.**
 - **T‑E (Playwright, two‑zone).** `playwright` is installed but there is no config or
   browser binaries (`npx playwright install`). Add `playwright.config.js` + a test that
   opens two contexts on different `timezoneId` (e.g. `America/New_York` vs
   `Asia/Kathmandu`), books the SAME slot, and asserts the network payload's UTC instant
   is byte‑identical with **no `viewerTz`**, and the persisted row's epoch‑ms matches.
-- **T‑F / T‑G.** Cross‑library agreement (luxon `toViewer` == Intl across the zone list)
-  and a tz‑data staleness guard (assert client/server tz‑data versions match + aren't
-  stale). Pure, CI‑friendly — add when convenient.
+  This run also carries the **live** half of T‑window‑guard: a real Save round‑trip
+  proving the server independently rejects L ≥ W (the unit suite already covers the
+  shared‑contract half).
 
 ---
 
