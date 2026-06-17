@@ -23,8 +23,9 @@ Spec references are to "FINAL BUILDER PROMPT v7" (rules R1–R27, §1–§11).
 - Stage 9 (partial): **GitHub Actions CI** (`.github/workflows/ci.yml`) runs the T1
   scheduling lint + full vitest suite + build on every push/PR (full‑ICU Node 20).
   The suite is now **160 tests / 1 skip**, including T‑F/T‑G (cross‑lib + tz‑data)
-  and the **RTL T‑window‑guard** component test (see §6). The only §10 item still
-  outstanding is the Playwright two‑zone **T‑E** (needs browser binaries).
+  and the **RTL T‑window‑guard** component test (see §6). A separate CI `e2e` job
+  runs the Playwright two‑zone **T‑E** booking test. Every automated §10 test now
+  runs in CI; only a small live‑backend persisted‑row round‑trip remains (§6).
 - **R26/R27 retention sweeps are scheduled** via `pg_cron` (migration `0015`):
   `sched-expire-reschedules` every 5 min, `sched-purge-holds` daily 03:10 UTC. Verified
   registered + the functions execute cleanly.
@@ -150,11 +151,12 @@ other flow changes — the commit step already requires a successful payment ref
 
 ## 6. Verification harness — remaining §10 tests
 
-**What exists today.** 160 unit/component tests run in CI on full‑ICU Node 20:
-TimeKit core/DST/zones (T‑A/T‑B/T‑C/T‑D), recurrence (T‑recur), toViewer,
-cross‑library agreement + tz‑data sanity (T‑F/T‑G), EffectiveBookable, offers,
-checkout, the T1 rule test, synced overlap, and the **RTL T‑window‑guard**
-component test (below).
+**What exists today.** 160 unit/component tests (vitest) + 2 Playwright e2e tests
+run in CI on full‑ICU Node 20: TimeKit core/DST/zones (T‑A/T‑B/T‑C/T‑D), recurrence
+(T‑recur), toViewer, cross‑library agreement + tz‑data sanity (T‑F/T‑G),
+EffectiveBookable, offers, checkout, the T1 rule test, synced overlap, the **RTL
+T‑window‑guard** component test, and the **Playwright two‑zone T‑E** booking test
+(all three below).
 
 - ✅ **T‑window‑guard (RTL) — DONE.**
   `src/components/common/teacher-scheduling-preferences/__tests__/TeacherSchedulingPreferences.window-guard.test.jsx`.
@@ -177,15 +179,28 @@ component test (below).
   with a raw‑Intl reference across the collision‑matrix zones × 3 DST seasons,
   and every zone offset is a 15‑minute multiple (R24 data invariant).
 
-**Still blocked / to finish.**
-- **T‑E (Playwright, two‑zone).** `playwright` is installed but there is no config or
-  browser binaries (`npx playwright install`). Add `playwright.config.js` + a test that
-  opens two contexts on different `timezoneId` (e.g. `America/New_York` vs
-  `Asia/Kathmandu`), books the SAME slot, and asserts the network payload's UTC instant
-  is byte‑identical with **no `viewerTz`**, and the persisted row's epoch‑ms matches.
-  This run also carries the **live** half of T‑window‑guard: a real Save round‑trip
-  proving the server independently rejects L ≥ W (the unit suite already covers the
-  shared‑contract half).
+- ✅ **T‑E (Playwright, two‑zone) — DONE.** `playwright.config.js` +
+  `e2e/t-e.two-zone-booking.spec.js`. Two browser contexts on different `timezoneId`
+  (`America/New_York` vs `Asia/Kathmandu`, and `Europe/Moscow` vs `Asia/Vladivostok`)
+  book the SAME slot; the test asserts the `create_hold` payload's `p_slot_start_utc`
+  is **byte‑identical** across zones and carries **no `viewerTz`** (exactly the known
+  RPC keys; no zone id / "viewer"/"timezone" token), plus a bonus check that the same
+  instant renders as DIFFERENT local labels per zone (display‑only tz). Hermetic +
+  deterministic: Playwright builds + previews the app with both flags ON
+  (`webServer.env`), `bookable_slots` is stubbed with one fixed future :00‑grid
+  instant, and `create_hold` is captured at the network boundary — so NO real backend
+  write happens (dummy Supabase env injected for the CI build). Wired into CI as a
+  separate `e2e` job. Added dev dep `@playwright/test`; a `data-testid` hook on the
+  slot button (additive, non‑behavioral).
+
+**Residual (needs a live backend + seeded data — small).**
+- The **persisted‑row epoch‑ms** read‑back, and the **live** half of T‑window‑guard
+  (a real Save round‑trip proving the server independently rejects L ≥ W), need a real
+  Supabase write with seeded teacher availability + an authenticated student. The unit
+  + e2e suites already prove the *client/payload* guarantees (byte‑identical UTC, no
+  viewerTz; shared‑normalization L ≥ W rejection). When the demo‑seed / auth‑id mapping
+  in §7 is finalized for a staging DB, extend the T‑E spec to let
+  `create_hold`/`commit_booking` hit the real RPC and read the row's epoch‑ms back.
 
 ---
 

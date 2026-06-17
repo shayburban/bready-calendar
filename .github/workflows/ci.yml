@@ -50,3 +50,31 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+  e2e:
+    name: e2e (Playwright — T-E two-zone)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 20 (full-ICU)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Browser + OS deps for headless Chromium.
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # T-E (§10.3 / R20 / R24): two contexts on different timezoneId book the
+      # SAME slot; assert the create_hold UTC payload is byte-identical with no
+      # viewerTz. Hermetic — Playwright builds + previews the app with the
+      # scheduling flags ON (webServer.env) and the booking RPCs are intercepted,
+      # so no real backend is contacted (dummy Supabase env is injected too).
+      - name: Run T-E (two-zone booking)
+        run: npm run test:e2e

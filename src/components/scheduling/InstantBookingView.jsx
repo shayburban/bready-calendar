@@ -126,7 +126,7 @@ export default function InstantBookingView() {
               <p className="text-sm font-semibold text-gray-700 mb-2">{day}</p>
               <div className="flex flex-wrap gap-2">
                 {daySlots.map((s) => (
-                  <Button key={s.start_utc} variant="outline" size="sm" onClick={() => onPick(s)}>
+                  <Button key={s.start_utc} variant="outline" size="sm" data-testid="booking-slot" onClick={() => onPick(s)}>
                     {fmtTime(s.start_utc, viewerTz)}
                   </Button>
                 ))}
