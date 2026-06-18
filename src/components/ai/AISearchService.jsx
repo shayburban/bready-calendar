@@ -2,7 +2,53 @@
 import { User } from '@/api/entities';
 import { AISearchConfig } from '@/api/entities';
 import { InvokeLLM } from '@/api/integrations';
+import { searchTeachers } from '@/api/teacherSearchApi';
 import { format, isToday } from 'date-fns';
+
+// Deterministic fallback parser: pulls a max price and a level out of the raw
+// query so search works even when no LLM is wired (subject/specialization/
+// language matching is handled by the RPC's full-text rank on the query).
+function parseQueryFilters(query) {
+    const q = (query || '').toLowerCase();
+    let maxPrice = null;
+    const priceMatch =
+        q.match(/(?:under|below|less than|up to|max(?:imum)?|<)\s*\$?\s*(\d{1,4})/) ||
+        q.match(/\$\s*(\d{1,4})/);
+    if (priceMatch) maxPrice = Number(priceMatch[1]);
+
+    let level = null;
+    for (const lvl of ['beginner', 'intermediate', 'advanced', 'expert']) {
+        if (q.includes(lvl)) { level = lvl.charAt(0).toUpperCase() + lvl.slice(1); break; }
+    }
+    return { maxPrice, level };
+}
+
+// Best-effort structured extraction via the LLM integration. Returns null when
+// the integration isn't wired (mock) or returns nothing usable.
+async function llmExtractFilters(query) {
+    try {
+        const r = await InvokeLLM({
+            prompt: `Extract teacher-search filters from this student request and return JSON only. Request: "${query}"`,
+            response_json_schema: {
+                type: 'object',
+                properties: {
+                    subjects: { type: 'array', items: { type: 'string' } },
+                    specializations: { type: 'array', items: { type: 'string' } },
+                    languages: { type: 'array', items: { type: 'string' } },
+                    level: { type: 'string' },
+                    maxPrice: { type: 'number' },
+                },
+            },
+        });
+        if (r && typeof r === 'object' &&
+            (r.subjects?.length || r.specializations?.length || r.languages?.length || r.level || typeof r.maxPrice === 'number')) {
+            return r;
+        }
+    } catch {
+        // integration not available — fall back to the deterministic parser
+    }
+    return null;
+}
 
 const AISearchService = {
     /**
@@ -59,24 +105,24 @@ const AISearchService = {
                 last_search_date: today
             });
 
-            // --- Here you would call your AI vector search backend ---
-            // For now, we simulate a call to an LLM to get mock teacher IDs
-            const response = await InvokeLLM({
-                prompt: `Based on the query "${query}", return a JSON object with a list of plausible teacher IDs. The key should be "teacher_ids" and the value an array of numbers. For example: {"teacher_ids": [1, 2, 3]}`,
-                response_json_schema: {
-                    type: "object",
-                    properties: {
-                        teacher_ids: {
-                            type: "array",
-                            items: { type: "number" }
-                        }
-                    }
-                }
+            // Turn the natural-language query into structured filters (LLM when
+            // available, deterministic parser otherwise), then let the SQL
+            // recommendation engine rank verified teachers built from their
+            // registration data. No vector DB / embedding key required.
+            const llm = await llmExtractFilters(query);
+            const parsed = parseQueryFilters(query);
+
+            const results = await searchTeachers({
+                query,
+                subjects: llm?.subjects?.length ? llm.subjects : null,
+                specializations: llm?.specializations?.length ? llm.specializations : null,
+                languages: llm?.languages?.length ? llm.languages : null,
+                level: llm?.level || parsed.level || null,
+                maxPrice: typeof llm?.maxPrice === 'number' ? llm.maxPrice : parsed.maxPrice,
+                limit: 24,
             });
 
-            // In a real scenario, you would use these IDs to fetch full teacher profiles.
-            // For this demo, we can just return the mock IDs or mock data.
-            return { success: true, results: response.teacher_ids || [] };
+            return { success: true, results };
 
         } catch (error) {
             console.error("AI Search Error:", error);

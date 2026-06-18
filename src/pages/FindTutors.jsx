@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import SearchContainer from '@/components/TeacherSearch/SearchContainer';
 import ListingBanner from '@/components/tutors/ListingBanner';
+import { listTeacherCards } from '@/api/teacherSearchApi';
 
-// In a real app, you would fetch this data from your API
+// Fallback catalog shown until real verified teachers exist (or when offline).
 const MOCK_TEACHERS = [
     { id: 1, name: "Mark R.", subjects: ["Chemistry", "Biology"], specializations: ["Organic Chemistry"], hourlyRate: { regular: 50 }, rating: 5, location: "New York, USA", languages: ["English"], availability: ["Monday", "Wednesday", "Friday"] },
     { id: 2, name: "Dr. Sarah Johnson", subjects: ["Biology"], specializations: ["Microbiology", "Genetics"], hourlyRate: { regular: 60 }, rating: 4.8, location: "London, UK", languages: ["English"], availability: ["Tuesday", "Thursday"] },
@@ -13,6 +14,22 @@ const MOCK_TEACHERS = [
 ];
 
 export default function FindTutors() {
+    // Load real verified teachers (built from registration data via the
+    // search_teachers RPC). Falls back to MOCK_TEACHERS until any exist / offline.
+    const [teachers, setTeachers] = useState(MOCK_TEACHERS);
+
+    useEffect(() => {
+        let cancelled = false;
+        listTeacherCards(60)
+            .then((cards) => {
+                if (!cancelled && Array.isArray(cards) && cards.length > 0) {
+                    setTeachers(cards);
+                }
+            })
+            .catch(() => { /* keep the mock fallback */ });
+        return () => { cancelled = true; };
+    }, []);
+
     return (
         <div className="bg-gray-50 min-h-screen">
             <ListingBanner
@@ -20,7 +37,7 @@ export default function FindTutors() {
                 tags={["Find your perfect match", "Expert Tutors", "Flexible Scheduling"]}
             />
             <div className="container mx-auto px-4 py-8">
-                <SearchContainer initialTeachers={MOCK_TEACHERS} />
+                <SearchContainer initialTeachers={teachers} />
             </div>
         </div>
     );

@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { User, Upload, CheckCircle, XCircle } from 'lucide-react';
 import { UploadFile } from '@/api/integrations';
+import { uploadProfileImage } from '@/api/storage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 const PhotoRule = ({ text, examples, defaultOpen = false }) => {
@@ -73,12 +74,19 @@ const PhotoUploadForm = () => {
       tempUrlRef.current = URL.createObjectURL(file);
       setPreview(tempUrlRef.current);
 
-      // Upload original file
-      const { file_url } = await UploadFile({ file });
-      
-      // Update state with final URL
-      setPersonalInfo((p) => ({ ...p, profilePicture: file_url }));
-      setPreview(file_url);
+      // Upload to Supabase Storage (profile-media); fall back to the legacy
+      // UploadFile integration when there's no session / the upload fails.
+      let file_url = await uploadProfileImage(file);
+      if (!file_url) {
+        const res = await UploadFile({ file });
+        file_url = res?.file_url;
+      }
+
+      if (file_url) {
+        // Update state with final URL
+        setPersonalInfo((p) => ({ ...p, profilePicture: file_url }));
+        setPreview(file_url);
+      }
     } catch (error) {
       console.error('Upload failed:', error);
       setErrors((p) => ({ ...p, photo: 'Image upload failed. Please try again.' }));

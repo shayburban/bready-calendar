@@ -7,6 +7,50 @@
 // genuinely signed-in user — exactly the teacher filling in the form.
 import { supabase } from './supabaseClient';
 
+// Build the normalized search document the recommendation engine ranks on
+// (search_teachers RPC, migration 0021). Flattens the wizard's nested profile
+// into plain string arrays + a free-text blob so a student's AI query maps to
+// teachers without any embedding model. Exported so other callers can reuse it.
+export function buildSearchDocument(profileData) {
+  const pi = profileData.personalInfo || {};
+  const subjects = (profileData.subjects || []).map((s) => s.subject).filter(Boolean);
+  const specializations = (profileData.specializations || []).map((s) => s.specialization).filter(Boolean);
+  const boards = (profileData.boards || []).map((b) => b.boardName).filter(Boolean);
+  const exams = (profileData.exams || []).map((e) => e.examName).filter(Boolean);
+  const languages = (profileData.languages || []).map((l) => l.language).filter(Boolean);
+  const levels = [...new Set((profileData.subjects || []).map((s) => s.level).filter(Boolean))];
+  const availabilityDays = Object.entries(profileData.availability_schedule || {})
+    .filter(([, slots]) => Array.isArray(slots) && slots.length > 0)
+    .map(([day]) => day);
+  const hr = profileData.hourly_rate || {};
+  const exp = profileData.experience || {};
+
+  const search_facets = {
+    subjects,
+    specializations,
+    boards,
+    exams,
+    languages,
+    levels,
+    availability_days: availabilityDays,
+    regular_rate: typeof hr.regular === 'number' ? hr.regular : null,
+    country: pi.country || '',
+    location: pi.location || '',
+    online_years: exp.online_years || 0,
+    offline_years: exp.offline_years || 0,
+    rating: 0,
+  };
+
+  const search_text = [
+    pi.fullName, pi.bio,
+    ...subjects, ...specializations, ...boards, ...exams, ...languages,
+    pi.location, pi.country,
+    ...(profileData.search_keywords || []),
+  ].filter(Boolean).join(' ');
+
+  return { search_text, search_facets };
+}
+
 // Resolve the authenticated user id (uuid) RLS will check against.
 // Returns null when there's no Supabase session (dev mock / guest).
 async function getAuthUserId() {
@@ -100,6 +144,8 @@ export async function submitTeacherProfile(profileData) {
         workHistory: profileData.workHistory || [],
         teachingHistory: profileData.teachingHistory || [],
       },
+      // Normalized representation the recommendation engine ranks on.
+      ...buildSearchDocument(profileData),
     };
 
     const { data, error } = await supabase
