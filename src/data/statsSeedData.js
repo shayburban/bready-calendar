@@ -275,10 +275,15 @@ export function generateSeedData(nowMs = Date.now()) {
   out.push(asCompleted(mk(next(), atWeekdayHour(nowMs, 3, 3, 12), 1, 'completed', 'T'), 30, true));
   // reviewed-released completion
   out.push(asCompleted(mk(next(), atWeekdayHour(nowMs, 3, 5, 15), 1, 'completed', 'T'), 30, false));
-  // refund cancellation
+  // refund cancellation — role T (student gets refunded; not your money)
   out.push(asCancelledRefund(mk(next(), atWeekdayHour(nowMs, 2, 2, 11), 1, 'cancelled', 'T'), 25));
+  // refund cancellation — role S (YOU were the student-payer -> Refund(S) to you)
+  out.push(asCancelledRefund(mk(next(), atWeekdayHour(nowMs, 2, 6, 16), 1, 'cancelled', 'S'), 20));
   // fee cancellation (per policy)
   out.push(asCancelledFee(mk(next(), atWeekdayHour(nowMs, 2, 4, 13), 1, 'cancelled', 'T'), 50, policy));
+  // trial lessons (role T, flagged) so the Total Trial Lessons ($) card is real
+  out.push(asCompleted(mk(next(), atWeekdayHour(nowMs, 4, 2, 9), 1, 'completed', 'T', { isTrial: true }), 15));
+  out.push(asCompleted(mk(next(), atWeekdayHour(nowMs, 4, 4, 11), 1, 'completed', 'T', { isTrial: true }), 15));
   // an accepted + a declined reschedule, so accept/decline rates are non-trivial
   out.push(mk(next(), nowMs - 3 * DAY, 1, 'waiting', 'S', { requestKind: 'reschedule', isReschedule: true, status: 'accepted' }));
   out.push(mk(next(), nowMs - 6 * DAY, 1, 'waiting', 'T', { requestKind: 'reschedule', isReschedule: true, status: 'declined' }));

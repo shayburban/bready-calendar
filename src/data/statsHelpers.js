@@ -357,10 +357,11 @@ export function computeStatCards(records) {
   // Hours where YOU taught (role T) — booked or completed.
   const hoursAsTeacher = sumHours(recs, (r) => r.role === 'T' && isBookedOrCompleted(r));
 
-  // Refund ($) — refund-outcome cancellations (Refund(S)). ⚙️ needs money fields.
+  // Refund ($) — Refund(S): refunds YOU receive as the student-payer when a
+  // role-S booking is cancelled with a refund outcome (G.1). ⚙️ needs money fields.
   const refund = sumAmount(
     recs,
-    (r) => r.type === 'cancelled' && r.cancellationOutcome === 'refund'
+    (r) => r.type === 'cancelled' && r.role === 'S' && r.cancellationOutcome === 'refund'
   );
 
   // Distinct students across role-T bookings/completions.
@@ -453,48 +454,73 @@ export function bandFor(conversion) {
   return 'low';
 }
 
-// Conversion funnel (Spec D + G.2). No double-counting of reschedules: a
-// reschedule waiting is a separate pipeline event, never a new booking.
+// Conversion funnel (Spec D + G.2) — scoped to role-T (this is "availability
+// conversion": YOUR teaching supply). It is intentionally CUMULATIVE so it reads
+// as a proper monotonic-descending funnel: Opportunities >= In Play >= Booked >=
+// Held >= Completed. Drop-offs explain the narrowing at each stage.
+//
+// Why cumulative + role-T: the live calendar has two booking paths (instant
+// availability-pay vs request->waiting->accept), and conversion is modeled on the
+// availability record's status, while the request path produces booked records.
+// A snapshot/mixed-role funnel widens in the middle (top < booked) and misleads;
+// counting each opportunity once, as role-T records, fixes that.
+//
+// Reschedules: a reschedule WAITING is never a new booking (tracked separately).
+// A booked record carrying reschedule:true is still one real booking.
 export function computeFunnel(records) {
-  const recs = lessonRecords(records);
+  const recs = lessonRecords(records).filter((r) => r.role === 'T');
   const count = (pred) => recs.filter(pred).length;
 
-  const availabilityOffered = recs
-    .filter((r) => r.type === 'availability' && r.role === 'T')
-    .reduce((s, r) => s + (r.slotCount || 1), 0);
+  // Availability records by outcome (record-count units throughout for a single
+  // consistent unit; multi-slot hours live in the wasted-supply HOURS metric).
+  const availT = recs.filter((r) => r.type === 'availability');
+  const isConverted = (r) => !!r.bookedAtUTC || r.status === 'converted';
+  const isWastedAvail = (r) => r.status === 'expired' || (!r.bookedAtUTC && isPast(r.endUTC));
+  const convAvail = availT.filter(isConverted).length;
+  const wastedAvail = availT.filter((r) => !isConverted(r) && isWastedAvail(r)).length;
+  const openAvail = availT.length - convAvail - wastedAvail; // still open / future
 
-  const bookingRequests = count(
-    (r) => r.type === 'waiting' && r.requestKind === 'booking-request'
+  // Request path.
+  const pendingRequests = count(
+    (r) => r.type === 'waiting' && r.requestKind === 'booking-request' && r.status !== 'rejected'
+  );
+  const rejected = count(
+    (r) => r.type === 'waiting' && r.requestKind === 'booking-request' && r.status === 'rejected'
   );
   const reschedules = count((r) => r.type === 'waiting' && r.requestKind === 'reschedule');
-  const booked = count((r) => r.type === 'booked' && !r.isReschedule);
-  const notReviewed = count((r) => r.type === 'not-reviewed');
+
+  // Booking lifecycle records (request-path bookings + the booked lifecycle).
+  // not-reviewed and completed each imply the booking reached `booked` (per D),
+  // and `cancelled` is reachable only from booked.
+  const cancelled = count((r) => r.type === 'cancelled');
+  const lifecycleBookings =
+    count((r) => r.type === 'booked') +
+    count((r) => r.type === 'not-reviewed') +
+    count((r) => r.type === 'completed') +
+    cancelled;
+  // Converted availability ARE bookings too (instant-pay path) — include them so
+  // they aren't lost from the funnel.
+  const reachedBooked = lifecycleBookings + convAvail;
+  const reachedHeld = count((r) => r.type === 'not-reviewed') + count((r) => r.type === 'completed');
   const completed = count((r) => r.type === 'completed');
 
-  // Drop-offs
-  const rejected = count((r) => r.type === 'waiting' && r.status === 'rejected');
-  const cancelled = count((r) => r.type === 'cancelled'); // only from booked (D)
+  // Cumulative stages (each term added to a lower stage is >= 0 -> monotonic).
+  const inPlay = reachedBooked + pendingRequests;
+  const opportunities = inPlay + openAvail + wastedAvail + rejected;
+
   const disputedRefund = count(
     (r) => r.type === 'not-reviewed' && r.disputeOpen && r.status === 'refunded'
   );
-  const wastedSupply = recs
-    .filter(
-      (r) =>
-        r.type === 'availability' &&
-        r.role === 'T' &&
-        (r.status === 'expired' || (!r.bookedAtUTC && isPast(r.endUTC)))
-    )
-    .reduce((s, r) => s + (r.slotCount || 1), 0);
 
   return {
     stages: [
-      { key: 'availability', label: 'Availability / Requests', value: availabilityOffered + bookingRequests },
-      { key: 'waiting', label: 'Waiting', value: bookingRequests },
-      { key: 'booked', label: 'Booked', value: booked },
-      { key: 'not-reviewed', label: 'Not Reviewed', value: notReviewed },
+      { key: 'opportunities', label: 'Opportunities', value: opportunities },
+      { key: 'in-play', label: 'In Play (booked + pending)', value: inPlay },
+      { key: 'booked', label: 'Reached Booked', value: reachedBooked },
+      { key: 'not-reviewed', label: 'Session Held', value: reachedHeld },
       { key: 'completed', label: 'Completed', value: completed },
     ],
-    dropoffs: { rejected, cancelled, disputedRefund, wastedSupply },
+    dropoffs: { rejected, cancelled, disputedRefund, wastedSupply: wastedAvail },
     reschedules,
   };
 }
