@@ -63,6 +63,7 @@ export function mapRecordToTaskRow(record, { nowMs = Date.now(), tz } = {}) {
     oldRate: record.oldRate || '',
     // reschedule proposal (for Accept/Decline in Phase 2)
     reschedule: !!record.isReschedule,
+    rescheduleId: record.rescheduleId || null,
     rescheduleProposedUTC: record.proposedStartUTC || null,
     rescheduleProposedBy: record.proposedBy || null,
     status: record.status || null,

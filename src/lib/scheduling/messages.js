@@ -16,6 +16,8 @@ export const MSG = {
   reschedule_expired:
     'This reschedule request expired because the proposed time has passed. The lesson stays at its original time.',
   window_lt_notice: 'Your booking window must be longer than your minimum notice.',
+  forbidden: 'You can only change your own bookings.',
+  already_done: 'This lesson already happened and can’t be cancelled.',
 };
 
 // Fill {tokens} in a message string.

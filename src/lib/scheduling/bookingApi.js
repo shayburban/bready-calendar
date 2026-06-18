@@ -79,11 +79,26 @@ export const respondReschedule = (rescheduleId, action) => {
   return callRpc('respond_reschedule', { p_reschedule_id: rescheduleId, p_action: action });
 };
 
-// Stage 6a — the caller's lessons. bookings/reschedule_pending have RLS on with
-// no policies, so this reads through the SECURITY DEFINER get_my_bookings RPC
-// (0013). Each row carries viewer_role + any PENDING reschedule proposal.
-export const fetchMyBookings = (userId) =>
-  callRpc('get_my_bookings', { p_user_id: userId });
+// Stage 6a / Task Manager — the caller's lessons. bookings/reschedule_pending
+// have RLS on with no policies, so this reads through the SECURITY DEFINER
+// get_my_bookings RPC. As of 0016 the caller is derived from auth.uid() inside
+// the function (no spoofable user id); pass { includeCancelled } to also return
+// cancelled lessons (the Task Manager's Done tab). Each row carries viewer_role,
+// tutor_name/student_name, server-computed duration_hours/hourly_rate, and any
+// PENDING reschedule proposal.
+export const fetchMyBookings = (opts = {}) =>
+  callRpc('get_my_bookings', { p_include_cancelled: !!opts.includeCancelled });
+
+// Task Manager mutations (0017/0018). cancel = set status='cancelled' (never a
+// hard delete); the RPC derives the policy outcome atomically. Subject persists
+// the editable reminder. Both are auth.uid()-scoped and SECURITY DEFINER.
+export const cancelBooking = (bookingId) => {
+  invalidateSlotsCache(); // a cancellation frees the slot back to the market (R22)
+  return callRpc('cancel_booking', { p_booking_id: bookingId });
+};
+
+export const updateBookingSubject = (bookingId, subject) =>
+  callRpc('update_booking_subject', { p_booking_id: bookingId, p_subject: subject });
 
 // Stage 7 (R-display) — a teacher's display IANA zone for the dual-zone banner,
 // via the public SECURITY DEFINER get_teacher_tz RPC (0014). Scalar RPC, so the

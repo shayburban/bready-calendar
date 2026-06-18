@@ -8,7 +8,11 @@
 // On a live-fetch FAILURE it falls back to the demo dataset with a distinct
 // "live unavailable" mode banner — never silently passing demo off as real.
 //
-// Plain hook (matches the existing useTeacherStatsData convention). Realtime +
+// Phase 2: also exposes mutators (cancel / subject / reschedule propose / accept-
+// decline). In LIVE mode they call the SECURITY DEFINER RPCs then refetch; in
+// DEMO mode they mutate the local demo records ONLY (never the backend, Spec I).
+//
+// Plain hook (matches useTeacherStatsData). Realtime + optimistic/rollback +
 // cross-component dedupe (React Query) is deferred to Phase 3.
 
 import { useState, useEffect, useCallback } from 'react';
@@ -16,11 +20,14 @@ import { User } from '@/api/entities';
 import { normalizeEvents } from './statsHelpers';
 import { generateDemoTaskEvents } from './demoTasks';
 import { hoursBetween } from './taskFormatters';
-import { fetchMyBookings } from '@/lib/scheduling/bookingApi';
+import {
+  fetchMyBookings,
+  cancelBooking,
+  updateBookingSubject,
+  createReschedule,
+  respondReschedule,
+} from '@/lib/scheduling/bookingApi';
 
-// Resolve the active source. Precedence: explicit prop > ?demo=1 / ?tasks=demo >
-// VITE_TASKS_SOURCE env > 'supabase' (live default). Demo is NEVER the silent
-// production default — it only wins via an explicit opt-in here (Spec I/M2).
 export function resolveTasksSource(explicit) {
   if (explicit) return explicit;
   try {
@@ -35,8 +42,8 @@ export function resolveTasksSource(explicit) {
 }
 
 // get_my_bookings row -> raw event shape normalizeEvents understands (Spec F).
-// Phase 1 reads the existing RPC (0013); Phase 2 adds tutor_name/student_name +
-// duration_hours/hourly_rate, which this mapper already prefers when present.
+// As of 0016 the RPC also returns tutor_name/student_name + duration_hours/
+// hourly_rate, which this mapper prefers when present.
 function bookingRowToRaw(row) {
   const role = row.viewer_role === 'teacher' ? 'T' : 'S';
   const type =
@@ -57,7 +64,6 @@ function bookingRowToRaw(row) {
     role,
     startUTC: row.start_time,
     endUTC: row.end_time,
-    // display name preferred; falls back to id until the RPC join lands (Phase 2)
     ...(role === 'T'
       ? { student: counterpartyName || counterpartyId }
       : { teacher: counterpartyName || counterpartyId }),
@@ -70,6 +76,7 @@ function bookingRowToRaw(row) {
       ? {
           reschedule: true,
           requestKind: 'reschedule',
+          rescheduleId: row.reschedule_id,
           proposedStartUTC: row.proposed_start_utc,
           proposedBy: row.proposed_by,
         }
@@ -78,8 +85,6 @@ function bookingRowToRaw(row) {
   };
 }
 
-// normalizeEvents output + the task-only extras that live alongside the record
-// (kept off statsHelpers so Statistics is untouched). Order is preserved 1:1.
 function enrich(raws) {
   const records = normalizeEvents(raws, null);
   return records.map((rec, i) => {
@@ -89,11 +94,10 @@ function enrich(raws) {
       isDemo: raw.isDemo === true,
       hourlyRate: raw.rate ?? raw.hourlyRate ?? null,
       oldRate: raw.oldRate || '',
-      counterpartyName: rec.counterpartyId, // name for demo; real name once RPC joins
+      counterpartyName: rec.counterpartyId,
+      rescheduleId: raw.rescheduleId || null,
       proposedStartUTC: raw.proposedStartUTC || null,
       proposedBy: raw.proposedBy || null,
-      // durationHours: prefer server value, else compute from the UTC instants
-      // (time math, not money) so the demo (which carries no 'time' string) is fine.
       durationHours:
         raw.durationHoursServer != null
           ? Number(raw.durationHoursServer)
@@ -128,17 +132,15 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
         loadDemo('demo');
         return;
       }
-      // Live Supabase path. On ANY failure -> demo fallback + distinct banner.
       try {
-        const me = await User.me().catch(() => null);
-        const r = await fetchMyBookings(me?.id);
+        await User.me().catch(() => null); // ensure a session is attempted
+        const r = await fetchMyBookings({ includeCancelled: true });
         if (!alive) return;
         if (!r || !r.ok) throw new Error(r?.message || 'Live bookings unavailable.');
         const raws = (r.data || []).map(bookingRowToRaw);
         setState({ records: enrich(raws), loading: false, error: null, mode: 'live' });
       } catch (err) {
         if (!alive) return;
-        // Fallback safety (Spec H): show demo, clearly flagged as unavailable.
         const records = enrich(generateDemoTaskEvents());
         setState({ records, loading: false, error: err, mode: 'live-unavailable' });
       }
@@ -149,5 +151,113 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
     };
   }, [source, reloadKey]);
 
-  return { ...state, source, refetch };
+  // Demo data is active whenever the rows are demo (explicit demo OR fallback).
+  const isDemoActive = state.mode === 'demo' || state.mode === 'live-unavailable';
+
+  // Patch one local demo record by id (demo-only mutation; never the backend).
+  const patchLocal = useCallback((id, patch) => {
+    setState((s) => ({
+      ...s,
+      records: s.records.map((r) => (r.id === id ? { ...r, ...patch } : r)),
+    }));
+  }, []);
+
+  const cancelTask = useCallback(
+    async (id) => {
+      if (isDemoActive) {
+        patchLocal(id, {
+          type: 'cancelled',
+          status: 'cancelled',
+          moneyState: 'refunded',
+          cancellationOutcome: 'refund',
+          isReschedule: false,
+          rescheduleId: null,
+          proposedStartUTC: null,
+          proposedBy: null,
+        });
+        return { ok: true, demo: true };
+      }
+      const r = await cancelBooking(id);
+      if (r.ok) refetch();
+      return r;
+    },
+    [isDemoActive, patchLocal, refetch]
+  );
+
+  const updateSubject = useCallback(
+    async (id, subject) => {
+      if (isDemoActive) {
+        patchLocal(id, { subject });
+        return { ok: true, demo: true };
+      }
+      const r = await updateBookingSubject(id, subject);
+      if (r.ok) refetch();
+      return r;
+    },
+    [isDemoActive, patchLocal, refetch]
+  );
+
+  const proposeReschedule = useCallback(
+    async (id, proposedStartUtc, proposedBy) => {
+      if (isDemoActive) {
+        patchLocal(id, {
+          isReschedule: true,
+          requestKind: 'reschedule',
+          proposedStartUTC: proposedStartUtc,
+          proposedBy,
+          rescheduleId: `demo-rp-${id}`,
+        });
+        return { ok: true, demo: true };
+      }
+      const r = await createReschedule({ bookingId: id, proposedStartUtc, proposedBy });
+      if (r.ok) refetch();
+      return r;
+    },
+    [isDemoActive, patchLocal, refetch]
+  );
+
+  const answerReschedule = useCallback(
+    async (row, action) => {
+      if (isDemoActive) {
+        if (action === 'accept' && row.rescheduleProposedUTC) {
+          const start = row.record?.startUTC ? new Date(row.record.startUTC).getTime() : null;
+          const end = row.record?.endUTC ? new Date(row.record.endUTC).getTime() : null;
+          const durMs = start != null && end != null ? end - start : 60 * 60 * 1000;
+          const newStart = row.rescheduleProposedUTC;
+          const newEnd = new Date(new Date(newStart).getTime() + durMs).toISOString();
+          patchLocal(row.id, {
+            startUTC: newStart,
+            endUTC: newEnd,
+            isReschedule: false,
+            rescheduleId: null,
+            proposedStartUTC: null,
+            proposedBy: null,
+          });
+        } else {
+          patchLocal(row.id, {
+            isReschedule: false,
+            rescheduleId: null,
+            proposedStartUTC: null,
+            proposedBy: null,
+          });
+        }
+        return { ok: true, demo: true };
+      }
+      const r = await respondReschedule(row.rescheduleId, action);
+      if (r.ok) refetch();
+      return r;
+    },
+    [isDemoActive, patchLocal, refetch]
+  );
+
+  return {
+    ...state,
+    source,
+    isDemoActive,
+    refetch,
+    cancelTask,
+    updateSubject,
+    proposeReschedule,
+    answerReschedule,
+  };
 }

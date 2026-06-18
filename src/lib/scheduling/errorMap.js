@@ -19,6 +19,8 @@ export const TOKEN_MAP = {
   NO_STUDENT: { code: 'NO_STUDENT', msgKey: 'slot_lost' },
   RESCHEDULE_EXISTS: { code: 'RESCHEDULE_EXISTS', msgKey: 'reschedule_conflict' },
   NOT_FOUND: { code: 'NOT_FOUND', msgKey: null },
+  FORBIDDEN: { code: 'FORBIDDEN', msgKey: 'forbidden' },
+  ALREADY_DONE: { code: 'ALREADY_DONE', msgKey: 'already_done' },
 };
 
 // Extract the leading known TOKEN from a Supabase/Postgres error and map it.

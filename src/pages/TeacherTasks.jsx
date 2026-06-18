@@ -38,10 +38,126 @@ import {
   CreditCard,
   CheckCircle2,
   XCircle,
+  Check,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { toast } from '@/components/ui/use-toast';
+import { detectViewerTz, wallClockToUtcISO } from '@/lib/scheduling/timekit';
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+
+const PAGE_SIZE = 20;
+
+// Minimal, dependency-free CSV (no PapaParse dep in this repo). Quotes fields
+// containing comma/quote/newline. In demo mode it's headed "DEMO DATA — NOT REAL"
+// and the caller prefixes the filename with DEMO_ (Spec I).
+function rowsToCsv(rows, isDemo) {
+  const headers = ['Name', 'Type', 'Date', 'Time', 'Service', 'Referred', 'Duration', 'Price/Hr', 'Total', 'Deposited', 'Subject'];
+  const esc = (v) => {
+    const s = String(v == null ? '' : v);
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const body = rows.map((r) =>
+    [
+      r.name,
+      r.type,
+      r.date,
+      r.time,
+      isDemo ? r.service || '' : '-',
+      isDemo ? (r.referred ? 'Yes' : 'No') : '-',
+      r.duration,
+      r.rate,
+      r.total,
+      isDemo ? (r.deposited ? 'Yes' : 'No') : '-',
+      r.subject,
+    ]
+      .map(esc)
+      .join(',')
+  );
+  return (isDemo ? 'DEMO DATA — NOT REAL\n' : '') + headers.join(',') + '\n' + body.join('\n');
+}
+
+function downloadCsv(text, filename) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Propose-a-new-time dialog (mirrors LiveLessonsPanel). Native date/time inputs;
+// the wall-clock is converted to an absolute UTC instant via TimeKit.
+function RescheduleDialog({ row, onClose, onSubmit }) {
+  const [date, setDate] = useState('');
+  const [time, setTime] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    setDate('');
+    setTime('');
+    setErr(null);
+    setBusy(false);
+  }, [row?.id]);
+
+  const submit = async () => {
+    if (!date || !time) {
+      setErr('Pick a date and time.');
+      return;
+    }
+    let iso;
+    try {
+      iso = wallClockToUtcISO(date, time, detectViewerTz() || 'UTC');
+    } catch {
+      setErr('That date/time is invalid.');
+      return;
+    }
+    setBusy(true);
+    setErr(null);
+    const r = await onSubmit(iso);
+    setBusy(false);
+    if (r?.ok) onClose();
+    else setErr(r?.message || 'Could not propose that time.');
+  };
+
+  return (
+    <Dialog open={!!row} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Propose a new time</DialogTitle>
+          <DialogDescription>
+            {row?.subject || 'Lesson'} — currently {row?.date} {row?.time}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <label className="block text-sm">
+            New date
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1" />
+          </label>
+          <label className="block text-sm">
+            New start time (your local time)
+            <Input type="time" step="900" value={time} onChange={(e) => setTime(e.target.value)} className="mt-1" />
+          </label>
+          {err ? <p className="text-sm text-red-600">{err}</p> : null}
+          <Button className="w-full bg-green-600 hover:bg-green-700 text-white" disabled={busy} onClick={submit}>
+            {busy ? 'Proposing…' : 'Propose reschedule'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 const COLUMN_OPTIONS = [
   'Name',
@@ -235,7 +351,74 @@ function ComingSoon({ children, label }) {
   );
 }
 
-function TaskTable({ rows, visibleColumns, setVisibleColumns, live, fromDate, untilDate, setFromDate, setUntilDate, onApplyRange }) {
+// Action cell: real Cancel / Reschedule, or Accept/Decline for a reschedule
+// proposed by the other party, or an "awaiting" note for one you proposed.
+// Cancelled/completed rows are terminal -> no actions.
+function RowActions({ row, onCancel, onProposeOpen, onAnswer }) {
+  const myRole = row.perspective === 'T' ? 'teacher' : 'student';
+  const pendingFromOther = row.reschedule && row.rescheduleProposedBy && row.rescheduleProposedBy !== myRole;
+  const pendingFromMe = row.reschedule && row.rescheduleProposedBy === myRole;
+  const canCancel = ['booked', 'waiting'].includes(row.typeKey);
+  const canReschedule = row.typeKey === 'booked';
+
+  if (pendingFromOther) {
+    return (
+      <div className="flex items-center gap-1">
+        <Button variant="outline" size="sm" className="h-8" onClick={() => onAnswer(row, 'decline')}>
+          <X className="w-4 h-4 mr-1" /> Decline
+        </Button>
+        <Button
+          size="sm"
+          className="h-8 bg-green-600 hover:bg-green-700 text-white"
+          onClick={() => onAnswer(row, 'accept')}
+        >
+          <Check className="w-4 h-4 mr-1" /> Accept
+        </Button>
+      </div>
+    );
+  }
+  if (pendingFromMe) {
+    return <span className="text-xs text-amber-700 whitespace-nowrap">Awaiting response…</span>;
+  }
+  if (!canCancel && !canReschedule) {
+    return <span className="text-gray-400">—</span>;
+  }
+  return (
+    <div className="flex items-center gap-1">
+      {canCancel && (
+        <Button variant="outline" size="sm" className="h-8" onClick={() => onCancel(row)}>
+          Cancel
+        </Button>
+      )}
+      {canReschedule && (
+        <Button variant="outline" size="sm" className="h-8" onClick={() => onProposeOpen(row)}>
+          Reschedule
+        </Button>
+      )}
+    </div>
+  );
+}
+
+function TaskTable({
+  rows,
+  visibleColumns,
+  setVisibleColumns,
+  live, // eslint-disable-line no-unused-vars
+  fromDate,
+  untilDate,
+  setFromDate,
+  setUntilDate,
+  onApplyRange,
+  onExportCsv,
+  page,
+  pageCount,
+  totalCount,
+  onPrevPage,
+  onNextPage,
+  onCancel,
+  onProposeOpen,
+  onAnswer,
+}) {
   const [columnSearch, setColumnSearch] = useState('');
   const [selectedRows, setSelectedRows] = useState({});
 
@@ -330,17 +513,31 @@ function TaskTable({ rows, visibleColumns, setVisibleColumns, live, fromDate, un
         </div>
 
         <div className="flex items-center gap-2 bg-white border rounded px-3 py-1.5">
-          <span className="text-sm text-gray-600">{rows.length} shown</span>
-          <ComingSoon label="Pagination — coming soon">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled aria-label="Previous page">
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-          </ComingSoon>
-          <ComingSoon label="Pagination — coming soon">
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled aria-label="Next page">
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </ComingSoon>
+          <span className="text-sm text-gray-600">
+            {totalCount === 0
+              ? '0 of 0'
+              : `${page * PAGE_SIZE + 1}–${Math.min((page + 1) * PAGE_SIZE, totalCount)} of ${totalCount}`}
+          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            aria-label="Previous page"
+            disabled={page === 0}
+            onClick={onPrevPage}
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            aria-label="Next page"
+            disabled={page >= pageCount - 1}
+            onClick={onNextPage}
+          >
+            <ChevronRight className="w-4 h-4" />
+          </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="h-8 w-8 p-0" aria-label="Column settings">
@@ -380,11 +577,9 @@ function TaskTable({ rows, visibleColumns, setVisibleColumns, live, fromDate, un
               </div>
             </PopoverContent>
           </Popover>
-          <ComingSoon label="CSV export — coming soon">
-            <Button variant="outline" size="sm" className="h-8" disabled>
-              Extract CSV File
-            </Button>
-          </ComingSoon>
+          <Button variant="outline" size="sm" className="h-8" onClick={onExportCsv}>
+            Extract CSV File
+          </Button>
           <ComingSoon label="Statement — coming soon">
             <Button variant="outline" size="sm" className="h-8" disabled>
               <Download className="w-4 h-4 mr-2" />
@@ -492,18 +687,7 @@ function TaskTable({ rows, visibleColumns, setVisibleColumns, live, fromDate, un
                   </div>
                 </td>
                 <td className="p-3">
-                  <div className="flex items-center gap-1">
-                    <ComingSoon label="Cancel goes live in Phase 2">
-                      <Button variant="outline" size="sm" className="h-8" disabled>
-                        Cancel
-                      </Button>
-                    </ComingSoon>
-                    <ComingSoon label="Reschedule goes live in Phase 2">
-                      <Button variant="outline" size="sm" className="h-8" disabled>
-                        Reschedule
-                      </Button>
-                    </ComingSoon>
-                  </div>
+                  <RowActions row={row} onCancel={onCancel} onProposeOpen={onProposeOpen} onAnswer={onAnswer} />
                 </td>
               </tr>
             ))}
@@ -537,6 +721,15 @@ function TaskTabPanel({
   setFromDate,
   setUntilDate,
   onApplyRange,
+  onExportCsv,
+  page,
+  pageCount,
+  totalCount,
+  onPrevPage,
+  onNextPage,
+  onCancel,
+  onProposeOpen,
+  onAnswer,
 }) {
   return (
     <div className="pt-6">
@@ -574,6 +767,15 @@ function TaskTabPanel({
             setFromDate={setFromDate}
             setUntilDate={setUntilDate}
             onApplyRange={onApplyRange}
+            onExportCsv={onExportCsv}
+            page={page}
+            pageCount={pageCount}
+            totalCount={totalCount}
+            onPrevPage={onPrevPage}
+            onNextPage={onNextPage}
+            onCancel={onCancel}
+            onProposeOpen={onProposeOpen}
+            onAnswer={onAnswer}
           />
         </TabsContent>
       </Tabs>
@@ -588,10 +790,35 @@ export default function TeacherTasks() {
   const [innerTab, setInnerTab] = useState('todo');
   const [demoMode, setDemoMode] = useState(false);
 
-  const { records, loading: dataLoading, mode } = useTeacherTasksData({
-    source: demoMode ? 'demo' : undefined,
-  });
+  const {
+    records,
+    loading: dataLoading,
+    mode,
+    isDemoActive,
+    cancelTask,
+    proposeReschedule,
+    answerReschedule,
+  } = useTeacherTasksData({ source: demoMode ? 'demo' : undefined });
   const isDemoView = mode === 'demo' || mode === 'live-unavailable';
+  const [page, setPage] = useState(0);
+  const [proposeRow, setProposeRow] = useState(null);
+
+  const toastResult = (r, okMsg) =>
+    toast(
+      r?.ok
+        ? { title: r.demo ? `Demo mode: ${okMsg} locally (not saved)` : okMsg }
+        : { title: 'Action failed', description: r?.message || 'Please try again.', variant: 'destructive' }
+    );
+  const handleCancel = async (row) => toastResult(await cancelTask(row.id), 'Booking cancelled');
+  const handleAnswer = async (row, action) =>
+    toastResult(await answerReschedule(row, action), action === 'accept' ? 'Reschedule accepted' : 'Reschedule declined');
+  const handleProposeSubmit = async (iso) => {
+    const row = proposeRow;
+    const by = row.perspective === 'T' ? 'teacher' : 'student';
+    const r = await proposeReschedule(row.id, iso, by);
+    toastResult(r, 'Reschedule proposed');
+    return r;
+  };
 
   // Lifted filter state (drives the rows).
   const [titleFilters, setTitleFilters] = useState([]);
@@ -628,6 +855,21 @@ export default function TeacherTasks() {
     if (appliedRange.until) out = out.filter((r) => rowISO(r) && rowISO(r) <= appliedRange.until);
     return out;
   }, [allRows, activeTab, innerTab, studentFilters, titleFilters, appliedRange]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const pageRows = useMemo(
+    () => rows.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE),
+    [rows, page]
+  );
+  // Reset to the first page whenever the view/filters/data change.
+  useEffect(() => {
+    setPage(0);
+  }, [activeTab, innerTab, studentFilters, titleFilters, appliedRange, records]);
+
+  const handleExportCsv = () => {
+    const csv = rowsToCsv(rows, isDemoActive);
+    downloadCsv(csv, `${isDemoActive ? 'DEMO_' : ''}tasks_${activeTab}_${innerTab}.csv`);
+  };
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -717,7 +959,7 @@ export default function TeacherTasks() {
           </Card>
         ) : (
           <TaskTabPanel
-            rows={rows}
+            rows={pageRows}
             innerTab={innerTab}
             setInnerTab={setInnerTab}
             titleFilters={titleFilters}
@@ -732,9 +974,24 @@ export default function TeacherTasks() {
             setFromDate={setFromDate}
             setUntilDate={setUntilDate}
             onApplyRange={() => setAppliedRange({ from: fromDate, until: untilDate })}
+            onExportCsv={handleExportCsv}
+            page={page}
+            pageCount={pageCount}
+            totalCount={rows.length}
+            onPrevPage={() => setPage((p) => Math.max(0, p - 1))}
+            onNextPage={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+            onCancel={handleCancel}
+            onProposeOpen={setProposeRow}
+            onAnswer={handleAnswer}
           />
         )}
       </div>
+
+      <RescheduleDialog
+        row={proposeRow}
+        onClose={() => setProposeRow(null)}
+        onSubmit={handleProposeSubmit}
+      />
     </div>
   );
 }

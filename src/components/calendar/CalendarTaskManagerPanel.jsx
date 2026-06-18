@@ -40,7 +40,9 @@ import {
   Copy,
   Send,
   Search,
+  Check,
 } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
 import { TITLE_OPTIONS } from '@/data/teacherTasks';
 import { useTeacherTasksData } from '@/data/useTeacherTasksData';
 import { mapRecordsToTaskRows } from '@/data/taskRowMapping';
@@ -82,23 +84,49 @@ function ComingSoon({ children, label }) {
   );
 }
 
-function TaskCard({ row }) {
+function TaskCard({ row, onCancel, onSaveSubject, onAnswer }) {
   const typeColor = row.typeColor || 'bg-green-500';
+  const [subject, setSubject] = useState(row.subject || '');
+  // Keep the input in sync if the underlying row's subject changes (e.g. refetch).
+  React.useEffect(() => {
+    setSubject(row.subject || '');
+  }, [row.subject]);
+
+  const myRole = row.perspective === 'T' ? 'teacher' : 'student';
+  const pendingFromOther = row.reschedule && row.rescheduleProposedBy && row.rescheduleProposedBy !== myRole;
+  const canCancel = ['booked', 'waiting'].includes(row.typeKey);
+
+  const handleSubjectBlur = () => {
+    if (subject !== (row.subject || '')) onSaveSubject(row.id, subject);
+  };
 
   return (
     <div className="bg-white border rounded p-2 mb-3 text-sm">
       <div className="flex justify-end gap-1 mb-1">
-        <ComingSoon label="Edit goes live in Phase 2">
+        <ComingSoon label="Edit goes live later">
           <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Edit task">
             <Pencil className="w-3.5 h-3.5" />
           </Button>
         </ComingSoon>
-        <ComingSoon label="Cancel booking goes live in Phase 2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Cancel booking">
+        {canCancel ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            aria-label="Cancel booking"
+            title="Cancel booking"
+            onClick={() => onCancel(row)}
+          >
             <Trash2 className="w-3.5 h-3.5" />
           </Button>
-        </ComingSoon>
-        <ComingSoon label="Email goes live in Phase 2">
+        ) : (
+          <ComingSoon label="This booking can no longer be cancelled">
+            <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Cancel booking">
+              <Trash2 className="w-3.5 h-3.5" />
+            </Button>
+          </ComingSoon>
+        )}
+        <ComingSoon label="Email goes live later">
           <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Email">
             <Mail className="w-3.5 h-3.5" />
           </Button>
@@ -148,15 +176,33 @@ function TaskCard({ row }) {
       <p className="font-semibold mt-2 mb-1">
         Meeting subject reminder ({row.perspective || 'T'})
       </p>
-      <ComingSoon label="Subject editing goes live in Phase 2">
-        <FieldInput
-          value={row.subject || ''}
-          readOnly
-          disabled
-          placeholder="Subject reminder"
-          className="h-8 mb-2"
-        />
-      </ComingSoon>
+      <FieldInput
+        value={subject}
+        onChange={(e) => setSubject(e.target.value)}
+        onBlur={handleSubjectBlur}
+        placeholder="Subject reminder"
+        className="h-8 mb-2"
+      />
+
+      {pendingFromOther && (
+        <div className="rounded bg-amber-50 border border-amber-200 p-2 mb-2">
+          <p className="text-xs text-amber-800">
+            Reschedule proposed{row.rescheduleProposedUTC ? ` → ${row.rescheduleProposedUTC.slice(0, 16).replace('T', ' ')} UTC` : ''}.
+          </p>
+          <div className="flex gap-2 mt-1">
+            <Button variant="outline" size="sm" className="h-7" onClick={() => onAnswer(row, 'decline')}>
+              <X className="w-3.5 h-3.5 mr-1" /> Decline
+            </Button>
+            <Button
+              size="sm"
+              className="h-7 bg-green-600 hover:bg-green-700 text-white"
+              onClick={() => onAnswer(row, 'accept')}
+            >
+              <Check className="w-3.5 h-3.5 mr-1" /> Accept
+            </Button>
+          </div>
+        </div>
+      )}
 
       <p className="flex items-center text-xs mb-1">
         <CreditCard
@@ -184,8 +230,19 @@ export default function CalendarTaskManagerPanel() {
   // Same single source the page + calendar + Statistics use (Spec C). Source
   // resolves to live Supabase by default; ?demo=1 / env opt into demo; a live
   // failure falls back to demo with a banner.
-  const { records, loading, mode } = useTeacherTasksData();
+  const { records, loading, mode, cancelTask, updateSubject, answerReschedule } = useTeacherTasksData();
   const isDemoView = mode === 'demo' || mode === 'live-unavailable';
+
+  const toastResult = (r, okMsg) =>
+    toast(
+      r?.ok
+        ? { title: r.demo ? `Demo mode: ${okMsg} locally (not saved)` : okMsg }
+        : { title: 'Action failed', description: r?.message || 'Please try again.', variant: 'destructive' }
+    );
+  const handleCancel = async (row) => toastResult(await cancelTask(row.id), 'Booking cancelled');
+  const handleSaveSubject = async (id, subject) => toastResult(await updateSubject(id, subject), 'Subject saved');
+  const handleAnswer = async (row, action) =>
+    toastResult(await answerReschedule(row, action), action === 'accept' ? 'Reschedule accepted' : 'Reschedule declined');
 
   const [perspective, setPerspective] = useState('all');
   const [innerTab, setInnerTab] = useState('todo');
@@ -412,7 +469,15 @@ export default function CalendarTaskManagerPanel() {
               {innerTab === 'todo' ? 'No tasks to do.' : 'Nothing done yet.'}
             </p>
           ) : (
-            visibleRows.map((row) => <TaskCard key={row.id} row={row} />)
+            visibleRows.map((row) => (
+              <TaskCard
+                key={row.id}
+                row={row}
+                onCancel={handleCancel}
+                onSaveSubject={handleSaveSubject}
+                onAnswer={handleAnswer}
+              />
+            ))
           )}
         </TabsContent>
       </Tabs>

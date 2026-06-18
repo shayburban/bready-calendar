@@ -101,7 +101,7 @@ export default function LiveLessonsPanel() {
     let alive = true;
     (async () => {
       setLoading(true);
-      const r = await fetchMyBookings(userId);
+      const r = await fetchMyBookings(); // caller derived from auth.uid() (0016)
       if (!alive) return;
       setLessons(r.ok ? (r.data || []) : []);
       setLoading(false);
