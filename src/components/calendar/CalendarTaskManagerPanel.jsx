@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useSyncExternalStore } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { Button } from '@/components/ui/button';
@@ -41,16 +41,16 @@ import {
   Send,
   Search,
 } from 'lucide-react';
-import {
-  TITLE_OPTIONS,
-  OUTER_TABS,
-  TODO_ROWS,
-  DONE_ROWS,
-  subscribeTeacherTasks,
-  getTeacherTasksVersion,
-  updateTeacherTask,
-  deleteTeacherTask,
-} from '@/data/teacherTasks';
+import { TITLE_OPTIONS } from '@/data/teacherTasks';
+import { useTeacherTasksData } from '@/data/useTeacherTasksData';
+import { mapRecordsToTaskRows } from '@/data/taskRowMapping';
+
+// Perspective options — unified label/order with the TeacherTasks page (Spec F).
+const PERSPECTIVES = [
+  { value: 'all', label: 'All' },
+  { value: 'teacher', label: 'As A Teacher' },
+  { value: 'student', label: 'As A Student' },
+];
 
 function FilterChip({ label, onRemove }) {
   return (
@@ -68,54 +68,61 @@ function FilterChip({ label, onRemove }) {
   );
 }
 
+// Disabled control with a visible reason (Spec A/G — no silent dead controls).
+function ComingSoon({ children, label }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">{children}</span>
+        </TooltipTrigger>
+        <TooltipContent>{label || 'Coming soon'}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function TaskCard({ row }) {
-  const [subject, setSubject] = useState(row.subject || '');
-
-  const handleSubjectBlur = () => {
-    if (subject !== row.subject) {
-      updateTeacherTask(row.id, { subject });
-    }
-  };
-
   const typeColor = row.typeColor || 'bg-green-500';
 
   return (
     <div className="bg-white border rounded p-2 mb-3 text-sm">
       <div className="flex justify-end gap-1 mb-1">
-        <Button variant="ghost" size="icon" className="h-7 w-7">
-          <Pencil className="w-3.5 h-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7"
-          onClick={() => deleteTeacherTask(row.id)}
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7">
-          <Mail className="w-3.5 h-3.5" />
-        </Button>
+        <ComingSoon label="Edit goes live in Phase 2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Edit task">
+            <Pencil className="w-3.5 h-3.5" />
+          </Button>
+        </ComingSoon>
+        <ComingSoon label="Cancel booking goes live in Phase 2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Cancel booking">
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        </ComingSoon>
+        <ComingSoon label="Email goes live in Phase 2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" disabled aria-label="Email">
+            <Mail className="w-3.5 h-3.5" />
+          </Button>
+        </ComingSoon>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-7 w-7">
+            <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="More actions">
               <MoreVertical className="w-3.5 h-3.5" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled>
               <UserX className="w-4 h-4 mr-2" /> Meeting didn&rsquo;t happen
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled>
               <Copy className="w-4 h-4 mr-2" /> Duplicate meeting
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled>
               <Video className="w-4 h-4 mr-2" /> Google meeting link
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled>
               <Video className="w-4 h-4 mr-2" /> Zoom meeting link
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem disabled>
               <Send className="w-4 h-4 mr-2" /> Send Reminder
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -125,6 +132,11 @@ function TaskCard({ row }) {
       <p className="flex items-center gap-2">
         <span className={`inline-block w-2.5 h-2.5 rounded-full ${typeColor}`} />
         <span>{row.name}</span>
+        {row.isDemo && (
+          <span className="text-[9px] font-bold tracking-wide px-1 py-0.5 rounded bg-violet-600 text-white">
+            DEMO
+          </span>
+        )}
       </p>
       <p className="text-gray-700">
         {row.time}&nbsp;&nbsp;&nbsp;{row.date}
@@ -136,33 +148,30 @@ function TaskCard({ row }) {
       <p className="font-semibold mt-2 mb-1">
         Meeting subject reminder ({row.perspective || 'T'})
       </p>
-      <FieldInput
-        value={subject}
-        onChange={(e) => setSubject(e.target.value)}
-        onBlur={handleSubjectBlur}
-        placeholder="Subject reminder"
-        className="h-8 mb-2"
-      />
+      <ComingSoon label="Subject editing goes live in Phase 2">
+        <FieldInput
+          value={row.subject || ''}
+          readOnly
+          disabled
+          placeholder="Subject reminder"
+          className="h-8 mb-2"
+        />
+      </ComingSoon>
 
       <p className="flex items-center text-xs mb-1">
         <CreditCard
           className={`w-3.5 h-3.5 mr-2 ${
-            row.deposited ? 'text-blue-600' : 'text-gray-400'
+            row.isDemo && row.deposited ? 'text-blue-600' : 'text-gray-400'
           }`}
         />
-        {row.deposited ? 'Money deposited' : 'Money not deposited'}
+        {!row.isDemo
+          ? 'Deposit status —'
+          : row.deposited
+          ? 'Money deposited'
+          : 'Money not deposited'}
       </p>
 
-      <p className="text-xs mb-0.5">
-        <span className="font-semibold opacity-75">Online Classes:</span> 10 $ for 1 Hr.
-      </p>
-      <p className="text-xs mb-0.5">
-        <span className="font-semibold opacity-75">Consulting:</span> 10 $ for 1 Hr.
-      </p>
-      <p className="text-xs mb-0.5">
-        <span className="font-semibold opacity-75">Technical Interview:</span> 10 $ for 1 Hr.
-      </p>
-      {row.oldRate && (
+      {row.isDemo && row.oldRate && (
         <p className="text-xs">
           <span className="font-semibold opacity-75">Old Rate:</span> {row.oldRate}
         </p>
@@ -172,15 +181,17 @@ function TaskCard({ row }) {
 }
 
 export default function CalendarTaskManagerPanel() {
-  // Subscribe to the shared teacher-tasks "database" so edits made here
-  // (or in TeacherTasks.jsx) trigger a re-render.
-  useSyncExternalStore(subscribeTeacherTasks, getTeacherTasksVersion, getTeacherTasksVersion);
+  // Same single source the page + calendar + Statistics use (Spec C). Source
+  // resolves to live Supabase by default; ?demo=1 / env opt into demo; a live
+  // failure falls back to demo with a banner.
+  const { records, loading, mode } = useTeacherTasksData();
+  const isDemoView = mode === 'demo' || mode === 'live-unavailable';
 
   const [perspective, setPerspective] = useState('all');
   const [innerTab, setInnerTab] = useState('todo');
-  const [titleFilters, setTitleFilters] = useState(['Booked', 'Booked']);
+  const [titleFilters, setTitleFilters] = useState([]);
   const [titleSearch, setTitleSearch] = useState('');
-  const [studentFilters, setStudentFilters] = useState(['Aman']);
+  const [studentFilters, setStudentFilters] = useState([]);
   const [studentSearch, setStudentSearch] = useState('');
 
   const filteredTitleOptions = useMemo(
@@ -199,32 +210,41 @@ export default function CalendarTaskManagerPanel() {
   };
 
   const perspectiveLabel =
-    OUTER_TABS.find((t) => t.value === perspective)?.label || 'All Tasks';
+    PERSPECTIVES.find((t) => t.value === perspective)?.label || 'All';
 
-  const rows = (innerTab === 'todo' ? TODO_ROWS : DONE_ROWS)[perspective] || [];
+  const allRows = useMemo(
+    () => mapRecordsToTaskRows(records, { nowMs: Date.now() }),
+    [records]
+  );
 
   const visibleRows = useMemo(() => {
-    let out = rows;
+    const roleFilter = perspective === 'teacher' ? 'T' : perspective === 'student' ? 'S' : null;
+    let out = allRows.filter((r) => r.bucket === innerTab);
+    if (roleFilter) out = out.filter((r) => r.perspective === roleFilter);
     if (studentFilters.length) {
       const needles = studentFilters.map((s) => s.toLowerCase());
-      out = out.filter((r) =>
-        needles.some((n) => r.name.toLowerCase().includes(n))
-      );
+      out = out.filter((r) => needles.some((n) => String(r.name).toLowerCase().includes(n)));
     }
     if (titleFilters.length) {
       const needles = titleFilters.map((s) => s.toLowerCase());
-      out = out.filter((r) =>
-        needles.some((n) => r.type.toLowerCase().includes(n))
-      );
+      out = out.filter((r) => needles.some((n) => r.type.toLowerCase().includes(n)));
     }
     return out;
-  }, [rows, studentFilters, titleFilters]);
+  }, [allRows, perspective, innerTab, studentFilters, titleFilters]);
 
   return (
     <div className="border rounded-lg p-4 space-y-3">
       <h4 className="text-base font-semibold text-[#062a35]">Task Manager</h4>
 
-      {/* Perspective dropdown (All Tasks / As A Student (S) / As A Teacher (T)) */}
+      {isDemoView && (
+        <div className="rounded bg-violet-600 text-white text-xs font-semibold px-2 py-1">
+          {mode === 'live-unavailable'
+            ? '⚠️ Live data unavailable — showing DEMO data.'
+            : '⚠️ DEMO DATA — not real, nothing is saved.'}
+        </div>
+      )}
+
+      {/* Perspective dropdown (All / As A Teacher / As A Student) */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -236,11 +256,8 @@ export default function CalendarTaskManagerPanel() {
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start">
-          {OUTER_TABS.map((t) => (
-            <DropdownMenuItem
-              key={t.value}
-              onClick={() => setPerspective(t.value)}
-            >
+          {PERSPECTIVES.map((t) => (
+            <DropdownMenuItem key={t.value} onClick={() => setPerspective(t.value)}>
               {t.label}
             </DropdownMenuItem>
           ))}
@@ -383,16 +400,17 @@ export default function CalendarTaskManagerPanel() {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="todo" className="mt-3">
-          {visibleRows.length === 0 ? (
-            <p className="text-sm text-gray-500">No tasks to do.</p>
-          ) : (
-            visibleRows.map((row) => <TaskCard key={row.id} row={row} />)
-          )}
-        </TabsContent>
-        <TabsContent value="done" className="mt-3">
-          {visibleRows.length === 0 ? (
-            <p className="text-sm text-gray-500">Nothing done yet.</p>
+        <TabsContent value={innerTab} className="mt-3">
+          {loading ? (
+            <div className="space-y-3" aria-busy="true">
+              {[0, 1].map((i) => (
+                <div key={i} className="h-24 bg-gray-100 rounded animate-pulse" />
+              ))}
+            </div>
+          ) : visibleRows.length === 0 ? (
+            <p className="text-sm text-gray-500">
+              {innerTab === 'todo' ? 'No tasks to do.' : 'Nothing done yet.'}
+            </p>
           ) : (
             visibleRows.map((row) => <TaskCard key={row.id} row={row} />)
           )}

@@ -1,14 +1,9 @@
-import React, { useState, useEffect, useMemo, useSyncExternalStore } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '@/api/entities';
-import {
-  TITLE_OPTIONS,
-  TODO_ROWS,
-  DONE_ROWS,
-  subscribeTeacherTasks,
-  getTeacherTasksVersion,
-} from '@/data/teacherTasks';
+import { TITLE_OPTIONS } from '@/data/teacherTasks';
+import { useTeacherTasksData } from '@/data/useTeacherTasksData';
+import { mapRecordsToTaskRows } from '@/data/taskRowMapping';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -58,11 +53,16 @@ const COLUMN_OPTIONS = [
   'Duration',
 ];
 
+// Outer perspective tabs. Unified label/order with the sidebar twin (Spec F).
 const OUTER_TABS = [
   { value: 'all', label: 'All' },
   { value: 'teacher', label: 'As A Teacher' },
   { value: 'student', label: 'As A Student' },
 ];
+
+// Columns the live `bookings` table doesn't back -> '—' in live, real in demo
+// (Spec F). Money Deposited is NEVER computed from bookings.
+const UNBACKED_IN_LIVE = new Set(['Service', 'Referred Students', 'Money Deposited']);
 
 function FilterChip({ label, onRemove }) {
   return (
@@ -80,9 +80,13 @@ function FilterChip({ label, onRemove }) {
   );
 }
 
-function TaskFilterPanel() {
-  const [titleFilters, setTitleFilters] = useState(['Booked', 'Booked']);
-  const [studentFilters, setStudentFilters] = useState(['Aman']);
+// Controlled filter card — student + task-type chips now actually filter (Spec G).
+function TaskFilterPanel({
+  titleFilters,
+  setTitleFilters,
+  studentFilters,
+  setStudentFilters,
+}) {
   const [studentSearch, setStudentSearch] = useState('');
   const [titleSearch, setTitleSearch] = useState('');
 
@@ -216,19 +220,23 @@ function TaskFilterPanel() {
   );
 }
 
-function TaskTable({ rows }) {
+// A button that's disabled until its feature ships, with a visible reason
+// (Spec A/G — never a silent dead control).
+function ComingSoon({ children, label }) {
+  return (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="inline-flex">{children}</span>
+        </TooltipTrigger>
+        <TooltipContent>{label || 'Coming soon'}</TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+function TaskTable({ rows, visibleColumns, setVisibleColumns, live, fromDate, untilDate, setFromDate, setUntilDate, onApplyRange }) {
   const [columnSearch, setColumnSearch] = useState('');
-  const [visibleColumns, setVisibleColumns] = useState({
-    Name: true,
-    Type: true,
-    Date: false,
-    Time: false,
-    Service: false,
-    'Referred Students': false,
-    Duration: false,
-  });
-  const [fromDate, setFromDate] = useState('');
-  const [untilDate, setUntilDate] = useState('');
   const [selectedRows, setSelectedRows] = useState({});
 
   const filteredColumnOptions = useMemo(
@@ -238,6 +246,10 @@ function TaskTable({ rows }) {
       ),
     [columnSearch]
   );
+
+  const show = (k) => !!visibleColumns[k];
+  // value of an unbacked column: real in demo (per row), '—' in live.
+  const cell = (row, colKey, real) => (!row.isDemo && UNBACKED_IN_LIVE.has(colKey) ? '—' : real);
 
   return (
     <div>
@@ -261,7 +273,7 @@ function TaskTable({ rows }) {
             className="w-44"
           />
         </div>
-        <Button className="bg-green-600 hover:bg-green-700 text-white">
+        <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={onApplyRange}>
           Show
         </Button>
       </div>
@@ -272,9 +284,7 @@ function TaskTable({ rows }) {
           <div className="flex items-center border rounded bg-white">
             <label className="px-2 py-1.5 flex items-center">
               <Checkbox
-                checked={
-                  rows.length > 0 && rows.every((r) => selectedRows[r.id])
-                }
+                checked={rows.length > 0 && rows.every((r) => selectedRows[r.id])}
                 onCheckedChange={(val) => {
                   if (val) {
                     const all = {};
@@ -284,6 +294,7 @@ function TaskTable({ rows }) {
                     setSelectedRows({});
                   }
                 }}
+                aria-label="Select all rows"
               />
             </label>
             <Popover>
@@ -291,6 +302,7 @@ function TaskTable({ rows }) {
                 <button
                   type="button"
                   className="px-2 py-1.5 border-l text-gray-500 hover:bg-gray-50"
+                  aria-label="Selection options"
                 >
                   <ChevronDown className="w-4 h-4" />
                 </button>
@@ -310,22 +322,28 @@ function TaskTable({ rows }) {
               </PopoverContent>
             </Popover>
           </div>
-          <Button variant="outline" size="sm" className="h-9">
-            <Trash2 className="w-4 h-4" />
-          </Button>
+          <ComingSoon label="Bulk cancel — coming soon">
+            <Button variant="outline" size="sm" className="h-9" disabled aria-label="Bulk cancel selected">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          </ComingSoon>
         </div>
 
         <div className="flex items-center gap-2 bg-white border rounded px-3 py-1.5">
-          <span className="text-sm text-gray-600">1 – 20 of 100</span>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-            <ChevronRight className="w-4 h-4" />
-          </Button>
+          <span className="text-sm text-gray-600">{rows.length} shown</span>
+          <ComingSoon label="Pagination — coming soon">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled aria-label="Previous page">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+          </ComingSoon>
+          <ComingSoon label="Pagination — coming soon">
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" disabled aria-label="Next page">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </ComingSoon>
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+              <Button variant="outline" size="sm" className="h-8 w-8 p-0" aria-label="Column settings">
                 <List className="w-4 h-4" />
               </Button>
             </PopoverTrigger>
@@ -353,7 +371,7 @@ function TaskTable({ rows }) {
                     <Checkbox
                       checked={!!visibleColumns[col]}
                       onCheckedChange={(val) =>
-                        setVisibleColumns({ ...visibleColumns, [col]: !!val })
+                        setVisibleColumns((prev) => ({ ...prev, [col]: !!val }))
                       }
                     />
                     <span>{col}</span>
@@ -362,13 +380,17 @@ function TaskTable({ rows }) {
               </div>
             </PopoverContent>
           </Popover>
-          <Button variant="outline" size="sm" className="h-8">
-            Extract CSV File
-          </Button>
-          <Button variant="outline" size="sm" className="h-8">
-            <Download className="w-4 h-4 mr-2" />
-            Statement
-          </Button>
+          <ComingSoon label="CSV export — coming soon">
+            <Button variant="outline" size="sm" className="h-8" disabled>
+              Extract CSV File
+            </Button>
+          </ComingSoon>
+          <ComingSoon label="Statement — coming soon">
+            <Button variant="outline" size="sm" className="h-8" disabled>
+              <Download className="w-4 h-4 mr-2" />
+              Statement
+            </Button>
+          </ComingSoon>
         </div>
       </div>
 
@@ -378,22 +400,18 @@ function TaskTable({ rows }) {
           <thead>
             <tr className="bg-gray-50 border-b text-left text-gray-600">
               <th className="p-3 w-10"></th>
-              <th className="p-3 font-semibold">Name</th>
-              <th className="p-3 font-semibold">Type</th>
-              <th className="p-3 font-semibold">Date</th>
-              <th className="p-3 font-semibold">Time</th>
-              <th className="p-3 font-semibold">Service</th>
-              <th className="p-3 font-semibold whitespace-nowrap">
-                Referred Student
-              </th>
-              <th className="p-3 font-semibold">Duration</th>
-              <th className="p-3 font-semibold whitespace-nowrap">
-                Price per Hour
-              </th>
+              {show('Name') && <th className="p-3 font-semibold">Name</th>}
+              {show('Type') && <th className="p-3 font-semibold">Type</th>}
+              {show('Date') && <th className="p-3 font-semibold">Date</th>}
+              {show('Time') && <th className="p-3 font-semibold">Time</th>}
+              {show('Service') && <th className="p-3 font-semibold">Service</th>}
+              {show('Referred Students') && (
+                <th className="p-3 font-semibold whitespace-nowrap">Referred Student</th>
+              )}
+              {show('Duration') && <th className="p-3 font-semibold">Duration</th>}
+              <th className="p-3 font-semibold whitespace-nowrap">Price per Hour</th>
               <th className="p-3 font-semibold">Total Cost</th>
-              <th className="p-3 font-semibold whitespace-nowrap">
-                Money Deposited
-              </th>
+              <th className="p-3 font-semibold whitespace-nowrap">Money Deposited</th>
               <th className="p-3 font-semibold">Contact</th>
               <th className="p-3 font-semibold">Action</th>
             </tr>
@@ -407,68 +425,95 @@ function TaskTable({ rows }) {
                     onCheckedChange={(val) =>
                       setSelectedRows({ ...selectedRows, [row.id]: !!val })
                     }
+                    aria-label={`Select ${row.name}`}
                   />
                 </td>
-                <td className="p-3 whitespace-nowrap">{row.name}</td>
-                <td className="p-3">
-                  <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                    <span
-                      className={`inline-block w-3 h-3 rounded-full ${row.typeColor}`}
-                    />
-                    {row.type}
-                  </span>
-                </td>
-                <td className="p-3 whitespace-nowrap">{row.date}</td>
-                <td className="p-3 whitespace-nowrap">{row.time}</td>
-                <td className="p-3 whitespace-nowrap">{row.service}</td>
-                <td className="p-3">
-                  {row.referred ? (
-                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  )}
-                </td>
-                <td className="p-3 whitespace-nowrap">{row.duration}</td>
+                {show('Name') && (
+                  <td className="p-3 whitespace-nowrap">
+                    <span className="inline-flex items-center gap-2">
+                      {row.name}
+                      {row.isDemo && (
+                        <span className="text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded bg-violet-600 text-white">
+                          DEMO
+                        </span>
+                      )}
+                    </span>
+                  </td>
+                )}
+                {show('Type') && (
+                  <td className="p-3">
+                    <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                      <span className={`inline-block w-3 h-3 rounded-full ${row.typeColor}`} />
+                      {row.type}
+                    </span>
+                  </td>
+                )}
+                {show('Date') && <td className="p-3 whitespace-nowrap">{row.date}</td>}
+                {show('Time') && <td className="p-3 whitespace-nowrap">{row.time}</td>}
+                {show('Service') && (
+                  <td className="p-3 whitespace-nowrap">{cell(row, 'Service', row.service || '—')}</td>
+                )}
+                {show('Referred Students') && (
+                  <td className="p-3">
+                    {!row.isDemo ? (
+                      '—'
+                    ) : row.referred ? (
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    ) : (
+                      <XCircle className="w-5 h-5 text-red-500" />
+                    )}
+                  </td>
+                )}
+                {show('Duration') && <td className="p-3 whitespace-nowrap">{row.duration}</td>}
                 <td className="p-3 whitespace-nowrap">{row.rate}</td>
                 <td className="p-3 whitespace-nowrap">{row.total}</td>
                 <td className="p-3">
-                  <CreditCard
-                    className={`w-5 h-5 ${
-                      row.deposited ? 'text-blue-600' : 'text-gray-400'
-                    }`}
-                  />
+                  {!row.isDemo ? (
+                    <span className="text-gray-400" title="Not derivable from bookings (payments/escrow)">—</span>
+                  ) : (
+                    <CreditCard className={`w-5 h-5 ${row.deposited ? 'text-blue-600' : 'text-gray-400'}`} />
+                  )}
                 </td>
                 <td className="p-3">
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <MessageSquare className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <Mail className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <Send className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <Bell className="w-4 h-4" />
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <MoreVertical className="w-4 h-4" />
-                    </Button>
+                    {[
+                      { Icon: MessageSquare, label: 'Message' },
+                      { Icon: Mail, label: 'Email' },
+                      { Icon: Send, label: 'Send' },
+                      { Icon: Bell, label: 'Remind' },
+                      { Icon: MoreVertical, label: 'More' },
+                    ].map(({ Icon, label }) => (
+                      <ComingSoon key={label} label={`${label} — coming soon`}>
+                        <Button variant="outline" size="sm" className="h-8 w-8 p-0" disabled aria-label={label}>
+                          <Icon className="w-4 h-4" />
+                        </Button>
+                      </ComingSoon>
+                    ))}
                   </div>
                 </td>
                 <td className="p-3">
                   <div className="flex items-center gap-1">
-                    <Button variant="outline" size="sm" className="h-8">
-                      Cancel
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-8">
-                      Reschedule
-                    </Button>
+                    <ComingSoon label="Cancel goes live in Phase 2">
+                      <Button variant="outline" size="sm" className="h-8" disabled>
+                        Cancel
+                      </Button>
+                    </ComingSoon>
+                    <ComingSoon label="Reschedule goes live in Phase 2">
+                      <Button variant="outline" size="sm" className="h-8" disabled>
+                        Reschedule
+                      </Button>
+                    </ComingSoon>
                   </div>
                 </td>
               </tr>
             ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={13} className="p-8 text-center text-gray-500">
+                  No tasks match the current view and filters.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
@@ -476,12 +521,31 @@ function TaskTable({ rows }) {
   );
 }
 
-function TaskTabPanel({ todoRows, doneRows }) {
-  const [innerTab, setInnerTab] = useState('todo');
-
+function TaskTabPanel({
+  rows,
+  innerTab,
+  setInnerTab,
+  titleFilters,
+  setTitleFilters,
+  studentFilters,
+  setStudentFilters,
+  visibleColumns,
+  setVisibleColumns,
+  live,
+  fromDate,
+  untilDate,
+  setFromDate,
+  setUntilDate,
+  onApplyRange,
+}) {
   return (
     <div className="pt-6">
-      <TaskFilterPanel />
+      <TaskFilterPanel
+        titleFilters={titleFilters}
+        setTitleFilters={setTitleFilters}
+        studentFilters={studentFilters}
+        setStudentFilters={setStudentFilters}
+      />
 
       <Tabs value={innerTab} onValueChange={setInnerTab} className="mt-6">
         <TabsList className="bg-transparent p-0 h-auto flex flex-wrap gap-2 justify-start">
@@ -499,11 +563,18 @@ function TaskTabPanel({ todoRows, doneRows }) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="todo" className="mt-0">
-          <TaskTable rows={todoRows} />
-        </TabsContent>
-        <TabsContent value="done" className="mt-0">
-          <TaskTable rows={doneRows} />
+        <TabsContent value={innerTab} className="mt-0">
+          <TaskTable
+            rows={rows}
+            visibleColumns={visibleColumns}
+            setVisibleColumns={setVisibleColumns}
+            live={live}
+            fromDate={fromDate}
+            untilDate={untilDate}
+            setFromDate={setFromDate}
+            setUntilDate={setUntilDate}
+            onApplyRange={onApplyRange}
+          />
         </TabsContent>
       </Tabs>
     </div>
@@ -511,10 +582,52 @@ function TaskTabPanel({ todoRows, doneRows }) {
 }
 
 export default function TeacherTasks() {
-  useSyncExternalStore(subscribeTeacherTasks, getTeacherTasksVersion, getTeacherTasksVersion);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(null); // eslint-disable-line no-unused-vars
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  const [innerTab, setInnerTab] = useState('todo');
+  const [demoMode, setDemoMode] = useState(false);
+
+  const { records, loading: dataLoading, mode } = useTeacherTasksData({
+    source: demoMode ? 'demo' : undefined,
+  });
+  const isDemoView = mode === 'demo' || mode === 'live-unavailable';
+
+  // Lifted filter state (drives the rows).
+  const [titleFilters, setTitleFilters] = useState([]);
+  const [studentFilters, setStudentFilters] = useState([]);
+  const [fromDate, setFromDate] = useState('');
+  const [untilDate, setUntilDate] = useState('');
+  const [appliedRange, setAppliedRange] = useState({ from: '', until: '' });
+  const [visibleColumns, setVisibleColumns] = useState({
+    Name: true,
+    Type: true,
+    Date: false,
+    Time: false,
+    Service: false,
+    'Referred Students': false,
+    Duration: false,
+  });
+  const allRows = useMemo(() => mapRecordsToTaskRows(records, { nowMs: Date.now() }), [records]);
+
+  const rows = useMemo(() => {
+    let out = allRows;
+    if (activeTab === 'teacher') out = out.filter((r) => r.perspective === 'T');
+    else if (activeTab === 'student') out = out.filter((r) => r.perspective === 'S');
+    out = out.filter((r) => r.bucket === innerTab);
+    if (studentFilters.length) {
+      const needles = studentFilters.map((s) => s.toLowerCase());
+      out = out.filter((r) => needles.some((n) => String(r.name).toLowerCase().includes(n)));
+    }
+    if (titleFilters.length) {
+      const needles = titleFilters.map((s) => s.toLowerCase());
+      out = out.filter((r) => needles.some((n) => r.type.toLowerCase().includes(n)));
+    }
+    const rowISO = (r) => (r.record?.startUTC ? r.record.startUTC.slice(0, 10) : null);
+    if (appliedRange.from) out = out.filter((r) => rowISO(r) && rowISO(r) >= appliedRange.from);
+    if (appliedRange.until) out = out.filter((r) => rowISO(r) && rowISO(r) <= appliedRange.until);
+    return out;
+  }, [allRows, activeTab, innerTab, studentFilters, titleFilters, appliedRange]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -561,30 +674,78 @@ export default function TeacherTasks() {
 
       <TeacherPageTabs activeTabValue="tasks" />
 
-      <div className="container mx-auto px-4 md:px-6 py-8">
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="bg-transparent p-0 h-auto flex flex-wrap gap-2 justify-start">
-            {OUTER_TABS.map((t) => (
-              <TabsTrigger
-                key={t.value}
-                value={t.value}
-                className="data-[state=active]:bg-blue-600 data-[state=active]:text-white bg-white border text-gray-700 rounded-full px-4 py-2 text-sm"
-              >
-                {t.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+      {/* Demo / live-unavailable banners — keyed off the resolved mode; a colour
+          deliberately distinct from the orange admin banner (Spec I). */}
+      {mode === 'demo' && (
+        <div className="bg-violet-600 text-white text-sm font-semibold px-4 py-2 text-center">
+          ⚠️ DEMO DATA — sample bookings for testing. Nothing here is real and no changes are saved.
+        </div>
+      )}
+      {mode === 'live-unavailable' && (
+        <div className="bg-rose-700 text-white text-sm font-semibold px-4 py-2 text-center">
+          ⚠️ Live data unavailable — showing DEMO data. Nothing here is real.
+        </div>
+      )}
 
-          {OUTER_TABS.map((t) => (
-            <TabsContent key={t.value} value={t.value} className="mt-0">
-              <TaskTabPanel
-                todoRows={TODO_ROWS[t.value]}
-                doneRows={DONE_ROWS[t.value]}
-              />
-            </TabsContent>
-          ))}
-        </Tabs>
+      <div className="container mx-auto px-4 md:px-6 py-8">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="bg-transparent p-0 h-auto flex flex-wrap gap-2 justify-start">
+              {OUTER_TABS.map((t) => (
+                <TabsTrigger
+                  key={t.value}
+                  value={t.value}
+                  className="data-[state=active]:bg-blue-600 data-[state=active]:text-white bg-white border text-gray-700 rounded-full px-4 py-2 text-sm"
+                >
+                  {t.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          {/* Dev-only source toggle (Spec I): ON -> demo; OFF -> live (Supabase). */}
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <Checkbox checked={demoMode} onCheckedChange={(v) => setDemoMode(!!v)} aria-label="Toggle demo data" />
+            <span>Demo data</span>
+          </label>
+        </div>
+
+        {dataLoading ? (
+          <TasksSkeleton />
+        ) : allRows.length === 0 ? (
+          <Card className="p-8 text-center text-gray-500">
+            No bookings yet. When you teach or book a lesson, it will appear here.
+          </Card>
+        ) : (
+          <TaskTabPanel
+            rows={rows}
+            innerTab={innerTab}
+            setInnerTab={setInnerTab}
+            titleFilters={titleFilters}
+            setTitleFilters={setTitleFilters}
+            studentFilters={studentFilters}
+            setStudentFilters={setStudentFilters}
+            visibleColumns={visibleColumns}
+            setVisibleColumns={setVisibleColumns}
+            live={!isDemoView}
+            fromDate={fromDate}
+            untilDate={untilDate}
+            setFromDate={setFromDate}
+            setUntilDate={setUntilDate}
+            onApplyRange={() => setAppliedRange({ from: fromDate, until: untilDate })}
+          />
+        )}
       </div>
+    </div>
+  );
+}
+
+function TasksSkeleton() {
+  return (
+    <div className="pt-6 space-y-3" aria-busy="true">
+      <div className="h-40 max-w-md bg-gray-100 rounded animate-pulse" />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <div key={i} className="h-12 bg-gray-100 rounded animate-pulse" />
+      ))}
     </div>
   );
 }
