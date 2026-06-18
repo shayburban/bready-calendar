@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { User } from '@/api/entities';
 import { TeacherProfile } from '@/api/entities';
+import { saveDraft, loadDraft, submitTeacherProfile } from '@/api/teacherRegistrationApi';
 
 import { useTeacher } from './TeacherContext';
 
@@ -56,10 +57,26 @@ const TeacherForm = () => {
   // Load state from localStorage on initial mount - RESTORED: Uncommented this logic
   useEffect(() => {
     const loadProgress = async () => {
-      const savedStep = await persistenceManager.get('currentStep', 1);
-      const savedSubStep = await persistenceManager.get('currentSubStep', 1);
-      const savedData = await persistenceManager.get('formData');
-      
+      // Prefer the backend draft (cross-device); fall back to localStorage when
+      // there's no session / no remote draft. A submitted draft is ignored so a
+      // finished teacher isn't dropped back into the wizard.
+      let savedStep = await persistenceManager.get('currentStep', 1);
+      let savedSubStep = await persistenceManager.get('currentSubStep', 1);
+      let savedData = await persistenceManager.get('formData');
+
+      try {
+        const remote = await loadDraft();
+        if (remote.ok && remote.data && !remote.data.submitted) {
+          if (remote.data.form_data && Object.keys(remote.data.form_data).length > 0) {
+            savedData = remote.data.form_data;
+          }
+          if (remote.data.current_step) savedStep = remote.data.current_step;
+          if (remote.data.current_sub_step) savedSubStep = remote.data.current_sub_step;
+        }
+      } catch {
+        // ignore — localStorage values already loaded above
+      }
+
       if (savedData) {
         if (savedData.personalInfo) setPersonalInfo(savedData.personalInfo);
         if (savedData.isAgeConfirmed !== undefined) setIsAgeConfirmed(savedData.isAgeConfirmed);
@@ -94,6 +111,28 @@ const TeacherForm = () => {
       packages // Added for persistence
     };
     persistenceManager.save('formData', formDataToSave);
+  }, [currentStep, currentSubStep, personalInfo, isAgeConfirmed, teachingSubjects, allSpecs, allBoards, allExams, availability, services, packages]);
+
+  // Backend draft autosave (debounced). Mirrors the localStorage save to
+  // teacher_registration_drafts so progress through stages 1–5c survives across
+  // devices/sessions. Best-effort: no-ops without a Supabase session, and never
+  // blocks the UI (localStorage above remains the synchronous source of truth).
+  useEffect(() => {
+    const formDataToSave = {
+      personalInfo,
+      isAgeConfirmed,
+      teachingSubjects,
+      allSpecs,
+      allBoards,
+      allExams,
+      availability,
+      services,
+      packages,
+    };
+    const timer = setTimeout(() => {
+      saveDraft(formDataToSave, currentStep, currentSubStep);
+    }, 800);
+    return () => clearTimeout(timer);
   }, [currentStep, currentSubStep, personalInfo, isAgeConfirmed, teachingSubjects, allSpecs, allBoards, allExams, availability, services, packages]);
 
   // Load user data
@@ -551,7 +590,12 @@ const TeacherForm = () => {
         }
       };
 
-      await TeacherProfile.create(profileData);
+      // Live backend first; fall back to the in-memory mock when there's no
+      // Supabase session (dev mode / offline) so the flow always completes.
+      const remote = await submitTeacherProfile(profileData);
+      if (!remote.ok) {
+        await TeacherProfile.create(profileData);
+      }
       setIsComplete(true);
       await persistenceManager.clear();
       alert('Application submitted successfully!');

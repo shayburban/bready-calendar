@@ -1,9 +1,13 @@
 
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
+import { fetchRegistrationCatalog } from '@/api/registrationCatalog';
 
 const ServiceContext = createContext();
 
-// Mock data that would eventually come from an API
+// Static fallback catalog. Used until the live catalog loads, and whenever the
+// Supabase fetch fails (offline / not migrated yet) so the wizard never breaks.
+// The live catalog (migrations 0019/0020) overrides the data-driven fields;
+// `levels` and `proficiencyLevels` are fixed enums and stay static.
 const mockData = {
   subjectCategories: [
     { id: 'cat-stem', name: 'STEM' },
@@ -72,8 +76,31 @@ const mockData = {
 };
 
 export const ServiceProvider = ({ children }) => {
+  // Start from the static catalog so selectors render immediately, then swap in
+  // the live catalog once it loads. `catalogSource` lets callers tell which one
+  // is active without changing the consumed shape.
+  const [catalog, setCatalog] = useState({ ...mockData, catalogSource: 'static', catalogLoading: true });
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchRegistrationCatalog()
+      .then((live) => {
+        if (cancelled) return;
+        if (live) {
+          // Override only the data-driven fields; keep static enums.
+          setCatalog({ ...mockData, ...live, catalogSource: 'live', catalogLoading: false });
+        } else {
+          setCatalog({ ...mockData, catalogSource: 'static', catalogLoading: false });
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCatalog({ ...mockData, catalogSource: 'static', catalogLoading: false });
+      });
+    return () => { cancelled = true; };
+  }, []);
+
   return (
-    <ServiceContext.Provider value={mockData}>
+    <ServiceContext.Provider value={catalog}>
       {children}
     </ServiceContext.Provider>
   );
