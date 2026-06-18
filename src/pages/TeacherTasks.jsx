@@ -39,6 +39,9 @@ import {
   CheckCircle2,
   XCircle,
   Check,
+  CalendarDays,
+  Copy,
+  RefreshCw,
 } from 'lucide-react';
 import {
   Dialog,
@@ -361,39 +364,55 @@ function RowActions({ row, onCancel, onProposeOpen, onAnswer }) {
   const canCancel = ['booked', 'waiting'].includes(row.typeKey);
   const canReschedule = row.typeKey === 'booked';
 
-  if (pendingFromOther) {
-    return (
-      <div className="flex items-center gap-1">
-        <Button variant="outline" size="sm" className="h-8" onClick={() => onAnswer(row, 'decline')}>
-          <X className="w-4 h-4 mr-1" /> Decline
-        </Button>
-        <Button
-          size="sm"
-          className="h-8 bg-green-600 hover:bg-green-700 text-white"
-          onClick={() => onAnswer(row, 'accept')}
-        >
-          <Check className="w-4 h-4 mr-1" /> Accept
-        </Button>
-      </div>
-    );
-  }
-  if (pendingFromMe) {
-    return <span className="text-xs text-amber-700 whitespace-nowrap">Awaiting response…</span>;
-  }
-  if (!canCancel && !canReschedule) {
-    return <span className="text-gray-400">—</span>;
-  }
+  const copyId = async () => {
+    try {
+      await navigator.clipboard.writeText(row.id);
+      toast({ title: 'Booking id copied' });
+    } catch {
+      toast({ title: 'Copy failed', variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="flex items-center gap-1">
-      {canCancel && (
-        <Button variant="outline" size="sm" className="h-8" onClick={() => onCancel(row)}>
-          Cancel
+      {/* Always-available row meta: jump to the calendar + copy the booking id. */}
+      <Link to={createPageUrl('TeacherCalendar')} title="View in Calendar" aria-label="View in Calendar">
+        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+          <CalendarDays className="w-4 h-4" />
         </Button>
-      )}
-      {canReschedule && (
-        <Button variant="outline" size="sm" className="h-8" onClick={() => onProposeOpen(row)}>
-          Reschedule
-        </Button>
+      </Link>
+      <Button variant="ghost" size="sm" className="h-8 w-8 p-0" title="Copy booking id" aria-label="Copy booking id" onClick={copyId}>
+        <Copy className="w-4 h-4" />
+      </Button>
+
+      {pendingFromOther ? (
+        <>
+          <Button variant="outline" size="sm" className="h-8" onClick={() => onAnswer(row, 'decline')}>
+            <X className="w-4 h-4 mr-1" /> Decline
+          </Button>
+          <Button
+            size="sm"
+            className="h-8 bg-green-600 hover:bg-green-700 text-white"
+            onClick={() => onAnswer(row, 'accept')}
+          >
+            <Check className="w-4 h-4 mr-1" /> Accept
+          </Button>
+        </>
+      ) : pendingFromMe ? (
+        <span className="text-xs text-amber-700 whitespace-nowrap">Awaiting response…</span>
+      ) : (
+        <>
+          {canCancel && (
+            <Button variant="outline" size="sm" className="h-8" onClick={() => onCancel(row)}>
+              Cancel
+            </Button>
+          )}
+          {canReschedule && (
+            <Button variant="outline" size="sm" className="h-8" onClick={() => onProposeOpen(row)}>
+              Reschedule
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
@@ -593,7 +612,7 @@ function TaskTable({
       <div className="mt-4 overflow-x-auto">
         <table className="w-full bg-white border text-sm">
           <thead>
-            <tr className="bg-gray-50 border-b text-left text-gray-600">
+            <tr className="bg-gray-50 border-b text-left text-gray-600 [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-gray-50">
               <th className="p-3 w-10"></th>
               {show('Name') && <th className="p-3 font-semibold">Name</th>}
               {show('Type') && <th className="p-3 font-semibold">Type</th>}
@@ -783,6 +802,85 @@ function TaskTabPanel({
   );
 }
 
+const OVERVIEW_LEGEND = [
+  { key: 'booked', label: 'Booked', color: 'bg-orange-400' },
+  { key: 'waiting', label: 'Waiting', color: 'bg-amber-300' },
+  { key: 'completed', label: 'Completed', color: 'bg-emerald-600' },
+  { key: 'cancelled', label: 'Cancelled', color: 'bg-gray-500' },
+  { key: 'availability', label: 'Availability', color: 'bg-green-500' },
+];
+
+function OverviewStat({ label, value }) {
+  return (
+    <div className="rounded border border-gray-200 px-3 py-1.5 min-w-[92px]">
+      <div className="text-lg font-bold text-gray-800">{value}</div>
+      <div className="text-[11px] text-gray-500">{label}</div>
+    </div>
+  );
+}
+
+// Summary strip + status legend + quick-filter presets + sort toggle + refresh
+// with a "last updated" indicator (Spec K Phase 3).
+function TasksOverview({ allRows, onPreset, onRefresh, lastUpdated, sortDir, onToggleSort, loading }) {
+  const now = Date.now();
+  const upcoming = allRows.filter(
+    (r) => r.typeKey === 'booked' && r.record?.startUTC && new Date(r.record.startUTC).getTime() > now
+  ).length;
+  const completed = allRows.filter((r) => r.typeKey === 'completed').length;
+  const pending = allRows.filter((r) => {
+    const myRole = r.perspective === 'T' ? 'teacher' : 'student';
+    const needsAnswer = r.reschedule && r.rescheduleProposedBy && r.rescheduleProposedBy !== myRole;
+    return needsAnswer || r.typeKey === 'waiting';
+  }).length;
+  const ago = lastUpdated ? Math.max(0, Math.round((now - lastUpdated) / 1000)) : null;
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-3">
+          <OverviewStat label="Upcoming" value={upcoming} />
+          <OverviewStat label="Completed" value={completed} />
+          <OverviewStat label="Pending actions" value={pending} />
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="h-8" onClick={onToggleSort} aria-label="Toggle date sort">
+            Date {sortDir === 'asc' ? '↑' : '↓'}
+          </Button>
+          <Button variant="outline" size="sm" className="h-8" onClick={onRefresh} aria-label="Refresh tasks">
+            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
+          {ago != null && <span className="text-xs text-gray-400">updated {ago}s ago</span>}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-3 mt-3">
+        <span className="text-xs text-gray-500">Quick filters:</span>
+        {[
+          ['today', 'Today'],
+          ['week', 'This Week'],
+          ['next30', 'Next 30'],
+          ['past', 'Past'],
+          ['all', 'All'],
+        ].map(([k, l]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => onPreset(k)}
+            className="text-xs px-2 py-1 rounded-full border text-gray-600 hover:bg-gray-50"
+          >
+            {l}
+          </button>
+        ))}
+        <span className="mx-1 h-4 w-px bg-gray-200" />
+        {OVERVIEW_LEGEND.map((x) => (
+          <span key={x.key} className="inline-flex items-center gap-1 text-xs text-gray-500">
+            <span className={`inline-block w-2.5 h-2.5 rounded-full ${x.color}`} /> {x.label}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function TeacherTasks() {
   const [user, setUser] = useState(null); // eslint-disable-line no-unused-vars
   const [loading, setLoading] = useState(true);
@@ -795,6 +893,8 @@ export default function TeacherTasks() {
     loading: dataLoading,
     mode,
     isDemoActive,
+    lastUpdated,
+    refetch,
     cancelTask,
     proposeReschedule,
     answerReschedule,
@@ -802,6 +902,7 @@ export default function TeacherTasks() {
   const isDemoView = mode === 'demo' || mode === 'live-unavailable';
   const [page, setPage] = useState(0);
   const [proposeRow, setProposeRow] = useState(null);
+  const [sortDir, setSortDir] = useState('asc'); // by start date
 
   const toastResult = (r, okMsg) =>
     toast(
@@ -853,8 +954,14 @@ export default function TeacherTasks() {
     const rowISO = (r) => (r.record?.startUTC ? r.record.startUTC.slice(0, 10) : null);
     if (appliedRange.from) out = out.filter((r) => rowISO(r) && rowISO(r) >= appliedRange.from);
     if (appliedRange.until) out = out.filter((r) => rowISO(r) && rowISO(r) <= appliedRange.until);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    out = [...out].sort((a, b) => {
+      const av = a.record?.startUTC || '';
+      const bv = b.record?.startUTC || '';
+      return av < bv ? -dir : av > bv ? dir : 0;
+    });
     return out;
-  }, [allRows, activeTab, innerTab, studentFilters, titleFilters, appliedRange]);
+  }, [allRows, activeTab, innerTab, studentFilters, titleFilters, appliedRange, sortDir]);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const pageRows = useMemo(
@@ -869,6 +976,27 @@ export default function TeacherTasks() {
   const handleExportCsv = () => {
     const csv = rowsToCsv(rows, isDemoActive);
     downloadCsv(csv, `${isDemoActive ? 'DEMO_' : ''}tasks_${activeTab}_${innerTab}.csv`);
+  };
+
+  // Quick-filter presets set the date range (Today / This Week / Next 30 / Past).
+  const applyPreset = (key) => {
+    const now = new Date();
+    const startOfDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const iso = (d) => d.toISOString().slice(0, 10);
+    const plus = (days) => {
+      const d = new Date(startOfDay);
+      d.setUTCDate(d.getUTCDate() + days);
+      return d;
+    };
+    let from = '';
+    let until = '';
+    if (key === 'today') { from = iso(startOfDay); until = iso(startOfDay); }
+    else if (key === 'week') { from = iso(startOfDay); until = iso(plus(7)); }
+    else if (key === 'next30') { from = iso(startOfDay); until = iso(plus(30)); }
+    else if (key === 'past') { from = iso(plus(-365)); until = iso(plus(-1)); }
+    setFromDate(from);
+    setUntilDate(until);
+    setAppliedRange({ from, until });
   };
 
   useEffect(() => {
@@ -950,6 +1078,18 @@ export default function TeacherTasks() {
             <span>Demo data</span>
           </label>
         </div>
+
+        {!dataLoading && allRows.length > 0 && (
+          <TasksOverview
+            allRows={allRows}
+            onPreset={applyPreset}
+            onRefresh={refetch}
+            lastUpdated={lastUpdated}
+            sortDir={sortDir}
+            onToggleSort={() => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))}
+            loading={dataLoading}
+          />
+        )}
 
         {dataLoading ? (
           <TasksSkeleton />

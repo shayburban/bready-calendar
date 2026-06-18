@@ -15,7 +15,7 @@
 // Plain hook (matches useTeacherStatsData). Realtime + optimistic/rollback +
 // cross-component dedupe (React Query) is deferred to Phase 3.
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { User } from '@/api/entities';
 import { normalizeEvents } from './statsHelpers';
 import { generateDemoTaskEvents } from './demoTasks';
@@ -115,6 +115,7 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
     loading: true,
     error: null,
     mode: source === 'demo' ? 'demo' : 'live',
+    lastUpdated: null,
   });
   const [reloadKey, setReloadKey] = useState(0);
   const refetch = useCallback(() => setReloadKey((k) => k + 1), []);
@@ -123,7 +124,7 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
     let alive = true;
     const loadDemo = (mode) => {
       const records = enrich(generateDemoTaskEvents());
-      if (alive) setState({ records, loading: false, error: null, mode });
+      if (alive) setState({ records, loading: false, error: null, mode, lastUpdated: Date.now() });
     };
 
     (async () => {
@@ -138,11 +139,11 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
         if (!alive) return;
         if (!r || !r.ok) throw new Error(r?.message || 'Live bookings unavailable.');
         const raws = (r.data || []).map(bookingRowToRaw);
-        setState({ records: enrich(raws), loading: false, error: null, mode: 'live' });
+        setState({ records: enrich(raws), loading: false, error: null, mode: 'live', lastUpdated: Date.now() });
       } catch (err) {
         if (!alive) return;
         const records = enrich(generateDemoTaskEvents());
-        setState({ records, loading: false, error: err, mode: 'live-unavailable' });
+        setState({ records, loading: false, error: err, mode: 'live-unavailable', lastUpdated: Date.now() });
       }
     })();
 
@@ -154,13 +155,34 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
   // Demo data is active whenever the rows are demo (explicit demo OR fallback).
   const isDemoActive = state.mode === 'demo' || state.mode === 'live-unavailable';
 
-  // Patch one local demo record by id (demo-only mutation; never the backend).
+  // Patch one local record by id. In demo this IS the mutation; in live it is the
+  // optimistic step (reconciled by refetch, or reverted on failure).
   const patchLocal = useCallback((id, patch) => {
     setState((s) => ({
       ...s,
       records: s.records.map((r) => (r.id === id ? { ...r, ...patch } : r)),
     }));
   }, []);
+
+  // Always-current records snapshot for optimistic rollback (Spec H).
+  const recordsRef = useRef([]);
+  useEffect(() => {
+    recordsRef.current = state.records;
+  }, [state.records]);
+
+  // Live mutation: apply `patch` optimistically, call the RPC, then reconcile via
+  // refetch on success or ROLL BACK to the pre-mutation snapshot on failure.
+  const liveOptimistic = useCallback(
+    async (id, patch, rpcCall) => {
+      const snapshot = recordsRef.current;
+      patchLocal(id, patch);
+      const r = await rpcCall();
+      if (r.ok) refetch();
+      else setState((s) => ({ ...s, records: snapshot }));
+      return r;
+    },
+    [patchLocal, refetch]
+  );
 
   const cancelTask = useCallback(
     async (id) => {
@@ -177,11 +199,13 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
         });
         return { ok: true, demo: true };
       }
-      const r = await cancelBooking(id);
-      if (r.ok) refetch();
-      return r;
+      return liveOptimistic(
+        id,
+        { type: 'cancelled', status: 'cancelled', isReschedule: false, rescheduleId: null, proposedStartUTC: null, proposedBy: null },
+        () => cancelBooking(id)
+      );
     },
-    [isDemoActive, patchLocal, refetch]
+    [isDemoActive, patchLocal, liveOptimistic]
   );
 
   const updateSubject = useCallback(
@@ -190,64 +214,56 @@ export function useTeacherTasksData({ source: explicitSource } = {}) {
         patchLocal(id, { subject });
         return { ok: true, demo: true };
       }
-      const r = await updateBookingSubject(id, subject);
-      if (r.ok) refetch();
-      return r;
+      return liveOptimistic(id, { subject }, () => updateBookingSubject(id, subject));
     },
-    [isDemoActive, patchLocal, refetch]
+    [isDemoActive, patchLocal, liveOptimistic]
   );
 
   const proposeReschedule = useCallback(
     async (id, proposedStartUtc, proposedBy) => {
+      const patch = {
+        isReschedule: true,
+        requestKind: 'reschedule',
+        proposedStartUTC: proposedStartUtc,
+        proposedBy,
+        rescheduleId: isDemoActive ? `demo-rp-${id}` : null,
+      };
       if (isDemoActive) {
-        patchLocal(id, {
-          isReschedule: true,
-          requestKind: 'reschedule',
-          proposedStartUTC: proposedStartUtc,
-          proposedBy,
-          rescheduleId: `demo-rp-${id}`,
-        });
+        patchLocal(id, patch);
         return { ok: true, demo: true };
       }
-      const r = await createReschedule({ bookingId: id, proposedStartUtc, proposedBy });
-      if (r.ok) refetch();
-      return r;
+      return liveOptimistic(id, patch, () => createReschedule({ bookingId: id, proposedStartUtc, proposedBy }));
     },
-    [isDemoActive, patchLocal, refetch]
+    [isDemoActive, patchLocal, liveOptimistic]
   );
 
   const answerReschedule = useCallback(
     async (row, action) => {
+      let patch;
+      if (action === 'accept' && row.rescheduleProposedUTC) {
+        const start = row.record?.startUTC ? new Date(row.record.startUTC).getTime() : null;
+        const end = row.record?.endUTC ? new Date(row.record.endUTC).getTime() : null;
+        const durMs = start != null && end != null ? end - start : 60 * 60 * 1000;
+        const newStart = row.rescheduleProposedUTC;
+        const newEnd = new Date(new Date(newStart).getTime() + durMs).toISOString();
+        patch = {
+          startUTC: newStart,
+          endUTC: newEnd,
+          isReschedule: false,
+          rescheduleId: null,
+          proposedStartUTC: null,
+          proposedBy: null,
+        };
+      } else {
+        patch = { isReschedule: false, rescheduleId: null, proposedStartUTC: null, proposedBy: null };
+      }
       if (isDemoActive) {
-        if (action === 'accept' && row.rescheduleProposedUTC) {
-          const start = row.record?.startUTC ? new Date(row.record.startUTC).getTime() : null;
-          const end = row.record?.endUTC ? new Date(row.record.endUTC).getTime() : null;
-          const durMs = start != null && end != null ? end - start : 60 * 60 * 1000;
-          const newStart = row.rescheduleProposedUTC;
-          const newEnd = new Date(new Date(newStart).getTime() + durMs).toISOString();
-          patchLocal(row.id, {
-            startUTC: newStart,
-            endUTC: newEnd,
-            isReschedule: false,
-            rescheduleId: null,
-            proposedStartUTC: null,
-            proposedBy: null,
-          });
-        } else {
-          patchLocal(row.id, {
-            isReschedule: false,
-            rescheduleId: null,
-            proposedStartUTC: null,
-            proposedBy: null,
-          });
-        }
+        patchLocal(row.id, patch);
         return { ok: true, demo: true };
       }
-      const r = await respondReschedule(row.rescheduleId, action);
-      if (r.ok) refetch();
-      return r;
+      return liveOptimistic(row.id, patch, () => respondReschedule(row.rescheduleId, action));
     },
-    [isDemoActive, patchLocal, refetch]
+    [isDemoActive, patchLocal, liveOptimistic]
   );
 
   return {
