@@ -34,36 +34,33 @@ import {
 import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
+// Teacher Statistics data layer (additive — Spec L). The page now computes real
+// aggregations from the hook's normalized records instead of hardcoded mocks.
+import { useTeacherStatsData } from '@/data/useTeacherStatsData';
+import {
+  computeStatCards,
+  applyFilters,
+  periodRange,
+} from '@/data/statsHelpers';
+import StatsAnalyticsContainer from '@/components/stats/AnalyticsContainer';
 
 const DESC =
   'Lorem ipsum dol amet, consec tetur adipiscing elit.';
 
-const STAT_CARDS = {
-  month: [
-    { title: 'Total Trial Lessons', value: 20, suffix: '$' },
-    { title: 'Total Hours Booked For Teachers', value: 20, suffix: 'Hrs.' },
-    { title: 'Total Meetings With Students', value: 20, suffix: 'Hrs.' },
-    { title: 'Refund', value: 20, suffix: '$' },
-    { title: 'Total Students Booked', value: 20, suffix: '' },
-    { title: 'Total New Students', value: 20, suffix: '' },
-  ],
-  week: [
-    { title: 'Total Trial Lessons', value: 6, suffix: '$' },
-    { title: 'Total Hours Booked For Teachers', value: 6, suffix: 'Hrs.' },
-    { title: 'Total Meetings With Students', value: 6, suffix: 'Hrs.' },
-    { title: 'Refund', value: 2, suffix: '$' },
-    { title: 'Total Students Booked', value: 6, suffix: '' },
-    { title: 'Total New Students', value: 2, suffix: '' },
-  ],
-  entire: [
-    { title: 'Total Trial Lessons', value: 240, suffix: '$' },
-    { title: 'Total Hours Booked For Teachers', value: 240, suffix: 'Hrs.' },
-    { title: 'Total Meetings With Students', value: 240, suffix: 'Hrs.' },
-    { title: 'Refund', value: 35, suffix: '$' },
-    { title: 'Total Students Booked', value: 240, suffix: '' },
-    { title: 'Total New Students', value: 56, suffix: '' },
-  ],
-};
+// Build the existing 6-card array shape from real aggregations. Titles, order
+// and suffixes are kept identical to the original mock so the grid markup never
+// changes (Spec J "swap the data source only"). Values may be a number or "—"
+// (unknown money field) — the grid renders either.
+function buildStatCards(cardStats) {
+  return [
+    { title: 'Total Trial Lessons', value: cardStats.trialLessons, suffix: '$' },
+    { title: 'Total Hours Booked For Teachers', value: cardStats.hoursForTeachers, suffix: 'Hrs.' },
+    { title: 'Total Meetings With Students', value: cardStats.meetingsWithStudents, suffix: 'Hrs.' },
+    { title: 'Refund', value: cardStats.refund, suffix: '$' },
+    { title: 'Total Students Booked', value: cardStats.studentsBooked, suffix: '' },
+    { title: 'Total New Students', value: cardStats.newStudents, suffix: '' },
+  ];
+}
 
 const FILTER_OPTIONS = [
   'Subject',
@@ -440,6 +437,24 @@ export default function TeacherStatistics() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('month');
+  // Demo toggle (Spec H): ON -> seed (illustrative/fake); OFF -> production
+  // stand-in ('mock' while developing; 'supabase' when real data lands). Default
+  // 'seed' in development. Flipping this is the ONLY thing that swaps the source.
+  const [demoMode, setDemoMode] = useState(true);
+  const source = demoMode ? 'seed' : 'mock';
+  const { records, loading: dataLoading, error: dataError } = useTeacherStatsData({ source });
+
+  // Real STAT_CARDS, computed per period from the normalized records. Memoized
+  // and O(n) (Spec J performance). One bad metric can never NaN the others —
+  // sums skip unparseable rows and money falls back to "—".
+  const statCards = useMemo(() => {
+    const make = (period) => {
+      const { fromUTC, untilUTC } = periodRange(period);
+      const slice = applyFilters(records, { fromUTC, untilUTC });
+      return buildStatCards(computeStatCards(slice));
+    };
+    return { month: make('month'), week: make('week'), entire: make('entire') };
+  }, [records]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -487,7 +502,38 @@ export default function TeacherStatistics() {
       <TeacherPageTabs activeTabValue="stats" />
 
       <div className="container mx-auto px-4 md:px-6 py-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-3">Statistics</h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="text-2xl font-bold text-gray-900">Statistics</h2>
+          {/* Demo Data toggle (Spec H). ON -> illustrative seed; OFF -> real
+              source. Simply sets the source arg of useTeacherStatsData. */}
+          <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+            <Checkbox
+              checked={demoMode}
+              onCheckedChange={(v) => setDemoMode(!!v)}
+              aria-label="Toggle demo data"
+            />
+            <span>Demo Data</span>
+          </label>
+        </div>
+
+        {/* Persistent fake-data banner — stays up the whole time the seed is
+            active so demo figures are never mistaken for real (Spec H, K). */}
+        {source === 'seed' && (
+          <div
+            role="status"
+            className="mb-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-2 text-sm text-amber-800"
+          >
+            ⚠️ Demo Mode — numbers are illustrative / fake. Toggle “Demo Data” off to use your real data.
+          </div>
+        )}
+        {!demoMode && dataError && (
+          <div
+            role="alert"
+            className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800"
+          >
+            Couldn’t load live statistics data ({String(dataError.message || dataError)}). Showing what’s available.
+          </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-transparent p-0 h-auto flex flex-wrap gap-2 justify-start">
@@ -512,13 +558,13 @@ export default function TeacherStatistics() {
           </TabsList>
 
           <TabsContent value="month" className="mt-0">
-            <StatCardsGrid cards={STAT_CARDS.month} />
+            <StatCardsGrid cards={statCards.month} />
           </TabsContent>
           <TabsContent value="week" className="mt-0">
-            <StatCardsGrid cards={STAT_CARDS.week} />
+            <StatCardsGrid cards={statCards.week} />
           </TabsContent>
           <TabsContent value="entire" className="mt-0">
-            <StatCardsGrid cards={STAT_CARDS.entire} />
+            <StatCardsGrid cards={statCards.entire} />
           </TabsContent>
         </Tabs>
 
@@ -547,6 +593,17 @@ export default function TeacherStatistics() {
         </Card>
 
         <StatisticsChart />
+
+        {/* New analytics (Spec J) rendered BELOW the existing STAT_CARDS grid +
+            mock chart. All new content lives in this one full-width container;
+            the original page shell above is untouched. */}
+        <StatsAnalyticsContainer
+          records={records}
+          loading={dataLoading}
+          error={dataError}
+          source={source}
+          period={activeTab}
+        />
       </div>
     </div>
   );
