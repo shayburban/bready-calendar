@@ -11,6 +11,12 @@ import { useTeacher } from './TeacherContext';
 import { useFormAutoSave } from './persistence/useFormAutoSave';
 import { serializeFormState, hydrateFormState } from './persistence/serialize';
 import CustomDataSubmissionService from './approval/CustomDataSubmissionService';
+import {
+  syncRegistrationAvailabilityToCalendar,
+  slotStart,
+  slotEnd,
+  slotStartHourNum,
+} from '@/lib/scheduling/registrationAvailability';
 
 // localStorage key tracking which custom catalog entries already have a
 // pending_data row, so a retry/double-submit never creates duplicates.
@@ -523,12 +529,18 @@ const TeacherForm = () => {
       tags.push(`${personalInfo.experience.offline_years} years offline`);
     }
     Object.entries(availability.slots || {}).forEach(([day, slots]) => {
-      if (slots && slots.length > 0) {
+      // Only days with real (both-ends-filled) slots — the default per-day row
+      // is empty {start:'',end:''} and must not generate "available <day>" tags.
+      const realSlots = (slots || []).filter(s => slotStart(s) && slotEnd(s));
+      if (realSlots.length > 0) {
         tags.push(`available ${day}`);
         tags.push(`${day} classes`);
-        slots.forEach(slot => {
-          const timeOfDay = slot.startHour < 12 ? 'morning' : slot.startHour < 17 ? 'affternoon' : 'evening';
-          tags.push(`${timeOfDay} classes`);
+        realSlots.forEach(slot => {
+          const h = slotStartHourNum(slot);
+          if (h != null) {
+            const timeOfDay = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+            tags.push(`${timeOfDay} classes`);
+          }
         });
       }
     });
@@ -574,28 +586,31 @@ const TeacherForm = () => {
       const searchTags = generateSearchTags();
       const availabilitySearchData = {
         weeklyAvailability: Object.entries(availability.slots || {}).reduce((acc, [day, slots]) => {
-          if (slots && slots.length > 0) {
-            acc[day] = slots.map(slot => ({
-              start: slot.startHour,
-              end: slot.endHour,
-              timeOfDay: slot.startHour < 12 ? 'morning' : slot.startHour < 17 ? 'affternoon' : 'evening'
-            }));
+          const realSlots = (slots || []).filter(s => slotStart(s) && slotEnd(s));
+          if (realSlots.length > 0) {
+            acc[day] = realSlots.map(slot => {
+              const h = slotStartHourNum(slot);
+              return {
+                start: slotStart(slot),
+                end: slotEnd(slot),
+                timeOfDay: h == null ? null : (h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening'),
+              };
+            });
           }
           return acc;
         }, {}),
-        availableDays: Object.keys(availability.slots || {}).filter(day => 
-          availability.slots[day] && availability.slots[day].length > 0
+        availableDays: Object.keys(availability.slots || {}).filter(day =>
+          (availability.slots[day] || []).some(s => slotStart(s) && slotEnd(s))
         ),
         timePreferences: Object.entries(availability.slots || {}).reduce((acc, [day, slots]) => {
-          if (slots && slots.length > 0) {
-            slots.forEach(slot => {
-              const timeOfDay = slot.startHour < 12 ? 'morning' : slot.startHour < 17 ? 'affternoon' : 'evening';
-              if (!acc[timeOfDay]) acc[timeOfDay] = [];
-              if (!acc[timeOfDay].includes(day)) {
-                acc[timeOfDay].push(day);
-              }
-            });
-          }
+          (slots || []).forEach(slot => {
+            if (!slotStart(slot) || !slotEnd(slot)) return;
+            const h = slotStartHourNum(slot);
+            if (h == null) return;
+            const timeOfDay = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
+            if (!acc[timeOfDay]) acc[timeOfDay] = [];
+            if (!acc[timeOfDay].includes(day)) acc[timeOfDay].push(day);
+          });
           return acc;
         }, {})
       };
@@ -667,6 +682,15 @@ const TeacherForm = () => {
       if (!remote.ok) {
         await TeacherProfile.create(profileData);
       }
+
+      // Mirror the weekly availability painted in 5c into the teacher-calendar
+      // backend (availability_one_off via set_availability_one_off) — the SAME
+      // store the teacher calendar uses — so it's live for the teacher (T).
+      // Flag-gated (instant booking) + best-effort; never blocks completion.
+      try {
+        await syncRegistrationAvailabilityToCalendar(availability.slots, availability.timezone);
+      } catch { /* non-blocking */ }
+
       setIsComplete(true);
       // Only after a confirmed success: clear the local draft (incl. PII) and
       // mark the backend draft submitted.
