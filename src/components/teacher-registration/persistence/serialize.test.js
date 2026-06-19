@@ -40,7 +40,7 @@ describe('hydrateFormState', () => {
 
   it('defaults window/advance when missing and tolerates null', () => {
     const h = hydrateFormState({});
-    expect(h.availability.availabilityWindow).toEqual({ preference: 2, preferenceType: 'weeks' });
+    expect(h.availability.availabilityWindow).toEqual({ preference: 14, preferenceType: 'weeks' });
     expect(h.availability.farAdvanceBookingFromStudent).toEqual({ preference: 4, preferenceType: 'weeks' });
     expect(hydrateFormState(null)).toBeNull();
   });

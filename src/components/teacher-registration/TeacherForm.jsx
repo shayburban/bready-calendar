@@ -688,7 +688,11 @@ const TeacherForm = () => {
       // store the teacher calendar uses — so it's live for the teacher (T).
       // Flag-gated (instant booking) + best-effort; never blocks completion.
       try {
-        await syncRegistrationAvailabilityToCalendar(availability.slots, availability.timezone);
+        await syncRegistrationAvailabilityToCalendar(
+          availability.slots,
+          availability.timezone,
+          availability.availabilityWindow,
+        );
       } catch { /* non-blocking */ }
 
       setIsComplete(true);

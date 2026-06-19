@@ -370,7 +370,11 @@ export const availabilityInitialState = {
   // though the reducer state held a default. Saving without touching
   // these fields then persisted wrong-cased data.
   availabilityWindow: {
-    preference: 2,
+    // Default availability window: 14 weeks. Auto-fills the Page-5c
+    // "Availability Window" field and drives the instant-booking
+    // materialization horizon (see registrationAvailability.windowToDays) —
+    // changing it here (or in the field) changes both.
+    preference: 14,
     preferenceType: 'weeks',
   },
   farAdvanceBookingFromStudent: {

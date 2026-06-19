@@ -13,7 +13,7 @@
 //
 // Keep these two the ONLY place state <-> persistence conversion happens.
 
-const DEFAULT_WINDOW = { preference: 2, preferenceType: 'weeks' };
+const DEFAULT_WINDOW = { preference: 14, preferenceType: 'weeks' };
 const DEFAULT_ADVANCE = { preference: 4, preferenceType: 'weeks' };
 
 function normalizePair(pair) {
