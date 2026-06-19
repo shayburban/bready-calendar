@@ -1,8 +1,9 @@
 
 import { User } from '@/api/entities';
-import { InvokeLLM } from '@/api/integrations';
-import { searchTeachers } from '@/api/teacherSearchApi';
+import { searchTeachers, listTeacherCards } from '@/api/teacherSearchApi';
 import { supabase } from '@/api/supabaseClient';
+import { fetchRegistrationCatalog } from '@/api/registrationCatalog';
+import { parseSearchQuery } from '@/lib/search/queryParser';
 
 // ---------------------------------------------------------------------------
 // Daily search cap.
@@ -19,50 +20,15 @@ import { supabase } from '@/api/supabaseClient';
 const AI_SEARCH_DAILY_LIMIT = null; // e.g. 50 to re-enable a soft cap
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-// Deterministic fallback parser: pulls a max price and a level out of the raw
-// query so search works even when no LLM is wired. Always runs (Phase 2 upgrades
-// this to catalog-driven subject/specialization/language parsing).
-function parseQueryFilters(query) {
-    const q = (query || '').toLowerCase();
-    let maxPrice = null;
-    const priceMatch =
-        q.match(/(?:under|below|less than|up to|max(?:imum)?|<)\s*\$?\s*(\d{1,4})/) ||
-        q.match(/\$\s*(\d{1,4})/);
-    if (priceMatch) maxPrice = Number(priceMatch[1]);
-
-    let level = null;
-    for (const lvl of ['beginner', 'intermediate', 'advanced', 'expert']) {
-        if (q.includes(lvl)) { level = lvl.charAt(0).toUpperCase() + lvl.slice(1); break; }
+// Catalog is the parser's authoritative backbone. Loaded once, cached; falls
+// back to the parser's built-in DEFAULT_CATALOG when the live fetch returns null
+// (offline / RLS / not migrated). $0 — a single cached read, no AI.
+let _catalogPromise = null;
+function getCatalog() {
+    if (!_catalogPromise) {
+        _catalogPromise = fetchRegistrationCatalog().catch(() => null);
     }
-    return { maxPrice, level };
-}
-
-// Best-effort structured extraction via the LLM integration. Returns null when
-// the integration isn't wired (mock returns {ok:true}) or returns nothing
-// usable, so the deterministic parser stays in charge. No paid AI today.
-async function llmExtractFilters(query) {
-    try {
-        const r = await InvokeLLM({
-            prompt: `Extract teacher-search filters from this student request and return JSON only. Request: "${query}"`,
-            response_json_schema: {
-                type: 'object',
-                properties: {
-                    subjects: { type: 'array', items: { type: 'string' } },
-                    specializations: { type: 'array', items: { type: 'string' } },
-                    languages: { type: 'array', items: { type: 'string' } },
-                    level: { type: 'string' },
-                    maxPrice: { type: 'number' },
-                },
-            },
-        });
-        if (r && typeof r === 'object' &&
-            (r.subjects?.length || r.specializations?.length || r.languages?.length || r.level || typeof r.maxPrice === 'number')) {
-            return r;
-        }
-    } catch {
-        // integration not available — fall back to the deterministic parser
-    }
-    return null;
+    return _catalogPromise;
 }
 
 // Fire-and-forget usage log. Powers analytics + the optional re-enableable 24h
@@ -83,6 +49,53 @@ function logSearch(query, resultsCount) {
             // best-effort only
         }
     })();
+}
+
+// Fallback ladder so the page is never a dead end. Hard price is preserved
+// throughout; the least-critical filters are relaxed first. Each step records
+// which filter was dropped so the UI can tell the user what happened.
+async function runFallbackLadder(parsed) {
+    const cap = parsed.price?.cap ?? null;
+    const hardPrice = cap != null && !parsed.price.soft;
+    const applyPrice = (rows) => (hardPrice ? rows.filter((r) => (r.hourlyRate?.regular ?? 0) <= cap) : rows);
+
+    const base = {
+        query: parsed.residualText || null,
+        subjects: parsed.subjects.length ? parsed.subjects : null,
+        specializations: parsed.specializations.length ? parsed.specializations : null,
+        languages: parsed.languages.length ? parsed.languages : null,
+        level: parsed.level || null,
+        maxPrice: cap,
+        limit: 24,
+    };
+
+    const relaxed = [];
+    let rows = applyPrice(await searchTeachers(base));
+    if (rows.length) return { results: rows, relaxed };
+
+    // 1) relax language (least critical)
+    if (base.languages) {
+        base.languages = null; relaxed.push('language');
+        rows = applyPrice(await searchTeachers(base));
+        if (rows.length) return { results: rows, relaxed };
+    }
+    // 2) soften subject by dropping the (narrower) specialization
+    if (base.specializations) {
+        base.specializations = null; relaxed.push('specialization');
+        rows = applyPrice(await searchTeachers(base));
+        if (rows.length) return { results: rows, relaxed };
+    }
+    // 3) drop the subject filter, pushing its terms into the text query instead
+    if (base.subjects) {
+        base.query = [base.query, ...parsed.subjects, ...parsed.specializations].filter(Boolean).join(' ') || null;
+        base.subjects = null; relaxed.push('subject');
+        rows = applyPrice(await searchTeachers(base));
+        if (rows.length) return { results: rows, relaxed };
+    }
+    // 4) floor: top verified teachers + "Did you mean…?"
+    relaxed.push('all');
+    const top = await listTeacherCards(24);
+    return { results: top, relaxed, fellBackToTop: true };
 }
 
 const AISearchService = {
@@ -107,18 +120,19 @@ const AISearchService = {
             const remaining = Math.max(0, AI_SEARCH_DAILY_LIMIT - used);
             return { canSearch: remaining > 0, remaining, limit: AI_SEARCH_DAILY_LIMIT, unlimited: false };
         } catch {
-            // Never block search because the counter failed.
             return { canSearch: true, remaining: AI_SEARCH_DAILY_LIMIT, limit: AI_SEARCH_DAILY_LIMIT, unlimited: false };
         }
     },
 
     /**
-     * Parses the natural-language query into filters (LLM when available, the
-     * deterministic parser otherwise — which ALWAYS runs) and ranks verified
-     * teachers via the SQL recommendation engine. $0 per query: no paid AI,
+     * Smart Search: parses the natural-language query into catalog-resolved
+     * structured filters (subjects/specializations/languages/level/price) plus a
+     * residual free-text blob, then ranks verified teachers via the SQL engine,
+     * never letting price/filler words pollute full-text search. The fallback
+     * ladder guarantees the page is never a dead end. $0 per query: no paid AI,
      * no external embedding API, no vector DB.
-     * @param {string} query - The user's search query.
-     * @returns {Promise<{success: boolean, results?: any[], error?: string}>}
+     * @param {string} query
+     * @returns {Promise<{success: boolean, results?: any[], parsed?: object, summary?: string[], relaxed?: string[], suggestions?: string[], error?: string}>}
      */
     performAISearch: async function (query) {
         const status = await this.getUserSearchStatus();
@@ -127,21 +141,20 @@ const AISearchService = {
         }
 
         try {
-            const llm = await llmExtractFilters(query);   // null unless a real LLM is wired
-            const parsed = parseQueryFilters(query);      // deterministic, always runs
-
-            const results = await searchTeachers({
-                query,
-                subjects: llm?.subjects?.length ? llm.subjects : null,
-                specializations: llm?.specializations?.length ? llm.specializations : null,
-                languages: llm?.languages?.length ? llm.languages : null,
-                level: llm?.level || parsed.level || null,
-                maxPrice: typeof llm?.maxPrice === 'number' ? llm.maxPrice : parsed.maxPrice,
-                limit: 24,
-            });
+            const catalog = await getCatalog();
+            const parsed = parseSearchQuery(query, catalog);
+            const { results, relaxed, fellBackToTop } = await runFallbackLadder(parsed);
 
             logSearch(query, results.length);
-            return { success: true, results };
+            return {
+                success: true,
+                results,
+                parsed,
+                summary: parsed.summaryChips,
+                relaxed,
+                fellBackToTop: !!fellBackToTop,
+                suggestions: parsed.suggestions,
+            };
         } catch (error) {
             console.error('Smart Search error:', error);
             return { success: false, error: 'An unexpected error occurred during the search.' };

@@ -84,11 +84,17 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
             try {
                 const response = await AISearchService.performAISearch(searchQuery);
                 if (response.success) {
-                    toast({ 
-                        title: "AI search successful!", 
-                        description: `Found ${response.results.length} potential matches.` 
+                    const chips = response.summary?.length ? response.summary.join(' · ') : '';
+                    const dropped = (response.relaxed || []).filter((r) => r !== 'all');
+                    const notes = [];
+                    if (response.fellBackToTop) notes.push('No exact match — showing top verified tutors.');
+                    else if (dropped.length) notes.push(`Broadened search (relaxed: ${dropped.join(', ')}).`);
+                    if (response.suggestions?.length) notes.push(`Did you mean: ${response.suggestions.join(', ')}?`);
+                    toast({
+                        title: `Found ${response.results.length} tutor${response.results.length === 1 ? '' : 's'}${chips ? ` · ${chips}` : ''}`,
+                        description: notes.join(' ') || undefined,
                     });
-                    onSearch({ type: 'ai', results: response.results, query: searchQuery });
+                    onSearch({ type: 'ai', results: response.results, query: searchQuery, summary: response.summary });
                     await fetchSearchStatus(); // Refresh count
                     onClose(); // Close panel after successful search
                 } else {
