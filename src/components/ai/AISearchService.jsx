@@ -1,13 +1,27 @@
 
 import { User } from '@/api/entities';
-import { AISearchConfig } from '@/api/entities';
 import { InvokeLLM } from '@/api/integrations';
 import { searchTeachers } from '@/api/teacherSearchApi';
-import { format, isToday } from 'date-fns';
+import { supabase } from '@/api/supabaseClient';
+
+// ---------------------------------------------------------------------------
+// Daily search cap.
+//
+// Phase 1: search is FREE — the cap is DISABLED by default (null = unlimited),
+// so a real LLM bill never blocks a user and the old NaN-limit bug is gone.
+// It stays trivially re-enableable: set a number here and the limiter counts
+// the user's rows in teacher_search_logs over the last 24h.
+// NOTE: teacher_search_logs currently has RLS enabled with no policies, so the
+// fire-and-forget write below is best-effort (silently denied until an
+// INSERT/SELECT policy is added). Re-enabling the live cap therefore means:
+// (1) set a number here, and (2) add those RLS policies in a migration.
+// ---------------------------------------------------------------------------
+const AI_SEARCH_DAILY_LIMIT = null; // e.g. 50 to re-enable a soft cap
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Deterministic fallback parser: pulls a max price and a level out of the raw
-// query so search works even when no LLM is wired (subject/specialization/
-// language matching is handled by the RPC's full-text rank on the query).
+// query so search works even when no LLM is wired. Always runs (Phase 2 upgrades
+// this to catalog-driven subject/specialization/language parsing).
 function parseQueryFilters(query) {
     const q = (query || '').toLowerCase();
     let maxPrice = null;
@@ -24,7 +38,8 @@ function parseQueryFilters(query) {
 }
 
 // Best-effort structured extraction via the LLM integration. Returns null when
-// the integration isn't wired (mock) or returns nothing usable.
+// the integration isn't wired (mock returns {ok:true}) or returns nothing
+// usable, so the deterministic parser stays in charge. No paid AI today.
 async function llmExtractFilters(query) {
     try {
         const r = await InvokeLLM({
@@ -50,67 +65,70 @@ async function llmExtractFilters(query) {
     return null;
 }
 
-const AISearchService = {
-    /**
-     * Checks the user's current AI search status, resetting daily counts if necessary.
-     * @returns {Promise<{canSearch: boolean, remaining: number, limit: number, error?: string}>}
-     */
-    async getUserSearchStatus() {
+// Fire-and-forget usage log. Powers analytics + the optional re-enableable 24h
+// cap. Never blocks search and never surfaces errors (RLS may reject the write
+// until a policy is added — that's fine, the cap is disabled by default).
+function logSearch(query, resultsCount) {
+    (async () => {
         try {
             const user = await User.me();
-            let { ai_searches_today, ai_search_limit, last_search_date } = user;
+            if (!user?.id) return;
+            await supabase.from('teacher_search_logs').insert({
+                user_id: user.id,
+                search_query: query,
+                search_type: 'smart',
+                results_count: resultsCount,
+            });
+        } catch {
+            // best-effort only
+        }
+    })();
+}
 
-            // Fetch default limit from admin config if user has no specific limit
-            if (ai_search_limit === null || ai_search_limit === undefined) {
-                const config = await AISearchConfig.list();
-                ai_search_limit = config.length > 0 ? config[0].max_ai_searches_per_day : 5; // Default fallback
-            }
-
-            // Reset daily count if the last search was not today
-            if (last_search_date && !isToday(new Date(last_search_date))) {
-                ai_searches_today = 0;
-                await User.updateMyUserData({ ai_searches_today: 0 });
-            }
-
-            const remaining = ai_search_limit - ai_searches_today;
-            const canSearch = remaining > 0;
-
-            return { canSearch, remaining, limit: ai_search_limit };
-
-        } catch (e) {
-            // User not logged in, treat as no searches available.
-            return { canSearch: false, remaining: 0, limit: 0, error: "You must be logged in to use AI Search." };
+const AISearchService = {
+    /**
+     * Reports whether the user may search and how many searches remain.
+     * With the cap disabled (default) this is always unlimited and never blocks.
+     * @returns {Promise<{canSearch: boolean, remaining: number|null, limit: number|null, unlimited: boolean}>}
+     */
+    async getUserSearchStatus() {
+        if (AI_SEARCH_DAILY_LIMIT == null) {
+            return { canSearch: true, remaining: null, limit: null, unlimited: true };
+        }
+        try {
+            const user = await User.me();
+            const since = new Date(Date.now() - DAY_MS).toISOString();
+            const { count } = await supabase
+                .from('teacher_search_logs')
+                .select('id', { count: 'exact', head: true })
+                .eq('user_id', user.id)
+                .gte('created_date', since);
+            const used = count || 0;
+            const remaining = Math.max(0, AI_SEARCH_DAILY_LIMIT - used);
+            return { canSearch: remaining > 0, remaining, limit: AI_SEARCH_DAILY_LIMIT, unlimited: false };
+        } catch {
+            // Never block search because the counter failed.
+            return { canSearch: true, remaining: AI_SEARCH_DAILY_LIMIT, limit: AI_SEARCH_DAILY_LIMIT, unlimited: false };
         }
     },
 
     /**
-     * Performs an AI search if the user has remaining searches.
+     * Parses the natural-language query into filters (LLM when available, the
+     * deterministic parser otherwise — which ALWAYS runs) and ranks verified
+     * teachers via the SQL recommendation engine. $0 per query: no paid AI,
+     * no external embedding API, no vector DB.
      * @param {string} query - The user's search query.
      * @returns {Promise<{success: boolean, results?: any[], error?: string}>}
      */
-    performAISearch: async function(query) {
+    performAISearch: async function (query) {
         const status = await this.getUserSearchStatus();
-
         if (!status.canSearch) {
-            return { success: false, error: status.error || "You have reached your daily AI search limit." };
+            return { success: false, error: `You've reached today's search limit (${status.limit}). Please try again tomorrow.` };
         }
 
         try {
-            // Decrement search count and update date
-            const user = await User.me();
-            const newCount = (user.ai_searches_today || 0) + 1;
-            const today = format(new Date(), 'yyyy-MM-dd');
-            await User.updateMyUserData({ 
-                ai_searches_today: newCount,
-                last_search_date: today
-            });
-
-            // Turn the natural-language query into structured filters (LLM when
-            // available, deterministic parser otherwise), then let the SQL
-            // recommendation engine rank verified teachers built from their
-            // registration data. No vector DB / embedding key required.
-            const llm = await llmExtractFilters(query);
-            const parsed = parseQueryFilters(query);
+            const llm = await llmExtractFilters(query);   // null unless a real LLM is wired
+            const parsed = parseQueryFilters(query);      // deterministic, always runs
 
             const results = await searchTeachers({
                 query,
@@ -122,18 +140,13 @@ const AISearchService = {
                 limit: 24,
             });
 
+            logSearch(query, results.length);
             return { success: true, results };
-
         } catch (error) {
-            console.error("AI Search Error:", error);
-            // Revert search count if API call fails
-            const user = await User.me();
-            if (user && user.ai_searches_today > 0) {
-                 await User.updateMyUserData({ ai_searches_today: user.ai_searches_today - 1 });
-            }
-            return { success: false, error: "An unexpected error occurred during the AI search." };
+            console.error('Smart Search error:', error);
+            return { success: false, error: 'An unexpected error occurred during the search.' };
         }
-    }
+    },
 };
 
 export default AISearchService;

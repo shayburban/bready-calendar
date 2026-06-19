@@ -8,7 +8,7 @@ import { useToast } from "@/components/ui/use-toast"
 const SearchInterface = ({ onSearch }) => {
     const [searchMode, setSearchMode] = useState('filter'); // 'filter' or 'ai'
     const [searchQuery, setSearchQuery] = useState('');
-    const [aiSearchStatus, setAiSearchStatus] = useState({ remaining: 0, limit: 5 });
+    const [aiSearchStatus, setAiSearchStatus] = useState({ unlimited: true, limit: null });
     const [isLoading, setIsLoading] = useState(false);
     const { toast } = useToast();
 
@@ -67,9 +67,9 @@ const SearchInterface = ({ onSearch }) => {
             <div className="flex flex-col md:flex-row items-center justify-between gap-4">
                 <SearchModeToggle />
                 <div className="w-full md:w-auto text-center md:text-right">
-                    {searchMode === 'ai' && (
+                    {searchMode === 'ai' && aiSearchStatus.limit != null && (
                         <p className="text-sm text-gray-500">
-                            Daily AI Searches Remaining: <span className="font-semibold text-brand-blue">{aiSearchStatus.remaining}/{aiSearchStatus.limit}</span>
+                            Daily Searches Remaining: <span className="font-semibold text-brand-blue">{aiSearchStatus.remaining}/{aiSearchStatus.limit}</span>
                         </p>
                     )}
                 </div>

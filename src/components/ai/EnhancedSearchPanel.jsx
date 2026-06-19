@@ -12,7 +12,7 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [characterCount, setCharacterCount] = useState(0);
     const [isLoading, setIsLoading] = useState(false);
-    const [aiSearchStatus, setAiSearchStatus] = useState({ remaining: 0, limit: 5 });
+    const [aiSearchStatus, setAiSearchStatus] = useState({ unlimited: true, limit: null });
     const { toast } = useToast();
     const textareaRef = useRef(null);
     const panelRef = useRef(null);
@@ -194,11 +194,11 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
                             {/* Search Mode Toggle */}
                             <SearchModeToggle />
 
-                            {/* AI Search Status */}
-                            {searchMode === 'ai' && (
+                            {/* Search Status — only shown when a daily cap is enabled */}
+                            {searchMode === 'ai' && aiSearchStatus.limit != null && (
                                 <div className="text-center mb-4">
                                     <p className="text-sm text-gray-600">
-                                        Daily AI Searches Remaining: 
+                                        Daily Searches Remaining:
                                         <span className="font-semibold text-brand-blue ml-1">
                                             {aiSearchStatus.remaining}/{aiSearchStatus.limit}
                                         </span>
