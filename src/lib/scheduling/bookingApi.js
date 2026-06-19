@@ -69,6 +69,27 @@ export const commitBooking = ({ holdId, paymentRef, amount, subject }) => {
   return callRpc('commit_booking', { p_hold_id: holdId, p_payment_ref: paymentRef, p_amount: amount, p_subject: subject });
 };
 
+// Out-of-availability request flow (0023). A student requests ANY future time
+// the teacher hasn't opened; it lands as a 'requested' (waiting) booking the
+// teacher approves/rejects. student_id is derived from auth.uid() server-side.
+export const requestBooking = ({ teacherId, slotStartUtc, durationMinutes, subject, amount }) => {
+  invalidateSlotsCache();
+  return callRpc('request_booking', {
+    p_teacher: teacherId,
+    p_slot_start_utc: slotStartUtc,
+    p_duration_minutes: durationMinutes,
+    p_subject: subject ?? 'Lesson',
+    p_amount: amount ?? 0,
+  });
+};
+
+// Teacher approves ('approve' → confirmed) or rejects ('reject' → declined) a
+// pending request. Only the request's tutor may respond (enforced server-side).
+export const respondBookingRequest = (bookingId, action) => {
+  invalidateSlotsCache(); // an approval removes the slot from the market (R22)
+  return callRpc('respond_booking_request', { p_booking_id: bookingId, p_action: action });
+};
+
 export const createReschedule = ({ bookingId, proposedStartUtc, proposedBy }) => {
   invalidateSlotsCache();
   return callRpc('create_reschedule', { p_booking_id: bookingId, p_proposed_start_utc: proposedStartUtc, p_proposed_by: proposedBy });
