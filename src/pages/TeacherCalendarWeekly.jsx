@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User } from '@/api/entities';
 import { fetchMyBookings } from '@/lib/scheduling/bookingApi';
 import { mapBookingToEvent } from '@/lib/calendar/mapBookingToEvent';
+import { demoCalendarEnabled, getDemoCalendarEvents } from '@/data/demoCalendarBookings';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -86,12 +87,16 @@ export default function TeacherCalendarWeekly() {
   // the static sampleEvents mock for the weekly grid. Re-run after a request is
   // approved/declined so the chip updates immediately.
   const loadEvents = useCallback(async () => {
+    // FAKE demo events are appended ONLY when the URL carries ?demo=1
+    // (see src/data/demoCalendarBookings.js). Off by default → live-only.
+    const demo = demoCalendarEnabled() ? getDemoCalendarEvents() : [];
     try {
       const r = await fetchMyBookings();
-      setEvents(r.ok && Array.isArray(r.data) ? r.data.map(mapBookingToEvent).filter(Boolean) : []);
+      const live = r.ok && Array.isArray(r.data) ? r.data.map(mapBookingToEvent).filter(Boolean) : [];
+      setEvents([...live, ...demo]);
     } catch (e) {
       console.warn('Could not load calendar bookings:', e?.message || e);
-      setEvents([]);
+      setEvents([...demo]);
     }
   }, []);
 
@@ -304,7 +309,9 @@ export default function TeacherCalendarWeekly() {
             onSaveAvailability={handleSaveAvailability}
             onNoEndDateChange={handleNoEndDateChange}
             onResetAvailabilityForm={resetAvailabilityForm}
-            detectSyncedOverlap={syncedOverlapsForSlots}
+            detectSyncedOverlap={(slots) =>
+              syncedOverlapsForSlots(slots, events.filter((e) => e.type === 'synced'))
+            }
           />
 
           {/* Main Calendar Area */}

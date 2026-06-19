@@ -4,11 +4,15 @@ import {
   syncedOverlapsForSlots,
 } from '@/lib/calendarSyncedOverlap';
 
-// sampleEvents has a synced 'Google Calendar event' on day 21 at 16:00–17:00
-// (id 9). These tests pin the partial-day intersection that the calendar's
-// amber chip (Phase 4.2) and the sidebar pre-save warning (Phase 1) both rely on.
+// A live-shaped synced event on 21 June 2026 at 16:00–17:00. These tests pin the
+// partial-day intersection that the calendar's amber chip (Phase 4.2) and the
+// sidebar pre-save warning (Phase 1) both rely on. The detector now reads
+// INJECTED live synced events (not the mock file), matching date-exact, so a
+// June slot can never collide with another month's event sharing a day-of-month.
 
 const synced = { id: 's1', type: 'synced', time: '16:00 - 17:00', description: 'Google Calendar event' };
+// Same event in the calendar's live event shape (date-exact: 21 June 2026).
+const syncedLive = { id: 's9', type: 'synced', date: 21, year: 2026, month: 5, time: '16:00 - 17:00', description: 'Google Calendar event' };
 
 describe('syncedNoteForDay — partial vs full-day chip overlap (Phase 4.2 / R15b)', () => {
   it('flags a PARTIAL-day availability that overlaps a synced event', () => {
@@ -37,28 +41,36 @@ describe('syncedNoteForDay — partial vs full-day chip overlap (Phase 4.2 / R15
 
 describe('syncedOverlapsForSlots — pre-save detector (Phase 1 / R15a)', () => {
   it('detects a PARTIAL-day slot overlapping the day-21 synced event', () => {
-    const r = syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '14:45', endTime: '16:30' }]);
+    const r = syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '14:45', endTime: '16:30' }], [syncedLive]);
     expect(r).toEqual([{ name: 'Google Calendar event', range: '16:00 - 17:00' }]);
   });
   it('detects an all-day slot overlapping it', () => {
-    const r = syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '00:00', endTime: '23:59' }]);
+    const r = syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '00:00', endTime: '23:59' }], [syncedLive]);
     expect(r.map((o) => o.name)).toContain('Google Calendar event');
   });
   it('returns [] for a non-overlapping time on the same day', () => {
-    expect(syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '09:00', endTime: '10:00' }])).toEqual([]);
+    expect(syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '09:00', endTime: '10:00' }], [syncedLive])).toEqual([]);
   });
   it('returns [] for a day with no synced event', () => {
-    expect(syncedOverlapsForSlots([{ date: '2026-06-15', startTime: '16:00', endTime: '17:00' }])).toEqual([]);
+    expect(syncedOverlapsForSlots([{ date: '2026-06-15', startTime: '16:00', endTime: '17:00' }], [syncedLive])).toEqual([]);
+  });
+  it('does NOT collide with another MONTH that shares the day-of-month (regression: the old day-of-month-only bug)', () => {
+    // Same day-of-month (21) but a different month → must NOT match anymore.
+    expect(syncedOverlapsForSlots([{ date: '2026-07-21', startTime: '16:00', endTime: '17:00' }], [syncedLive])).toEqual([]);
+  });
+  it('returns [] when no synced events are injected (no Google sync yet → no false warning)', () => {
+    expect(syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '00:00', endTime: '23:59' }])).toEqual([]);
+    expect(syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '00:00', endTime: '23:59' }], [])).toEqual([]);
   });
   it('returns [] for a reversed/invalid range (documents the dropped-block root cause)', () => {
-    expect(syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '16:30', endTime: '14:45' }])).toEqual([]);
+    expect(syncedOverlapsForSlots([{ date: '2026-06-21', startTime: '16:30', endTime: '14:45' }], [syncedLive])).toEqual([]);
   });
   it('dedupes + tolerates malformed input', () => {
-    expect(syncedOverlapsForSlots(null)).toEqual([]);
+    expect(syncedOverlapsForSlots(null, [syncedLive])).toEqual([]);
     const dup = syncedOverlapsForSlots([
       { date: '2026-06-21', startTime: '15:30', endTime: '16:15' },
       { date: '2026-06-21', startTime: '16:30', endTime: '16:45' },
-    ]);
+    ], [syncedLive]);
     expect(dup).toEqual([{ name: 'Google Calendar event', range: '16:00 - 17:00' }]);
   });
 });

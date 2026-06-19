@@ -86,6 +86,12 @@ export const requestBooking = ({ teacherId, slotStartUtc, durationMinutes, subje
 // Teacher approves ('approve' → confirmed) or rejects ('reject' → declined) a
 // pending request. Only the request's tutor may respond (enforced server-side).
 export const respondBookingRequest = (bookingId, action) => {
+  // ⚠️ DEMO/FAKE bookings (ids prefixed "demo-", see src/data/demoCalendarBookings.js)
+  // never touch the DB — return a synthetic success so the card's Approve/Reject
+  // flow can be exercised visually without a real row.
+  if (typeof bookingId === 'string' && bookingId.startsWith('demo-')) {
+    return Promise.resolve({ ok: true, data: { id: bookingId, demo: true, action } });
+  }
   invalidateSlotsCache(); // an approval removes the slot from the market (R22)
   return callRpc('respond_booking_request', { p_booking_id: bookingId, p_action: action });
 };

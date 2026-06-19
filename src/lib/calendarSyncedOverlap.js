@@ -12,7 +12,6 @@
 // VISUAL annotation because both sides of every comparison sit on the same
 // rendered day. Bookability stays on absolute UTC instants (R24), elsewhere.
 
-import { sampleEvents } from '@/data/sampleEvents';
 import { parseWallRange, intervalsOverlap, syncedStripes } from '@/lib/scheduling/syncedOverlap';
 
 // sample-event type -> the synced-striping "kind" (R15b). Only availability,
@@ -48,21 +47,40 @@ export const syncedNoteForDay = (dayEvents) => {
 };
 
 // Pre-save check (R15a / Phase 1): the synced events a set of to-be-opened
-// availability slots would overlap, as [{ name, range }] (deduped). Synced
-// sampleEvents are keyed by day-of-month, matching how both calendars render
-// them. Partial-day ranges are handled by intervalsOverlap (half-open), so e.g.
+// availability slots would overlap, as [{ name, range }] (deduped).
+//
+// `syncedEvents` are the host calendar's LIVE synced events (type === 'synced')
+// — injected by the caller, NOT read from the mock file. Each carries the
+// calendar's event shape: { type, date (day-of-month), year, month, time }.
+// Matching is date-EXACT (year + month + day) when those fields are present, so
+// a June availability range can never collide with some other month's synced
+// event that merely shares a day-of-month (the old bug). When Google Calendar
+// sync doesn't exist yet, callers pass [] → this returns [] (no false warning).
+//
+// Partial-day ranges are handled by intervalsOverlap (half-open), so e.g.
 // 14:45–16:30 correctly overlaps a 16:00–17:00 synced event.
-export const syncedOverlapsForSlots = (slots) => {
-  if (!Array.isArray(slots)) return [];
+export const syncedOverlapsForSlots = (slots, syncedEvents = []) => {
+  if (!Array.isArray(slots) || !Array.isArray(syncedEvents)) return [];
+  const synced = syncedEvents.filter((e) => e && e.type === 'synced');
+  if (synced.length === 0) return [];
   const out = [];
   const seen = new Set();
   for (const slot of slots) {
     if (!slot || !slot.date || !slot.startTime || !slot.endTime) continue;
-    const dom = Number(String(slot.date).split('-')[2]);
+    const [yStr, mStr, dStr] = String(slot.date).split('-');
+    const slotYear = Number(yStr);
+    const slotMonth0 = Number(mStr) - 1; // 'YYYY-MM-DD' month is 1-based; events are 0-based
+    const slotDom = Number(dStr);
     const slotRange = parseWallRange(`${slot.startTime} - ${slot.endTime}`);
     if (!slotRange) continue;
-    for (const ev of sampleEvents) {
-      if (ev.type !== 'synced' || ev.date !== dom) continue;
+    for (const ev of synced) {
+      // Date-exact match; year/month fall back to "any" only for legacy events
+      // that predate the {year, month} fields (none in live data).
+      const sameDay =
+        ev.date === slotDom &&
+        (ev.year == null || ev.year === slotYear) &&
+        (ev.month == null || ev.month === slotMonth0);
+      if (!sameDay) continue;
       const evRange = parseWallRange(ev.time);
       if (!evRange) continue;
       if (intervalsOverlap(slotRange.start, slotRange.end, evRange.start, evRange.end) && !seen.has(ev.id)) {
