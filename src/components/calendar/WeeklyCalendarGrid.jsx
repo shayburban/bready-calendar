@@ -70,6 +70,10 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
 
     const weekDays = getWeekDays(currentDate);
     const today = new Date();
+    // "Now" reference for future-only add cells: a cell is past if its day is
+    // before today, or it's today and its hour is before the current hour.
+    const startTodayMs = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+    const nowHour = today.getHours();
 
     // Build per-day enriched events from the shared sampleEvents source.
     // An event is shown on weekday `i` if its `date` matches that day's day-of-month
@@ -182,15 +186,32 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
                 {/* Day Columns */}
                 {weekDays.map((day, dayIndex) => (
                     <div key={dayIndex} className="relative border-l">
-                        {/* Hour Cells */}
-                        {hours.map((_, hourIndex) => (
-                            <div
-                                key={hourIndex}
-                                title="Add New Booking Or Availability"
-                                onClick={() => onEmptyClick && onEmptyClick(dayIndex, hourIndex)}
-                                className="h-14 border-b cursor-pointer hover:bg-blue-50"
-                            ></div>
-                        ))}
+                        {/* Hour Cells — only FUTURE cells (this hour onward today,
+                            or any future day) are clickable and show the add hover
+                            label, because availability/bookings are present/future
+                            events. Past cells are inert + faintly greyed. */}
+                        {hours.map((_, hourIndex) => {
+                            const dayStartMs = new Date(day.getFullYear(), day.getMonth(), day.getDate()).getTime();
+                            const isPastCell =
+                                dayStartMs < startTodayMs ||
+                                (dayStartMs === startTodayMs && hourIndex < nowHour);
+                            return (
+                                <div
+                                    key={hourIndex}
+                                    title={isPastCell ? undefined : 'Add New Booking Or Availability'}
+                                    onClick={isPastCell ? undefined : () => onEmptyClick && onEmptyClick(dayIndex, hourIndex)}
+                                    className={`h-14 border-b relative group ${
+                                        isPastCell ? 'cursor-default bg-gray-50/50' : 'cursor-pointer hover:bg-blue-50'
+                                    }`}
+                                >
+                                    {!isPastCell && (
+                                        <span className="pointer-events-none absolute inset-0 hidden group-hover:flex items-center justify-center text-center leading-tight px-1 text-[10px] font-medium text-blue-600">
+                                            + Add New Booking Or Availability
+                                        </span>
+                                    )}
+                                </div>
+                            );
+                        })}
 
                         {/* Events for this day */}
                         {eventsByDayIndex[dayIndex].map((event) => (

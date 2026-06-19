@@ -1197,7 +1197,7 @@ export default function TeacherCalendar() {
               {/* Calendar Navigation */}
               <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
                 <div className="flex items-center space-x-4">
-                  <Button variant="outline" size="sm">Today</Button>
+                  <Button variant="outline" size="sm" onClick={() => setCurrentDate(new Date())}>Today</Button>
                   <div className="flex items-center space-x-2">
                     <Button variant="ghost" size="sm" onClick={() => navigateMonth('prev')}>
                       <ChevronLeft className="w-4 h-4" />
