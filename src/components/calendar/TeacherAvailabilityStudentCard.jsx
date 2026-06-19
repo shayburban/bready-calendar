@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 // component (same one used by the sidebar's Set Availability tab and
 // the My Availability (T) popup card).
 import TimeRangeFields from '../common/TimeRangeFields';
+import { pastDaysMatcher, timeFloorForDate } from '@/lib/calendar/futureTime';
 
 export default function TeacherAvailabilityStudentCard({ event, onClose }) {
     const initialDate = event?.dateString ? new Date(event.dateString) : new Date(2021, 6, 19);
@@ -62,7 +63,7 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    <Calendar mode="single" selected={date} onSelect={setDate} disabled={pastDaysMatcher()} initialFocus />
                 </PopoverContent>
             </Popover>
 
@@ -133,6 +134,7 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
                     startTime={bookingTime.startTime}
                     endTime={bookingTime.endTime}
                     onChange={setBookingTime}
+                    minTime={timeFloorForDate(date)}
                     triggerClassName="h-10 px-3 bg-transparent"
                     placeholder="Select time"
                 />

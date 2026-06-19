@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { toast } from '@/components/ui/use-toast';
 import { Availability } from '@/api/entities'; // New import
+import { timeFloorForDate, isFutureDateTime } from '@/lib/calendar/futureTime';
 
 export default function TeacherAvailabilityCard({ event, onClose, onDateChange, onAvailabilityChanged, savedAvailabilitySlots = [], syncedDayEvents = [], showEditIcon = true }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -128,13 +129,17 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   }, [syncedDayEvents, changeAvailYMD, startTime, endTime]);
 
   const isFormComplete = !!changeAvailDate && !!startTime && !!endTime;
+  // Availability is a present/future event: the new start (date + time) must be
+  // strictly in the future. The date picker already blocks past days; this also
+  // catches a today-but-past time. Hard-blocks the save.
+  const pastStart = !!changeAvailDate && !!startTime && !isFutureDateTime(changeAvailDate, startTime);
   // Only cross-role internal overlaps trigger the RED hard-block now.
   // Same-role overlaps are soft (yellow) and the teacher can still save.
   const hasHardConflict = internalCrossRoleConflicts.length > 0;
   // Button is "active green" when all fields are filled AND there is no
-  // hard cross-role internal conflict. Same-role internal conflicts and
-  // synced (external) conflicts are soft and do NOT block submission.
-  const isSubmitActive = isFormComplete && !hasHardConflict;
+  // hard cross-role internal conflict AND the start is in the future. Same-role
+  // internal conflicts and synced (external) conflicts are soft and do NOT block.
+  const isSubmitActive = isFormComplete && !hasHardConflict && !pastStart;
 
   // Real save (Change Availability) + real delete state. Success feedback
   // now goes through the centered 10-second toast (Task 1) — the popup
@@ -194,6 +199,11 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
     }
     if (hasHardConflict) {
       // The Red alert is already visible; clear the missing-fields error.
+      setValidationErrors([]);
+      return;
+    }
+    if (pastStart) {
+      // The red future-time alert is already visible; block the save.
       setValidationErrors([]);
       return;
     }
@@ -459,11 +469,12 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
                 setStartTime(s);
                 setEndTime(e);
               }}
-              startInvalid={validationErrors.includes('Start Time')}
+              startInvalid={validationErrors.includes('Start Time') || pastStart}
               endInvalid={
                 !!(startTime && endTime && endTime <= startTime) ||
                 validationErrors.includes('End Time')
               }
+              minTime={timeFloorForDate(changeAvailDate)}
               triggerClassName="h-10 px-3 bg-transparent"
               placeholder="Select time"
             />
@@ -480,6 +491,15 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
           <AlertTitle>Conflict with an existing availability</AlertTitle>
           <AlertDescription className="text-xs">
             The time you entered overlaps with another availability you've already saved on this date. Please pick a different time before submitting.
+          </AlertDescription>
+        </Alert>
+      )}
+      {pastStart && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Time must be in the future</AlertTitle>
+          <AlertDescription className="text-xs">
+            Availability can only be set for an upcoming date and time. Please pick a time later than now.
           </AlertDescription>
         </Alert>
       )}

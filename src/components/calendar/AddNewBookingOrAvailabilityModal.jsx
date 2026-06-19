@@ -30,6 +30,7 @@ import DateRangePicker from '../common/DateRangePicker';
 import TimeRangeFields from '../common/TimeRangeFields';
 import { detectViewerTz, wallClockToUtcISO } from '@/lib/scheduling/timekit';
 import { expandRepeatDates } from '@/lib/calendar/repeatDates';
+import { timeFloorForDate } from '@/lib/calendar/futureTime';
 import { syncedOverlapsForSlots } from '@/lib/calendarSyncedOverlap';
 import {
   searchStudents,
@@ -214,6 +215,7 @@ function OpenAvailabilityPane({ onClose, selectedDate, onSaveAvailability, synce
           onChange={setTime}
           startInvalid={(showErrors && !time.startTime) || (showErrors && pastStart)}
           endInvalid={(!!time.startTime && !!time.endTime && durMin <= 0) || (showErrors && !time.endTime)}
+          minTime={timeFloorForDate(date)}
           triggerClassName="h-10 px-3"
           placeholder="Select time"
         />
@@ -524,6 +526,7 @@ function NewBookingPane({ onClose, selectedDate, onBookingCreated }) {
           onChange={setTime}
           startInvalid={(showErrors && !time.startTime) || (showErrors && pastStart)}
           endInvalid={(!!time.startTime && !!time.endTime && durMin <= 0) || (showErrors && !time.endTime)}
+          minTime={timeFloorForDate(date)}
           triggerClassName="h-10 px-3"
           placeholder="Select time"
         />

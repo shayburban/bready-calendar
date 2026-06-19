@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MoreVertical, Pencil, Trash2, Mail, Bell, CreditCard, ChevronDown, Plus, RefreshCw, X } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
+import { pastDaysMatcher } from '@/lib/calendar/futureTime';
 import TabSelector from '../common/TabSelector';
 
 const NotificationRow = ({ value = "30", onRemove }) =>
@@ -60,7 +61,7 @@ export default function WaitingForConfirmationTeacherRescheduleCard({ event, onC
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    <Calendar mode="single" selected={date} onSelect={setDate} disabled={pastDaysMatcher()} initialFocus />
                 </PopoverContent>
             </Popover>
 

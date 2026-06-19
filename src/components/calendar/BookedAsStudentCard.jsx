@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MoreVertical, Pencil, Trash2, Mail, Bell, CreditCard, ChevronDown, Plus, RefreshCw, X, Copy } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
+import { pastDaysMatcher } from '@/lib/calendar/futureTime';
 import TabSelector from '../common/TabSelector';
 
 const NotificationRow = ({ value = "30", onRemove }) =>
@@ -65,6 +66,7 @@ export default function BookedAsStudentCard({ event, onClose }) {
                         mode="single"
                         selected={date}
                         onSelect={setDate}
+                        disabled={pastDaysMatcher()}
                         initialFocus />
                 </PopoverContent>
             </Popover>

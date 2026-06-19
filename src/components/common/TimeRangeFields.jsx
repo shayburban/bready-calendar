@@ -54,8 +54,20 @@ export default function TimeRangeFields({
   // ('HH:MM') to preserve the sidebar's existing copy. Popup cards
   // override to 'Select time' (Task 1 spec).
   placeholder,
+  // Optional lower bound ('HH:MM') applied as a floor to BOTH pickers — used by
+  // the future-only popup cards: when the selected date is TODAY they pass the
+  // current time so only later quarter-hours can be picked. Undefined/'' = no
+  // floor (default, unchanged behavior). Combines with the existing Start↔End
+  // interplay (End's floor is the later of Start and this minTime).
+  minTime,
 }) {
   const endTimeRef = useRef(null);
+  const floor = minTime || '';
+  // End must be after Start AND at/after the floor → use the later of the two.
+  const endFloor = (() => {
+    if (startTime && floor) return startTime > floor ? startTime : floor;
+    return startTime || floor || undefined;
+  })();
 
   return (
     <>
@@ -63,6 +75,8 @@ export default function TimeRangeFields({
         <label className="text-xs font-medium text-gray-700">Start Time</label>
         <TimeSelect
           value={startTime}
+          // Future-only floor (today → current time) applied to Start.
+          minTime={floor || undefined}
           // Reverse filter — when an End is already set, only show Start options
           // strictly before it. End stays empty while Start is picked (no
           // auto-fill), so this never restricts the Start minute grid.
@@ -95,9 +109,9 @@ export default function TimeRangeFields({
         <TimeSelect
           ref={endTimeRef}
           value={endTime}
-          // Forward filter — only show options strictly greater than
-          // the chosen Start. Identical to the legacy behavior.
-          minTime={startTime || undefined}
+          // Forward filter — only show options strictly greater than the chosen
+          // Start AND at/after the future-only floor (the later of the two).
+          minTime={endFloor}
           onChange={(newEnd) => onChange({ startTime, endTime: newEnd })}
           invalid={endInvalid}
           triggerClassName={triggerClassName}
