@@ -7,6 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { MoreVertical, Pencil, Trash2, Mail, Bell, CreditCard, ChevronDown, Plus, RefreshCw, X } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import TabSelector from '../common/TabSelector';
+import { respondBookingRequest } from '@/lib/scheduling/bookingApi';
 
 const NotificationRow = ({ value = "30", onRemove }) =>
     <div className="flex items-center space-x-2">
@@ -31,11 +32,33 @@ const NotificationRow = ({ value = "30", onRemove }) =>
         }
     </div>;
 
-export default function WaitingForConfirmationTeacherCard({ event, onClose }) {
+export default function WaitingForConfirmationTeacherCard({ event, onClose, onResponded }) {
     const [notifications, setNotifications] = useState([1]);
     const [emailNotifications, setEmailNotifications] = useState([1]);
     const [date, setDate] = useState(new Date(2021, 6, 19));
     const [activeTimeSlot, setActiveTimeSlot] = useState('15:00 - 16:00');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+
+    // Real proposed-booking details (from the mapped Supabase request row).
+    const studentName = event?.student || event?.student_name || 'Student';
+    const timeLabel = event?.time || '';
+    let dateLabel = '';
+    try { if (event?.dateString) dateLabel = new Date(event.dateString).toLocaleDateString(); } catch { /* ignore */ }
+    const amount = event?.amount;
+    const rateInfo = (event?.hourly_rate != null && event?.duration_hours != null)
+        ? ` (${event.hourly_rate}$ * ${event.duration_hours} Hr)`
+        : '';
+
+    // Approve -> confirmed, Reject -> declined (real RPC). Refresh + close on success.
+    const respond = async (action) => {
+        if (!event?.bookingId) { onClose?.(); return; } // legacy/mock event — no-op
+        setBusy(true); setError(null);
+        const r = await respondBookingRequest(event.bookingId, action);
+        setBusy(false);
+        if (r.ok) { onResponded?.(); onClose?.(); }
+        else setError(r.message || 'Could not update this request. Please try again.');
+    };
 
     const addNotification = (setter, state) => setter([...state, Date.now()]);
     const removeNotification = (setter, state, id) => setter(state.filter((item) => item !== id));
@@ -97,9 +120,11 @@ export default function WaitingForConfirmationTeacherCard({ event, onClose }) {
 
             <div className="text-sm space-y-1 mb-4">
                 <p className="font-bold">Proposed Booking</p>
-                <p className="underline">Student N.</p>
-                <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
-                <p><span className="text-blue-600 font-semibold">30$</span> (10$ * 3 Hr = 30$ total price)</p>
+                <p className="underline">{studentName}</p>
+                <p>{timeLabel}{dateLabel ? <>&nbsp;&nbsp;{dateLabel}</> : null}</p>
+                {amount != null && (
+                    <p><span className="text-blue-600 font-semibold">{amount}$</span>{rateInfo}</p>
+                )}
             </div>
 
             <div className="mb-4">
@@ -162,9 +187,14 @@ export default function WaitingForConfirmationTeacherCard({ event, onClose }) {
                 </div>
             </details>
 
+            {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
-                <Button variant="outline" onClick={onClose} className="border-red-500 text-red-600 hover:bg-red-50">Decline</Button>
-                <Button className="bg-green-500 hover:bg-green-600 text-white">Confirm Reschedule</Button>
+                <Button variant="outline" disabled={busy} onClick={() => respond('reject')} className="border-red-500 text-red-600 hover:bg-red-50">
+                    {busy ? '…' : 'Decline'}
+                </Button>
+                <Button disabled={busy} onClick={() => respond('approve')} className="bg-green-500 hover:bg-green-600 text-white">
+                    {busy ? 'Saving…' : 'Confirm Booking'}
+                </Button>
             </div>
         </div>
     );

@@ -27,7 +27,7 @@ const startMinutesOf = (e) => {
   return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
 };
 
-export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [], onAvailabilityChanged }) {
+export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [], onAvailabilityChanged, onRequestResponded }) {
   // Global picker highlight list — sourced ONCE from savedAvailabilitySlots so
   // the calendar highlights the same days regardless of which sibling chip is
   // active (Bug 1 fix). Output format matches what CalendarWithinCalendarCards
@@ -185,7 +185,7 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
       case 'waiting':
         if (activeEvent.role === 'T') {
           if (activeEvent.reschedule) return <WaitingForConfirmationTeacherRescheduleCard event={activeEvent} onClose={onClose} />;
-          return <WaitingForConfirmationTeacherCard event={activeEvent} onClose={onClose} />;
+          return <WaitingForConfirmationTeacherCard event={activeEvent} onClose={onClose} onResponded={onRequestResponded} />;
         }
         if (activeEvent.role === 'S') {
           if (activeEvent.reschedule) return <WaitingForConfirmationStudentRescheduleCard event={activeEvent} onClose={onClose} />;

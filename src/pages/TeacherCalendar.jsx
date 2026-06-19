@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { User } from '@/api/entities';
 import { Booking } from '@/api/entities';
 import { Availability } from '@/api/entities';
@@ -58,7 +58,7 @@ import { setAvailabilityOneOff } from '@/lib/scheduling/availabilityApi';
 import { SYNCED, fillMessage } from '@/lib/scheduling/messages';
 import { syncedNoteForDay, syncedOverlapsForSlots } from '@/lib/calendarSyncedOverlap';
 import { goToCalendarView } from '@/lib/calendarViewNavigation';
-import { sampleEvents } from '@/data/sampleEvents';
+import { fetchMyBookings } from '@/lib/scheduling/bookingApi';
 import {
   computeSiblingEvents,
   synthesizeSavedAvailEvent,
@@ -243,6 +243,50 @@ const buildEventTooltip = (events, type) => {
     .join(', ');
 };
 
+// Map a get_my_bookings row -> the calendar's event shape, in the viewer's
+// local zone. Only the three rendered states are mapped (a 'requested' row
+// becomes the pink "Waiting For Confirmation" chip the teacher confirms/declines);
+// 'declined'/'pending' are intentionally not shown on the grid. The extra
+// {year, month} let the grid place real events on their EXACT month (the legacy
+// day-of-month-only key would otherwise repeat on every month).
+const STATUS_TO_TYPE = { requested: 'waiting', confirmed: 'booked', completed: 'completed' };
+const TYPE_TO_COLOR = { waiting: 'bg-pink-200', booked: 'bg-orange-500', completed: 'bg-gray-800' };
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function mapBookingToEvent(b) {
+  const type = STATUS_TO_TYPE[b.status];
+  if (!type) return null;
+  const start = new Date(b.start_time);
+  const end = new Date(b.end_time);
+  if (isNaN(start) || isNaN(end)) return null;
+  const role = b.viewer_role === 'teacher' ? 'T' : 'S';
+  return {
+    id: b.id,
+    bookingId: b.id,
+    date: start.getDate(),
+    year: start.getFullYear(),
+    month: start.getMonth(),
+    time: `${pad2(start.getHours())}:${pad2(start.getMinutes())} - ${pad2(end.getHours())}:${pad2(end.getMinutes())}`,
+    type,
+    role,
+    status: b.status,
+    color: TYPE_TO_COLOR[type] || 'bg-gray-500',
+    student: role === 'T' ? (b.student_name || 'Student') : undefined,
+    teacher: role === 'S' ? (b.tutor_name || 'Teacher') : undefined,
+    student_name: b.student_name,
+    tutor_name: b.tutor_name,
+    subject: b.subject,
+    amount: b.amount,
+    duration_hours: b.duration_hours,
+    hourly_rate: b.hourly_rate,
+    start_time: b.start_time,
+    end_time: b.end_time,
+    description: type === 'waiting'
+      ? 'Out-of-availability request awaiting your confirmation'
+      : undefined,
+  };
+}
+
 export default function TeacherCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('Month');
@@ -300,33 +344,32 @@ export default function TeacherCalendar() {
     setShowAddModal(true);
   };
 
-  useEffect(() => {
-    const fetchUserAndEvents = async () => {
-      try {
-        setLoading(true);
-        // Simulate fetching user data
-        // In a real app, User.me() would likely be an async API call
-        const currentUser = await Promise.resolve({ role: 'teacher', full_name: 'Prof. Jane Doe' }); 
-        setUser(currentUser);
-        
-        // Filter events for current teacher if logged in
-        if (currentUser?.role === 'teacher') {
-          // In a real app, you would fetch events specific to this teacher
-          // For now, we'll use the sample events
-          setEvents(sampleEvents);
-        } else {
-          setEvents([]);
-        }
-      } catch (error) {
-        console.error('Error fetching user:', error);
-        setEvents(sampleEvents); // Fallback to sample events if user fetch fails
-      } finally {
-        setLoading(false);
+  // Live calendar data: the teacher's own bookings from Supabase
+  // (get_my_bookings via fetchMyBookings), mapped to calendar events. This
+  // REPLACES the static sampleEvents mock entirely. Also called after a request
+  // is approved/declined so the chip updates immediately.
+  const loadEvents = useCallback(async () => {
+    try {
+      const r = await fetchMyBookings();
+      if (r.ok && Array.isArray(r.data)) {
+        setEvents(r.data.map(mapBookingToEvent).filter(Boolean));
+      } else {
+        setEvents([]);
       }
-    };
+    } catch (e) {
+      console.warn('Could not load calendar bookings:', e?.message || e);
+      setEvents([]);
+    }
+  }, []);
 
-    fetchUserAndEvents();
-  }, []); // Empty dependency array because sampleEvents is now outside and stable.
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setUser({ role: 'teacher' });
+      await loadEvents();
+      setLoading(false);
+    })();
+  }, [loadEvents]);
 
   const navigateMonth = (direction) => {
     const newDate = new Date(currentDate);
@@ -426,7 +469,11 @@ export default function TeacherCalendar() {
     const mm = String(ref.getMonth() + 1).padStart(2, '0');
     const dd = String(dayOfMonth).padStart(2, '0');
     const isoDate = `${yyyy}-${mm}-${dd}`;
-    const sampleDayEvents = sampleEvents.filter((e) => e.date === dayOfMonth);
+    const sampleDayEvents = events.filter((e) =>
+      e.date === dayOfMonth &&
+      (e.year == null || e.year === ref.getFullYear()) &&
+      (e.month == null || e.month === ref.getMonth())
+    );
     const savedSynth = savedAvailabilitySlots
       .filter((s) => s.date === isoDate && s.startTime && s.endTime)
       .map((s, i) =>
@@ -1274,6 +1321,11 @@ export default function TeacherCalendar() {
                         const dayEvents = events.filter(event =>
                           event.date === day.date &&
                           day.isCurrentMonth &&
+                          // Real events carry {year, month}; match the rendered
+                          // month so they don't repeat across every month the way
+                          // the old day-of-month-only mock did.
+                          (event.year == null || event.year === monthDate.getFullYear()) &&
+                          (event.month == null || event.month === monthDate.getMonth()) &&
                           (!FILTERABLE_TYPES.includes(event.type) || activeFilters.includes(event.type))
                         );
                         // Synthesize availability events from sidebar-saved
@@ -1402,6 +1454,7 @@ export default function TeacherCalendar() {
         onClose={() => setShowAvailabilityModal(false)}
         savedAvailabilitySlots={savedAvailabilitySlots}
         onAvailabilityChanged={handleAvailabilityChanged}
+        onRequestResponded={loadEvents}
       />
       <SyncedEventsModal
         event={selectedEvent}
