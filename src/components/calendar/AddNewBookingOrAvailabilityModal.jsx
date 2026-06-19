@@ -53,6 +53,19 @@ const toMinutes = (t) => {
   return h * 60 + m;
 };
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// Availability and bookings are present/future events: the chosen start
+// (date + start time, in the viewer's local zone) must be strictly after now.
+// The date picker already blocks past DAYS; this also catches a today-but-past
+// TIME. The repeat start date is always the earliest occurrence, so checking it
+// guarantees every later occurrence is in the future too.
+const startIsFuture = (dateObj, startHHMM) => {
+  if (!dateObj || !startHHMM) return false;
+  const [h, m] = startHHMM.split(':').map((x) => parseInt(x, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return false;
+  const dt = new Date(dateObj);
+  dt.setHours(h, m, 0, 0);
+  return dt.getTime() > Date.now();
+};
 const fmtDate = (ymd) => {
   if (!ymd) return '';
   const [y, m, d] = ymd.split('-').map(Number);
@@ -146,7 +159,10 @@ function OpenAvailabilityPane({ onClose, selectedDate, onSaveAvailability, synce
 
   const durMin = (toMinutes(time.endTime) ?? 0) - (toMinutes(time.startTime) ?? 0);
   const timeValid = !!time.startTime && !!time.endTime && durMin > 0;
-  const formValid = !!date && timeValid;
+  // Start must be in the future (catches today + a past time).
+  const startFuture = startIsFuture(date, time.startTime);
+  const pastStart = !!date && !!time.startTime && timeValid && !startFuture;
+  const formValid = !!date && timeValid && startFuture;
 
   // Slots in the SAME shape the sidebar emits → reuses the exact downstream
   // path (merge, localStorage, debounced instant-booking publish).
@@ -196,7 +212,7 @@ function OpenAvailabilityPane({ onClose, selectedDate, onSaveAvailability, synce
           startTime={time.startTime}
           endTime={time.endTime}
           onChange={setTime}
-          startInvalid={showErrors && !time.startTime}
+          startInvalid={(showErrors && !time.startTime) || (showErrors && pastStart)}
           endInvalid={(!!time.startTime && !!time.endTime && durMin <= 0) || (showErrors && !time.endTime)}
           triggerClassName="h-10 px-3"
           placeholder="Select time"
@@ -239,7 +255,9 @@ function OpenAvailabilityPane({ onClose, selectedDate, onSaveAvailability, synce
 
       {showErrors && !formValid && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
-          Please pick a date and a valid start/end time before saving.
+          {pastStart
+            ? 'The start time must be in the future — availability can only be opened for upcoming times.'
+            : 'Please pick a date and a valid start/end time before saving.'}
         </div>
       )}
 
@@ -386,7 +404,10 @@ function NewBookingPane({ onClose, selectedDate, onBookingCreated }) {
   const durHrs = durMin > 0 ? durMin / 60 : 0;
   const timeValid = !!time.startTime && !!time.endTime && durMin > 0;
   const recipientValid = mode === 'guest' ? true : !!selected;
-  const formValid = recipientValid && !!date && timeValid;
+  // Bookings are present/future events — start must be after now.
+  const startFuture = startIsFuture(date, time.startTime);
+  const pastStart = !!date && !!time.startTime && timeValid && !startFuture;
+  const formValid = recipientValid && !!date && timeValid && startFuture;
 
   const amountPer = round2((Number(pricePerHour) || 0) * durHrs);
   const meetings = mode === 'guest' ? 1 : dates.length; // a guest invite is one booking
@@ -501,7 +522,7 @@ function NewBookingPane({ onClose, selectedDate, onBookingCreated }) {
           startTime={time.startTime}
           endTime={time.endTime}
           onChange={setTime}
-          startInvalid={showErrors && !time.startTime}
+          startInvalid={(showErrors && !time.startTime) || (showErrors && pastStart)}
           endInvalid={(!!time.startTime && !!time.endTime && durMin <= 0) || (showErrors && !time.endTime)}
           triggerClassName="h-10 px-3"
           placeholder="Select time"
@@ -542,8 +563,11 @@ function NewBookingPane({ onClose, selectedDate, onBookingCreated }) {
 
       {showErrors && !formValid && (
         <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
-          {(!recipientValid && (mode === 'student' ? 'Pick a teacher, ' : 'Pick a student, ')) || ''}
-          Please pick a date and a valid start/end time before sending.
+          {!recipientValid
+            ? (mode === 'student' ? 'Pick a teacher, then choose a date and a valid future time.' : 'Pick a student, then choose a date and a valid future time.')
+            : pastStart
+              ? 'The start time must be in the future — bookings can only be made for upcoming times.'
+              : 'Please pick a date and a valid start/end time before sending.'}
         </div>
       )}
 

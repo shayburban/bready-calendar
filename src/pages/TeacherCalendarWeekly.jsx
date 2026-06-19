@@ -398,6 +398,11 @@ export default function TeacherCalendarWeekly() {
                   const ws = new Date(currentDate);
                   ws.setHours(0, 0, 0, 0);
                   ws.setDate(ws.getDate() - ws.getDay() + (dayIndex || 0));
+                  // Availability/bookings are present/future events — ignore
+                  // clicks on past days (mirrors the monthly "+" gating).
+                  const startOfToday = new Date();
+                  startOfToday.setHours(0, 0, 0, 0);
+                  if (ws < startOfToday) return;
                   setSelectedAddDate(
                     `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
                   );

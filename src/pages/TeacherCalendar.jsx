@@ -295,6 +295,12 @@ export default function TeacherCalendar() {
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
+    // Availability and bookings are present/future events: never open the
+    // "Add New Booking Or Availability" popup on a past day.
+    const cellDate = new Date(ref.getFullYear(), ref.getMonth(), dayNumber);
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    if (cellDate < startOfToday) return;
     const y = ref.getFullYear();
     const m = String(ref.getMonth() + 1).padStart(2, '0');
     const d = String(dayNumber).padStart(2, '0');
@@ -366,14 +372,20 @@ export default function TeacherCalendar() {
 
     // Current month days
     const today = new Date();
+    const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     for (let day = 1; day <= daysInMonth; day++) {
       const isToday = today.getDate() === day &&
                      today.getMonth() === ref.getMonth() &&
                      today.getFullYear() === ref.getFullYear();
+      // A past day cannot receive new availability/bookings (those are
+      // present/future events) — drives hiding the "+" add button below.
+      const cellDate = new Date(ref.getFullYear(), ref.getMonth(), day);
+      const isPast = cellDate < startOfToday;
       days.push({
         date: day,
         isCurrentMonth: true,
-        isToday
+        isToday,
+        isPast
       });
     }
 
@@ -1362,8 +1374,9 @@ export default function TeacherCalendar() {
                               {day.date}
                             </div>
 
-                            {/* Add Event Button - Only visible on hover */}
-                            {day.isCurrentMonth && (
+                            {/* Add Event Button - Only visible on hover, and only
+                                for today or a future day (no past events). */}
+                            {day.isCurrentMonth && !day.isPast && (
                               <Button
                                 variant="ghost"
                                 size="sm"
