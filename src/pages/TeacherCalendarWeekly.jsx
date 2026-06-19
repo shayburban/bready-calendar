@@ -293,6 +293,7 @@ export default function TeacherCalendarWeekly() {
             view={view}
             setView={setView}
             onLegendFilterChange={setActiveFilters}
+            onBookingCreated={loadEvents}
             extraRows={extraRows}
             onAddExtraRow={() =>
               setExtraRows((prev) => [

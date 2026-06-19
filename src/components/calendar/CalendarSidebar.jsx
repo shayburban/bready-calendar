@@ -199,7 +199,7 @@ const formatReviewDate = (d) => {
   return format(new Date(d), 'd MMMM yyyy');
 };
 
-export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange, onResetAvailabilityForm, detectSyncedOverlap }) {
+export default function CalendarSidebar({ view, setView, onLegendFilterChange, extraRows = [], onAddExtraRow, onRemoveExtraRow, onUpdateExtraRow, primaryRangeValue, onPrimaryRangeChange, onActiveWeekdaysChange, onSaveAvailability, onNoEndDateChange, onResetAvailabilityForm, detectSyncedOverlap, onBookingCreated }) {
   const [isLegendOpen, setIsLegendOpen] = useState(true);
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false);
   // Active weekday indices for the "Advanced date selection" filter. Default
@@ -1505,7 +1505,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
 
                 {activeTab === 'setprice' && <CalendarSetPricePanel />}
 
-                {activeTab === 'book' && <CalendarNewBookingPanel />}
+                {activeTab === 'book' && <CalendarNewBookingPanel onBookingCreated={onBookingCreated} />}
 
                 {activeTab !== 'setavail' && activeTab !== 'task' && activeTab !== 'setprice' && activeTab !== 'book' && <div className="text-center p-4 border rounded-lg text-gray-500">Content for {activeTab}</div>}
 
