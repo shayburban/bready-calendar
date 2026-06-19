@@ -55,6 +55,7 @@ export default function TeacherCalendarWeekly() {
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
   const [showSyncedModal, setShowSyncedModal] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [selectedAddDate, setSelectedAddDate] = useState('');
   const [activeFilters, setActiveFilters] = useState(['not-reviewed', 'completed', 'cancelled']);
   // Hydrated from the same localStorage-backed store the Monthly page
   // uses, so saving from either calendar updates a single source of
@@ -392,7 +393,16 @@ export default function TeacherCalendarWeekly() {
               <WeeklyCalendarGrid
                 currentDate={currentDate}
                 onEventClick={handleEventClick}
-                onEmptyClick={() => setShowAddModal(true)}
+                onEmptyClick={(dayIndex) => {
+                  // Clicked weekday → its calendar date (week starts on Sunday).
+                  const ws = new Date(currentDate);
+                  ws.setHours(0, 0, 0, 0);
+                  ws.setDate(ws.getDate() - ws.getDay() + (dayIndex || 0));
+                  setSelectedAddDate(
+                    `${ws.getFullYear()}-${String(ws.getMonth() + 1).padStart(2, '0')}-${String(ws.getDate()).padStart(2, '0')}`
+                  );
+                  setShowAddModal(true);
+                }}
                 activeFilters={activeFilters}
                 savedAvailabilitySlots={savedAvailabilitySlots}
                 events={events}
@@ -424,6 +434,10 @@ export default function TeacherCalendarWeekly() {
       <AddNewBookingOrAvailabilityModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
+        selectedDate={selectedAddDate}
+        onSaveAvailability={handleSaveAvailability}
+        onBookingCreated={loadEvents}
+        syncedEvents={events.filter((e) => e.type === 'synced')}
       />
     </div>
   );

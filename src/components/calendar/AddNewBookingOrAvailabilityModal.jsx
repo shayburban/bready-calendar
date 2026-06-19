@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -22,86 +22,65 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  Calendar as CalendarIcon,
-  ChevronDown,
-  Pencil,
-  Trash2,
-} from 'lucide-react';
-// Task 1 — Start/End Time in both OpenAvailabilityPane and
-// NewBookingPane now mount the shared <TimeRangeFields/> component
-// (same one used by the sidebar's Set Availability tab and the My
-// Availability (T) popup card).
+import { ChevronDown, Loader2, Copy, Check, X, Search } from 'lucide-react';
+import { toast } from '@/components/ui/use-toast';
+// Same Start-Date field + Start/End-Time fields the "My Availability (T)" popup
+// card uses, so the date/time pickers are identical across surfaces.
+import DateRangePicker from '../common/DateRangePicker';
 import TimeRangeFields from '../common/TimeRangeFields';
+import { detectViewerTz, wallClockToUtcISO } from '@/lib/scheduling/timekit';
+import { expandRepeatDates } from '@/lib/calendar/repeatDates';
+import { syncedOverlapsForSlots } from '@/lib/calendarSyncedOverlap';
+import {
+  searchStudents,
+  requestBooking,
+  requestBookingForStudent,
+  createGuestBookingInvite,
+} from '@/lib/scheduling/bookingApi';
+import { searchTeachers } from '@/api/teacherSearchApi';
+import { createPageUrl } from '@/utils';
 
-const TIP =
-  "Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem Ipsum has been the industry's standard dummy text ever";
-
+// Light-grey field surface so every input matches the calendar page background
+// (per spec: "the fields in the popup card to be the same grey of the
+// background page of the calendar").
+const GREY_FIELD = 'bg-gray-50 border-gray-300';
 const WEEKDAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-const DEFAULT_ACTIVE = new Set([1, 2, 3]); // M, T, W
 
-function InfoTip({ text = TIP }) {
-  return (
-    <TooltipProvider delayDuration={150}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            className="ml-1 inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-400 text-[10px] font-semibold text-gray-500 hover:border-gray-600 hover:text-gray-700"
-            aria-label="Info">
-            i
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="right" className="max-w-xs text-xs">
-          {text}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
+const toMinutes = (t) => {
+  if (!t || typeof t !== 'string') return null;
+  const [h, m] = t.split(':').map((x) => parseInt(x, 10));
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+};
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+const fmtDate = (ymd) => {
+  if (!ymd) return '';
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
+// Debounce a value (for live search-as-you-type).
+function useDebounced(value, ms = 300) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
 }
 
-function DateField({ label = 'Date', value }) {
-  return (
-    <div className="flex-1 min-w-[9rem]">
-      <Label className="text-sm mb-1 block">{label}</Label>
-      <div className="relative">
-        <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
-        <Input key={value || 'empty'} type="date" className="pl-9" defaultValue={value || ''} />
-      </div>
-    </div>
-  );
-}
-
-// Task 1 — local TimeField helper removed. Both OpenAvailabilityPane
-// and NewBookingPane now mount the shared <TimeRangeFields/> directly,
-// so the modal's Time inputs match the sidebar's Set Availability
-// tab byte-for-byte (dropdowns, chronological filter, auto-focus-next,
-// invalid markers).
-
-function RepeatBlock({ showMeetingsAndCost }) {
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState(() => new Set(DEFAULT_ACTIVE));
-  const toggle = (i) =>
-    setActive((prev) => {
-      const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
-      return next;
-    });
+// ── Shared Repeat control (weekday toggles + "Repeat For: N Weeks") ──────────
+// When `open`, the selection repeats on the active weekdays for N weeks; when
+// closed it's a single date. `summary` is rendered live from the parent.
+function RepeatControl({ open, setOpen, weekdays, toggleWeekday, weeks, setWeeks, summary }) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <CollapsibleTrigger asChild>
         <button
           type="button"
-          className="flex items-center gap-1 text-sm font-semibold text-gray-800 hover:text-gray-900">
-          <ChevronDown
-            className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`}
-          />
+          className="flex items-center gap-1 text-sm font-semibold text-gray-800 hover:text-gray-900"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`} />
           Repeat
         </button>
       </CollapsibleTrigger>
@@ -111,287 +90,534 @@ function RepeatBlock({ showMeetingsAndCost }) {
             <button
               key={i}
               type="button"
-              onClick={() => toggle(i)}
+              onClick={() => toggleWeekday(i)}
               className={`h-8 w-8 rounded-full text-sm font-semibold border ${
-                active.has(i)
+                weekdays.includes(i)
                   ? 'bg-blue-600 text-white border-blue-600'
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
-              }`}>
+              }`}
+            >
               {letter}
             </button>
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <span className="font-semibold text-gray-700">Repeat For:</span>
-          <Input defaultValue="12" className="w-20" />
+          <Input
+            type="number"
+            min={1}
+            max={104}
+            value={weeks}
+            onChange={(e) => setWeeks(e.target.value)}
+            className={`w-20 ${GREY_FIELD}`}
+          />
           <span>Weeks</span>
         </div>
-        <p><span className="font-semibold text-gray-700">First Date:</span> 10th October.</p>
-        <p><span className="font-semibold text-gray-700">Last Date:</span> 10th October.</p>
-        <p><span className="font-semibold text-gray-700">No. of Hours:</span> 15</p>
-        {showMeetingsAndCost && (
-          <p><span className="font-semibold text-gray-700">No. Of Meetings:</span> 3</p>
-        )}
-        <p><span className="font-semibold text-gray-700">No. of Days:</span> 5</p>
-        {showMeetingsAndCost && (
-          <p><span className="font-semibold text-gray-700">Total Sequence Cost:</span> 10$ * 15hr. = 150$</p>
-        )}
+        {summary}
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
-function MoreSearchOptions() {
-  const [open, setOpen] = useState(false);
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <button
-          type="button"
-          className="flex items-center gap-1 text-sm text-gray-700 hover:text-gray-900">
-          <ChevronDown
-            className={`h-4 w-4 transition-transform ${open ? '' : '-rotate-90'}`}
-          />
-          More Search Options
-        </button>
-      </CollapsibleTrigger>
-      <CollapsibleContent className="mt-2 bg-gray-50 rounded-md p-3 text-sm space-y-1">
-        <Label>Student Unique No.</Label>
-        <Input placeholder="12- Shay B" />
-      </CollapsibleContent>
-    </Collapsible>
+// ── Open Availability (T) — same rules as the sidebar's Set Availability ──────
+function OpenAvailabilityPane({ onClose, selectedDate, onSaveAvailability, syncedEvents }) {
+  const [date, setDate] = useState(selectedDate ? new Date(selectedDate) : null);
+  const [time, setTime] = useState({ startTime: '', endTime: '' });
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [weekdays, setWeekdays] = useState(() =>
+    selectedDate ? [new Date(selectedDate).getDay()] : []
   );
-}
+  const [weeks, setWeeks] = useState(14); // platform default availability window
+  const [showErrors, setShowErrors] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-function SelectedChip() {
+  const toggleWeekday = (i) =>
+    setWeekdays((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort()));
+
+  const dates = useMemo(
+    () =>
+      expandRepeatDates({
+        startDate: date,
+        weekdays: repeatOpen ? weekdays : [],
+        repeatWeeks: repeatOpen ? weeks : 0,
+      }),
+    [date, repeatOpen, weekdays, weeks]
+  );
+
+  const durMin = (toMinutes(time.endTime) ?? 0) - (toMinutes(time.startTime) ?? 0);
+  const timeValid = !!time.startTime && !!time.endTime && durMin > 0;
+  const formValid = !!date && timeValid;
+
+  // Slots in the SAME shape the sidebar emits → reuses the exact downstream
+  // path (merge, localStorage, debounced instant-booking publish).
+  const slots = useMemo(
+    () => (formValid ? dates.map((d) => ({ date: d, startTime: time.startTime, endTime: time.endTime })) : []),
+    [formValid, dates, time]
+  );
+
+  // Same synced-overlap warning the sidebar shows (non-blocking).
+  const overlaps = useMemo(
+    () => (slots.length ? syncedOverlapsForSlots(slots, syncedEvents || []) : []),
+    [slots, syncedEvents]
+  );
+
+  const handleSave = () => {
+    if (!formValid) { setShowErrors(true); return; }
+    if (saving) return;
+    setSaving(true);
+    try {
+      onSaveAvailability?.(slots, 'open');
+      toast({
+        title: 'Availability schedule successfully saved.',
+        description: overlaps.length
+          ? '⚠ Note: This availability overlaps with a synced calendar event.'
+          : `${slots.length} slot${slots.length > 1 ? 's' : ''} opened for booking.`,
+      });
+      onClose?.();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const totalHours = round2(dates.length * (durMin > 0 ? durMin / 60 : 0));
+
   return (
-    <div className="flex items-start gap-2">
-      <span className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-600 text-white text-xs font-semibold">
-        P
-      </span>
-      <div className="text-sm">
-        <p>Prateek K - 9902</p>
-        <p>Engineering Entrance Coaching</p>
+    <div className="space-y-4">
+      <DateRangePicker
+        singleDate
+        singleValue={date}
+        onSingleChange={setDate}
+        singleLabel="Date"
+        singlePlaceholder="Select date"
+        invalid={showErrors && !date}
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <TimeRangeFields
+          startTime={time.startTime}
+          endTime={time.endTime}
+          onChange={setTime}
+          startInvalid={showErrors && !time.startTime}
+          endInvalid={(!!time.startTime && !!time.endTime && durMin <= 0) || (showErrors && !time.endTime)}
+          triggerClassName="h-10 px-3"
+          placeholder="Select time"
+        />
       </div>
-    </div>
-  );
-}
 
-function SequenceCard() {
-  return (
-    <div className="border rounded-md p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="font-semibold text-gray-700">Sequence 1:</p>
-        <div className="flex gap-1">
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7">
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
+      <RepeatControl
+        open={repeatOpen}
+        setOpen={setRepeatOpen}
+        weekdays={weekdays}
+        toggleWeekday={toggleWeekday}
+        weeks={weeks}
+        setWeeks={setWeeks}
+        summary={
+          <div className="space-y-1">
+            <p><span className="font-semibold text-gray-700">First Date:</span> {fmtDate(dates[0])}</p>
+            <p><span className="font-semibold text-gray-700">Last Date:</span> {fmtDate(dates[dates.length - 1])}</p>
+            <p><span className="font-semibold text-gray-700">No. of Days:</span> {dates.length}</p>
+            <p><span className="font-semibold text-gray-700">No. of Hours:</span> {totalHours}</p>
+          </div>
+        }
+      />
+
+      {overlaps.length > 0 && (
+        <Alert className="bg-yellow-50 border border-yellow-200 text-yellow-900 text-sm">
+          <AlertDescription>
+            <strong>Warning:</strong> This selection overlaps with a synced calendar event
+            {overlaps[0]?.range ? ` (${overlaps[0].range})` : ''}. You can still save it.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {formValid && (
+        <div className="text-sm text-gray-700 space-y-1">
+          <p className="font-semibold text-gray-800">Changes will be made to the following dates &amp; hours:</p>
+          <p>{dates.length === 1 ? fmtDate(dates[0]) : `${fmtDate(dates[0])} – ${fmtDate(dates[dates.length - 1])} (${dates.length} days)`}</p>
+          <p>{time.startTime} – {time.endTime}</p>
         </div>
-      </div>
-      <p className="font-semibold text-gray-700">Interview Preparation</p>
-      <div className="text-sm text-gray-600">
-        <p>Su, Mo, <span className="opacity-50">Tu</span>, We, Th, <span className="opacity-50">Fr</span>, Sa</p>
-        <p>3rd July 2021 - 10th Oct. 2021</p>
-      </div>
-      <div className="flex items-center justify-between text-sm">
-        <span>10:00 - 12:00</span>
-        <span className="inline-flex items-center gap-1">
-          <span className="bg-blue-100 text-blue-700 rounded-full px-2 py-0.5 text-xs font-semibold">1</span>
-          Hr.
-        </span>
-        <span className="font-semibold">150$</span>
-      </div>
-      <div className="text-sm">
-        <p className="font-semibold text-gray-700">Not incuded</p>
-        <p className="text-gray-600">3,4,5 July 21</p>
-        <p className="text-gray-600">10,13,15 Sep 21</p>
-      </div>
-      <div className="bg-red-50 text-red-700 rounded-md p-2 text-sm">
-        Sequence 1 deleted! <a href="#" className="text-blue-600 underline">Undo</a>
-      </div>
-    </div>
-  );
-}
+      )}
 
-function CostSummary() {
-  return (
-    <div className="border-t border-b py-3 text-sm space-y-2">
-      <div className="flex justify-between">
-        <span className="font-semibold text-gray-700">Subtotal:</span>
-        <span>9Hrs. 3 Meetings 3 Days</span>
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="font-semibold text-gray-700 flex items-center">Calculation<InfoTip />:</span>
-        <span>9Hrs. = 300$</span>
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="font-semibold text-gray-700 flex items-center">Added Taxes (18%)<InfoTip />:</span>
-        <span>20$</span>
-      </div>
-      <div className="flex justify-between items-center">
-        <span className="font-semibold text-gray-700 flex items-center">Cancellation Fees (30%)<InfoTip />:</span>
-        <span>20$</span>
-      </div>
-      <p className="text-xs text-gray-500">(Free Cancellation before 23:59 on 10 Dec. 2021)</p>
-      <div className="flex justify-between pt-2 border-t">
-        <span className="font-semibold text-gray-700">Total Cost:</span>
-        <span><span className="text-blue-600 font-semibold">300$</span> <span className="text-gray-500 text-xs">USD</span></span>
-      </div>
-    </div>
-  );
-}
+      {showErrors && !formValid && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
+          Please pick a date and a valid start/end time before saving.
+        </div>
+      )}
 
-function OpenAvailabilityPane({ onClose, selectedDate }) {
-  // Task 1 — local Start/End Time pair controlled by the shared
-  // <TimeRangeFields/>. triggerClassName="bg-transparent" blends with
-  // the modal's white surface; placeholder locked to "Select time".
-  const [availTime, setAvailTime] = useState({ startTime: '', endTime: '' });
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        <DateField label="Date" value={selectedDate} />
-      </div>
-      <div className="flex items-end gap-2">
-        <TimeRangeFields
-          startTime={availTime.startTime}
-          endTime={availTime.endTime}
-          onChange={setAvailTime}
-          triggerClassName="h-10 px-3 bg-transparent"
-          placeholder="Select time"
-        />
-      </div>
-      <RepeatBlock showMeetingsAndCost={false} />
-      <Alert variant="destructive" className="text-sm">
-        <AlertDescription>
-          <strong>Warning!</strong> You are busy on 21.08.2021, 21.08.2021,
-          21.08.2021 betwen the time entered.
-        </AlertDescription>
-      </Alert>
-      <p className="text-right text-sm">
-        <a href="#" className="text-blue-600 underline">Click Here</a> To Skip Those Dates
-      </p>
-      <p className="font-semibold text-gray-800">Changes will be made to the following dates & hours:</p>
-      <div className="text-sm text-gray-700 space-y-2">
-        <p className="font-semibold text-gray-700">Dates:</p>
-        <p>
-          20 June 2021 – 21 Oct 2021 (every day)<br />
-          24 – 27 July 2021 (every day)
-        </p>
-        <p>
-          20 Nov 2021 – 21 Dec 2021<br />
-          (Su, Mo, <span className="opacity-50">Tu</span>, We, Th, <span className="opacity-50">Fr</span>, Sa)
-        </p>
-        <p className="font-semibold text-gray-700">Timings For All Dates:</p>
-        <p>12:00 – 17:00</p>
-      </div>
       <div className="flex justify-end gap-3 pt-2">
         <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button className="bg-green-600 hover:bg-green-700">Open Availability</Button>
+        <Button
+          onClick={handleSave}
+          aria-disabled={!formValid || saving}
+          className={formValid ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-300 text-gray-500 hover:bg-gray-300'}
+        >
+          {saving ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Saving…</span> : 'Open Availability'}
+        </Button>
       </div>
     </div>
   );
 }
 
-function NewBookingPane({ onClose, selectedDate }) {
-  // Task 1 — local Start/End Time pair for the booking flow,
-  // controlled by the shared <TimeRangeFields/>.
-  const [bookingTime, setBookingTime] = useState({ startTime: '', endTime: '' });
+// ── Recipient search (students or teachers) ──────────────────────────────────
+function RecipientSearch({ kind, selected, onSelect }) {
+  const [query, setQuery] = useState('');
+  const debounced = useDebounced(query, 300);
+  const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const q = debounced.trim();
+    if (selected || q.length < 2) { setResults([]); return; }
+    setLoading(true);
+    (async () => {
+      let list = [];
+      if (kind === 'student') {
+        const r = await searchStudents(q, 8);
+        list = (r.ok ? r.data : []).map((s) => ({ id: s.id, name: s.full_name || s.email, sub: s.email }));
+      } else {
+        const cards = await searchTeachers({ query: q, limit: 8 });
+        list = cards.map((c) => ({ id: c.user_id, name: c.name, sub: c.subjects?.slice(0, 2).join(', '), rate: c.hourlyRate?.regular }));
+      }
+      if (!cancelled) { setResults(list); setLoading(false); }
+    })();
+    return () => { cancelled = true; };
+  }, [debounced, kind, selected]);
+
+  if (selected) {
+    return (
+      <div className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 p-2">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-green-600 text-xs font-semibold text-white">
+            {(selected.name || '?').charAt(0).toUpperCase()}
+          </span>
+          <div className="text-sm">
+            <p className="font-medium text-gray-800">{selected.name}</p>
+            {selected.sub && <p className="text-xs text-gray-500">{selected.sub}</p>}
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => onSelect(null)}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      <Label className="text-sm">{kind === 'student' ? 'Search Student By Name / Email' : 'Search Teacher By Name'}</Label>
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={kind === 'student' ? 'Enter at least 2 characters' : 'Enter teacher name'}
+          className={`pl-9 ${GREY_FIELD}`}
+        />
+      </div>
+      {loading && <p className="text-xs text-gray-500">Searching…</p>}
+      {!loading && debounced.trim().length >= 2 && results.length === 0 && (
+        <p className="text-xs text-gray-500">No matches found.</p>
+      )}
+      {results.length > 0 && (
+        <div className="max-h-40 overflow-y-auto rounded-md border border-gray-200">
+          {results.map((r) => (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => onSelect(r)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-gray-50"
+            >
+              <span>
+                <span className="font-medium text-gray-800">{r.name}</span>
+                {r.sub && <span className="ml-1 text-xs text-gray-500">{r.sub}</span>}
+              </span>
+              {r.rate != null && <span className="text-xs text-gray-500">{r.rate}$/hr</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── New Booking ──────────────────────────────────────────────────────────────
+function NewBookingPane({ onClose, selectedDate, onBookingCreated }) {
+  // mode: how the booking is made.
+  //   known   → As a Teacher (T): request a registered student (student approves)
+  //   guest   → As a Teacher (T): invite a brand-new guest via shareable link
+  //   student → As a Student (S): request another teacher (teacher approves)
+  const [mode, setMode] = useState('known');
+  const [selected, setSelected] = useState(null); // student or teacher
+  const [guest, setGuest] = useState({ name: '', email: '', phone: '' });
+  const [subject, setSubject] = useState('');
+  const [date, setDate] = useState(selectedDate ? new Date(selectedDate) : null);
+  const [time, setTime] = useState({ startTime: '', endTime: '' });
+  const [pricePerHour, setPricePerHour] = useState('');
+  const [repeatOpen, setRepeatOpen] = useState(false);
+  const [weekdays, setWeekdays] = useState(() => (selectedDate ? [new Date(selectedDate).getDay()] : []));
+  const [weeks, setWeeks] = useState(12);
+  const [showErrors, setShowErrors] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [guestLink, setGuestLink] = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  // Reset the recipient when switching modes (student vs teacher search differ).
+  const onModeChange = (m) => { setMode(m); setSelected(null); setGuestLink(null); };
+  const toggleWeekday = (i) =>
+    setWeekdays((prev) => (prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i].sort()));
+
+  // When a teacher is picked for an (S) booking, prefill their hourly rate.
+  const handleSelect = (r) => {
+    setSelected(r);
+    if (mode === 'student' && r?.rate != null) setPricePerHour(String(r.rate));
+  };
+
+  const dates = useMemo(
+    () =>
+      expandRepeatDates({
+        startDate: date,
+        weekdays: repeatOpen ? weekdays : [],
+        repeatWeeks: repeatOpen ? weeks : 0,
+      }),
+    [date, repeatOpen, weekdays, weeks]
+  );
+
+  const durMin = (toMinutes(time.endTime) ?? 0) - (toMinutes(time.startTime) ?? 0);
+  const durHrs = durMin > 0 ? durMin / 60 : 0;
+  const timeValid = !!time.startTime && !!time.endTime && durMin > 0;
+  const recipientValid = mode === 'guest' ? true : !!selected;
+  const formValid = recipientValid && !!date && timeValid;
+
+  const amountPer = round2((Number(pricePerHour) || 0) * durHrs);
+  const meetings = mode === 'guest' ? 1 : dates.length; // a guest invite is one booking
+  const totalCost = round2(amountPer * meetings);
+
+  const submitLabel =
+    mode === 'known' ? 'Send Request To Student'
+    : mode === 'guest' ? 'Create Invite Link'
+    : 'Send Request To Teacher';
+
+  const handleSubmit = async () => {
+    if (!formValid) { setShowErrors(true); return; }
+    if (submitting) return;
+    setSubmitting(true);
+    setGuestLink(null);
+    const tz = detectViewerTz() || 'UTC';
+    try {
+      if (mode === 'guest') {
+        // One shareable invite for the (first) selected slot.
+        const ymd = dates[0];
+        let slotStartUtc;
+        try { slotStartUtc = wallClockToUtcISO(ymd, time.startTime, tz); } catch { slotStartUtc = null; }
+        if (!slotStartUtc) { toast({ title: 'Could not build the booking time.', variant: 'destructive' }); return; }
+        const r = await createGuestBookingInvite({
+          guestName: guest.name, guestEmail: guest.email,
+          slotStartUtc, durationMinutes: durMin, subject: subject || 'Lesson', amount: amountPer,
+        });
+        if (!r.ok) { toast({ title: 'Could not create the invite.', description: r.message || r.code, variant: 'destructive' }); return; }
+        const token = r.data?.token;
+        const link = `${window.location.origin}${createPageUrl('GuestBooking')}?token=${token}`;
+        setGuestLink(link);
+        toast({ title: 'Invite link created.', description: 'Copy it and send it to your guest.' });
+        return;
+      }
+
+      // known / student → one request per occurrence date.
+      let ok = 0; let firstErr = null;
+      for (const ymd of dates) {
+        let slotStartUtc;
+        try { slotStartUtc = wallClockToUtcISO(ymd, time.startTime, tz); } catch { continue; }
+        const r = mode === 'known'
+          ? await requestBookingForStudent({ studentId: selected.id, slotStartUtc, durationMinutes: durMin, subject: subject || 'Lesson', amount: amountPer })
+          : await requestBooking({ teacherId: selected.id, slotStartUtc, durationMinutes: durMin, subject: subject || 'Lesson', amount: amountPer });
+        if (r.ok) ok += 1; else if (!firstErr) firstErr = r.message || r.code;
+      }
+      if (ok > 0) {
+        toast({
+          title: mode === 'known' ? 'Request sent to the student.' : 'Request sent to the teacher.',
+          description: `${ok} booking request${ok > 1 ? 's' : ''} created${firstErr ? ` (${dates.length - ok} skipped)` : ''}.`,
+        });
+        onBookingCreated?.();
+        onClose?.();
+      } else {
+        toast({ title: 'Could not create the request.', description: firstErr || 'Please try again.', variant: 'destructive' });
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyLink = async () => {
+    try { await navigator.clipboard.writeText(guestLink); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* ignore */ }
+  };
+
   return (
     <div className="space-y-4">
-      <Select>
-        <SelectTrigger>
-          <SelectValue placeholder="Select Booking Type" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="other-teacher">Other Teacher (S)</SelectItem>
-          <SelectItem value="known-student">Known Student (T)</SelectItem>
-          <SelectItem value="new-student">New Student (T)</SelectItem>
-        </SelectContent>
-      </Select>
       <div>
-        <Label className="text-sm mb-1 block">Student Name</Label>
-        <Input type="search" placeholder="Enter Student Name" />
+        <Label className="text-sm mb-1 block">Booking Type</Label>
+        <Select value={mode} onValueChange={onModeChange}>
+          <SelectTrigger className={GREY_FIELD}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="known">As a Teacher → Known Student (T)</SelectItem>
+            <SelectItem value="guest">As a Teacher → New Guest (T)</SelectItem>
+            <SelectItem value="student">As a Student → Book a Teacher (S)</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <MoreSearchOptions />
-      <SelectedChip />
-      <Alert variant="destructive" className="text-sm">
-        <AlertDescription>
-          <strong>Warning!</strong> can choose only one teacher.
-        </AlertDescription>
-      </Alert>
-      <Select>
-        <SelectTrigger>
-          <SelectValue placeholder="Choose a Service" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="online">Online Class</SelectItem>
-          <SelectItem value="consulting">Consulting</SelectItem>
-          <SelectItem value="interview">Technical Interview</SelectItem>
-        </SelectContent>
-      </Select>
-      <div className="flex flex-wrap gap-2">
-        <DateField label="Date" value={selectedDate} />
+
+      {mode === 'guest' ? (
+        <div className="space-y-2">
+          <div>
+            <Label className="text-sm mb-1 block">Guest Name</Label>
+            <Input value={guest.name} onChange={(e) => setGuest({ ...guest, name: e.target.value })} placeholder="Enter guest name" className={GREY_FIELD} />
+          </div>
+          <div>
+            <Label className="text-sm mb-1 block">Guest Email (optional)</Label>
+            <Input type="email" value={guest.email} onChange={(e) => setGuest({ ...guest, email: e.target.value })} placeholder="Enter guest email" className={GREY_FIELD} />
+          </div>
+        </div>
+      ) : (
+        <RecipientSearch kind={mode === 'student' ? 'teacher' : 'student'} selected={selected} onSelect={handleSelect} />
+      )}
+
+      <div>
+        <Label className="text-sm mb-1 block">Subject / Service</Label>
+        <Input value={subject} onChange={(e) => setSubject(e.target.value)} placeholder="e.g. Mathematics" className={GREY_FIELD} />
       </div>
-      <div className="flex items-end gap-2">
+
+      <DateRangePicker
+        singleDate
+        singleValue={date}
+        onSingleChange={setDate}
+        singleLabel="Date"
+        singlePlaceholder="Select date"
+        invalid={showErrors && !date}
+      />
+
+      <div className="grid grid-cols-2 gap-2">
         <TimeRangeFields
-          startTime={bookingTime.startTime}
-          endTime={bookingTime.endTime}
-          onChange={setBookingTime}
-          triggerClassName="h-10 px-3 bg-transparent"
+          startTime={time.startTime}
+          endTime={time.endTime}
+          onChange={setTime}
+          startInvalid={showErrors && !time.startTime}
+          endInvalid={(!!time.startTime && !!time.endTime && durMin <= 0) || (showErrors && !time.endTime)}
+          triggerClassName="h-10 px-3"
           placeholder="Select time"
         />
       </div>
-      <RepeatBlock showMeetingsAndCost />
-      <Alert variant="destructive" className="text-sm">
-        <AlertDescription>
-          <strong>Warning!</strong> You are busy on 21.08.2021, 21.08.2021,
-          21.08.2021 betwen the time entered.
-        </AlertDescription>
-      </Alert>
-      <p className="text-right text-sm">
-        <a href="#" className="text-blue-600 underline">Click Here</a> To Skip Those Dates
-      </p>
-      <p className="font-semibold text-gray-800">Booking Information:</p>
-      <SequenceCard />
-      <CostSummary />
+
+      <div>
+        <Label className="text-sm mb-1 block">Price Per Hour ($)</Label>
+        <Input type="number" min={0} value={pricePerHour} onChange={(e) => setPricePerHour(e.target.value)} placeholder="0" className={`w-32 ${GREY_FIELD}`} />
+      </div>
+
+      {mode !== 'guest' && (
+        <RepeatControl
+          open={repeatOpen}
+          setOpen={setRepeatOpen}
+          weekdays={weekdays}
+          toggleWeekday={toggleWeekday}
+          weeks={weeks}
+          setWeeks={setWeeks}
+          summary={
+            <div className="space-y-1">
+              <p><span className="font-semibold text-gray-700">First Date:</span> {fmtDate(dates[0])}</p>
+              <p><span className="font-semibold text-gray-700">Last Date:</span> {fmtDate(dates[dates.length - 1])}</p>
+              <p><span className="font-semibold text-gray-700">No. Of Meetings:</span> {dates.length}</p>
+              <p><span className="font-semibold text-gray-700">No. of Hours:</span> {round2(dates.length * durHrs)}</p>
+              <p><span className="font-semibold text-gray-700">Total Sequence Cost:</span> {amountPer}$ × {dates.length} = {round2(amountPer * dates.length)}$</p>
+            </div>
+          }
+        />
+      )}
+
+      {/* Cost summary (live) */}
+      <div className="border-t border-b py-3 text-sm space-y-1">
+        <div className="flex justify-between"><span className="font-semibold text-gray-700">Meetings:</span><span>{meetings}</span></div>
+        <div className="flex justify-between"><span className="font-semibold text-gray-700">Hours:</span><span>{round2((mode === 'guest' ? 1 : dates.length) * durHrs)}</span></div>
+        <div className="flex justify-between"><span className="font-semibold text-gray-700">Total Cost:</span><span className="font-semibold text-blue-600">{totalCost}$</span></div>
+      </div>
+
+      {showErrors && !formValid && (
+        <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2">
+          {(!recipientValid && (mode === 'student' ? 'Pick a teacher, ' : 'Pick a student, ')) || ''}
+          Please pick a date and a valid start/end time before sending.
+        </div>
+      )}
+
+      {guestLink && (
+        <div className="rounded-md border border-green-200 bg-green-50 p-3 space-y-2">
+          <p className="text-sm font-semibold text-green-800">Invite link ready — send it to your guest:</p>
+          <div className="flex items-center gap-2">
+            <Input readOnly value={guestLink} className="bg-white text-xs" />
+            <Button size="icon" variant="outline" className="h-9 w-9 flex-shrink-0" onClick={copyLink}>
+              {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-600">When they register and open this link they'll see this request and can accept it.</p>
+        </div>
+      )}
+
       <div className="flex justify-end gap-3 pt-2">
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
-        <Button className="bg-green-600 hover:bg-green-700">Send To Student Inbox</Button>
+        <Button variant="outline" onClick={onClose}>{guestLink ? 'Done' : 'Cancel'}</Button>
+        {!guestLink && (
+          <Button
+            onClick={handleSubmit}
+            aria-disabled={!formValid || submitting}
+            className={formValid ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-gray-300 text-gray-500 hover:bg-gray-300'}
+          >
+            {submitting ? <span className="flex items-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Sending…</span> : submitLabel}
+          </Button>
+        )}
       </div>
     </div>
   );
 }
 
-export default function AddNewBookingOrAvailabilityModal({ isOpen, onClose, selectedDate }) {
+export default function AddNewBookingOrAvailabilityModal({
+  isOpen,
+  onClose,
+  selectedDate,
+  onSaveAvailability,
+  onBookingCreated,
+  syncedEvents = [],
+}) {
+  // Remount the panes whenever the modal (re)opens on a date, so all fields
+  // reset and re-seed from `selectedDate` cleanly.
+  const seedKey = `${isOpen ? 'open' : 'closed'}-${selectedDate || ''}`;
   return (
     <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-lg font-bold">
-            Add New Booking Or Availability
-          </DialogTitle>
+          <DialogTitle className="text-lg font-bold">Add New Booking Or Availability</DialogTitle>
         </DialogHeader>
-        <Tabs defaultValue="avail" className="w-full">
+        <Tabs defaultValue="avail" className="w-full" key={seedKey}>
           <TabsList className="bg-transparent p-0 h-auto gap-2 mb-3">
             <TabsTrigger
               value="avail"
-              className="rounded-full px-4 py-1 border border-green-600 text-green-600 data-[state=active]:bg-green-600 data-[state=active]:text-white">
+              className="rounded-full px-4 py-1 border border-green-600 text-green-600 data-[state=active]:bg-green-600 data-[state=active]:text-white"
+            >
               Open New Availability (T)
             </TabsTrigger>
             <TabsTrigger
               value="book"
-              className="rounded-full px-4 py-1 border border-orange-500 text-orange-500 data-[state=active]:bg-orange-500 data-[state=active]:text-white">
-              New Booking (T)
+              className="rounded-full px-4 py-1 border border-orange-500 text-orange-500 data-[state=active]:bg-orange-500 data-[state=active]:text-white"
+            >
+              New Booking
             </TabsTrigger>
           </TabsList>
           <TabsContent value="avail">
-            <OpenAvailabilityPane onClose={onClose} selectedDate={selectedDate} />
+            <OpenAvailabilityPane
+              onClose={onClose}
+              selectedDate={selectedDate}
+              onSaveAvailability={onSaveAvailability}
+              syncedEvents={syncedEvents}
+            />
           </TabsContent>
           <TabsContent value="book">
-            <NewBookingPane onClose={onClose} selectedDate={selectedDate} />
+            <NewBookingPane onClose={onClose} selectedDate={selectedDate} onBookingCreated={onBookingCreated} />
           </TabsContent>
         </Tabs>
       </DialogContent>

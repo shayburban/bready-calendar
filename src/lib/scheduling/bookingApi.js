@@ -96,6 +96,55 @@ export const respondBookingRequest = (bookingId, action) => {
   return callRpc('respond_booking_request', { p_booking_id: bookingId, p_action: action });
 };
 
+// Teacher-initiated flow (0024). A teacher books someone instead of waiting for
+// a student to request. All three create a student-approves 'requested' booking.
+
+// search_students — find a registered student to book (name / email / id).
+export const searchStudents = async (query, limit = 10) => {
+  const r = await callRpc('search_students', { p_query: query, p_limit: limit });
+  return r.ok ? { ok: true, data: Array.isArray(r.data) ? r.data : [] } : r;
+};
+
+// request_booking_for_student — teacher requests a lesson with a KNOWN student;
+// the student approves it from their calendar (requested_by='teacher').
+export const requestBookingForStudent = ({ studentId, slotStartUtc, durationMinutes, subject, amount }) => {
+  invalidateSlotsCache();
+  return callRpc('request_booking_for_student', {
+    p_student: studentId,
+    p_slot_start_utc: slotStartUtc,
+    p_duration_minutes: durationMinutes,
+    p_subject: subject ?? 'Lesson',
+    p_amount: amount ?? 0,
+  });
+};
+
+// create_guest_booking_invite — teacher mints a shareable invite for a brand-new
+// guest. Returns the invite row (its `token` builds the shareable link).
+export const createGuestBookingInvite = ({ guestName, guestEmail, slotStartUtc, durationMinutes, subject, amount }) =>
+  callRpc('create_guest_booking_invite', {
+    p_guest_name: guestName ?? null,
+    p_guest_email: guestEmail ?? null,
+    p_slot_start_utc: slotStartUtc,
+    p_duration_minutes: durationMinutes,
+    p_subject: subject ?? 'Lesson',
+    p_amount: amount ?? 0,
+  });
+
+// get_guest_booking_invite — PUBLIC read of an invite (for the landing page).
+// The RPC returns a one-row table; unwrap to the single object (or null).
+export const getGuestBookingInvite = async (token) => {
+  const r = await callRpc('get_guest_booking_invite', { p_token: token });
+  if (!r.ok) return r;
+  const row = Array.isArray(r.data) ? r.data[0] : r.data;
+  return { ok: true, data: row || null };
+};
+
+// claim_guest_booking_invite — the now-registered guest materialises the request.
+export const claimGuestBookingInvite = (token) => {
+  invalidateSlotsCache();
+  return callRpc('claim_guest_booking_invite', { p_token: token });
+};
+
 export const createReschedule = ({ bookingId, proposedStartUtc, proposedBy }) => {
   invalidateSlotsCache();
   return callRpc('create_reschedule', { p_booking_id: bookingId, p_proposed_start_utc: proposedStartUtc, p_proposed_by: proposedBy });

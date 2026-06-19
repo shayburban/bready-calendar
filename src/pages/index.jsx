@@ -54,6 +54,8 @@ import TeacherFinance from "./TeacherFinance";
 
 import TeacherSettings from "./TeacherSettings";
 
+import GuestBooking from "./GuestBooking";
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -111,7 +113,9 @@ const PAGES = {
     TeacherFinance: TeacherFinance,
     
     TeacherSettings: TeacherSettings,
-    
+
+    GuestBooking: GuestBooking,
+
 }
 
 function _getCurrentPage(url) {
@@ -192,7 +196,9 @@ function PagesContent() {
                 <Route path="/TeacherFinance" element={<TeacherFinance />} />
                 
                 <Route path="/TeacherSettings" element={<TeacherSettings />} />
-                
+
+                <Route path="/GuestBooking" element={<GuestBooking />} />
+
             </Routes>
         </Layout>
     );

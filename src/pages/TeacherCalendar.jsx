@@ -1425,6 +1425,9 @@ export default function TeacherCalendar() {
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
         selectedDate={selectedAddDate}
+        onSaveAvailability={handleSaveAvailability}
+        onBookingCreated={loadEvents}
+        syncedEvents={events.filter((e) => e.type === 'synced')}
       />
     </div>
   );
