@@ -52,7 +52,10 @@ const EventCard = ({ event, onEventClick }) => {
 
 const FILTERABLE_TYPES = ['not-reviewed', 'completed', 'cancelled'];
 
-export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick, activeFilters = ['not-reviewed', 'completed', 'cancelled'], savedAvailabilitySlots = [] }) {
+export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyClick, activeFilters = ['not-reviewed', 'completed', 'cancelled'], savedAvailabilitySlots = [], events = null }) {
+    // When `events` is provided (an array, even empty), the grid is in LIVE mode
+    // and renders real bookings; otherwise it falls back to the sampleEvents mock.
+    const liveMode = Array.isArray(events);
     const hours = Array.from({ length: 24 }, (_, i) => `${i.toString().padStart(2, '0')}:00`);
 
     const getWeekDays = (date) => {
@@ -109,28 +112,36 @@ export default function WeeklyCalendarGrid({ currentDate, onEventClick, onEmptyC
                 };
             });
 
-        const sameMonth =
-            day.getMonth() === currentDate.getMonth() &&
-            day.getFullYear() === currentDate.getFullYear();
-        if (!sameMonth) return savedAvailEvents;
+        let dayEvents;
+        if (liveMode) {
+            // LIVE: real bookings carry {year, month, date}; match the exact
+            // weekday so events land on their true day (no cross-month repeat).
+            dayEvents = events.filter((e) =>
+                e.date === day.getDate() &&
+                (e.year == null || e.year === day.getFullYear()) &&
+                (e.month == null || e.month === day.getMonth()) &&
+                (!FILTERABLE_TYPES.includes(e.type) || activeFilters.includes(e.type))
+            );
+        } else {
+            // MOCK fallback: day-of-month match within the rendered month.
+            const sameMonth =
+                day.getMonth() === currentDate.getMonth() &&
+                day.getFullYear() === currentDate.getFullYear();
+            dayEvents = sameMonth
+                ? sampleEvents.filter((e) =>
+                    e.date === day.getDate() &&
+                    (!FILTERABLE_TYPES.includes(e.type) || activeFilters.includes(e.type)))
+                : [];
+        }
 
-        const dayEvents = sampleEvents.filter((e) =>
-            e.date === day.getDate() &&
-            (!FILTERABLE_TYPES.includes(e.type) || activeFilters.includes(e.type))
-        );
-
-        // `availableDatesForCategory` is now sourced from savedAvailabilitySlots
-        // only (computed above as `savedDates`) — sampleEvents are excluded per
-        // user requirement so the popup picker shows only user-saved dates.
         const enriched = dayEvents.map((e) => {
             const { startHour, endHour } = parseTimeRange(e.time);
-            const dateString = new Date(currentDate.getFullYear(), currentDate.getMonth(), e.date).toISOString();
             return {
                 ...e,
                 startHour,
                 endHour,
                 dayIndex,
-                dateString,
+                dateString: day.toISOString(),
                 availableDatesForCategory: savedDates,
             };
         });

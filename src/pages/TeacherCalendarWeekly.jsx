@@ -1,6 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User } from '@/api/entities';
+import { fetchMyBookings } from '@/lib/scheduling/bookingApi';
+import { mapBookingToEvent } from '@/lib/calendar/mapBookingToEvent';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -46,6 +48,7 @@ export default function TeacherCalendarWeekly() {
   const [view, setView] = useState('Week'); // Set default view to Week
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showEventModal, setShowEventModal] = useState(false);
   const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
@@ -78,20 +81,27 @@ export default function TeacherCalendarWeekly() {
     setActiveWeekdays([0, 1, 2, 3, 4, 5, 6]);
   };
 
-  useEffect(() => {
-    const fetchUserAndEvents = async () => {
-      try {
-        const currentUser = await User.me();
-        setUser(currentUser);
-      } catch (error) {
-        console.error('Error fetching user:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUserAndEvents();
+  // Live calendar data: the teacher's own bookings from Supabase
+  // (get_my_bookings via fetchMyBookings), mapped to calendar events. Replaces
+  // the static sampleEvents mock for the weekly grid. Re-run after a request is
+  // approved/declined so the chip updates immediately.
+  const loadEvents = useCallback(async () => {
+    try {
+      const r = await fetchMyBookings();
+      setEvents(r.ok && Array.isArray(r.data) ? r.data.map(mapBookingToEvent).filter(Boolean) : []);
+    } catch (e) {
+      console.warn('Could not load calendar bookings:', e?.message || e);
+      setEvents([]);
+    }
   }, []);
+
+  useEffect(() => {
+    (async () => {
+      try { setUser(await User.me()); } catch (error) { console.error('Error fetching user:', error); }
+      await loadEvents();
+      setLoading(false);
+    })();
+  }, [loadEvents]);
 
   const handleSaveAvailability = (slots, mode) => {
     setSavedAvailabilitySlots((prev) => {
@@ -378,6 +388,7 @@ export default function TeacherCalendarWeekly() {
                 onEmptyClick={() => setShowAddModal(true)}
                 activeFilters={activeFilters}
                 savedAvailabilitySlots={savedAvailabilitySlots}
+                events={events}
               />
             </div>
           </div>
@@ -396,6 +407,7 @@ export default function TeacherCalendarWeekly() {
         onClose={() => setShowAvailabilityModal(false)}
         savedAvailabilitySlots={savedAvailabilitySlots}
         onAvailabilityChanged={handleAvailabilityChanged}
+        onRequestResponded={loadEvents}
       />
       <SyncedEventsModal
         event={selectedEvent}
