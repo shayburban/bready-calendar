@@ -333,3 +333,16 @@ function buildChips(p) {
   p.languages.forEach((l) => chips.push(l));
   return chips;
 }
+
+// Memoized parse — caches normalized-query → parsed intent for the session
+// ($0; avoids re-parsing identical/repeat queries). The catalog is stable per
+// session (loaded once + cached), so the query string is a sufficient key.
+const _parseCache = new Map();
+export function parseSearchQueryCached(rawQuery, catalog) {
+  const key = String(rawQuery || '').trim().toLowerCase().replace(/\s+/g, ' ');
+  if (_parseCache.has(key)) return _parseCache.get(key);
+  const result = parseSearchQuery(rawQuery, catalog);
+  if (_parseCache.size > 300) _parseCache.clear(); // simple unbounded-growth guard
+  _parseCache.set(key, result);
+  return result;
+}

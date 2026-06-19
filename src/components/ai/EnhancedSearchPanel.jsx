@@ -19,7 +19,7 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
 
     const MAX_CHARACTERS = 500;
 
-    // Fetch AI search status when panel opens and mode is AI
+    // Fetch Smart Search status when panel opens and mode is Smart Search
     useEffect(() => {
         if (isOpen && searchMode === 'ai') {
             fetchSearchStatus();
@@ -99,7 +99,7 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
                     onClose(); // Close panel after successful search
                 } else {
                     toast({ 
-                        title: "AI Search Failed", 
+                        title: "Smart Search failed",
                         description: response.error, 
                         variant: "destructive" 
                     });
@@ -155,7 +155,7 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
                 aria-selected={searchMode === 'ai'}
                 aria-controls="search-content"
             >
-                <Zap size={16} /> AI Search
+                <Zap size={16} /> Smart Search
             </button>
         </div>
     );
@@ -250,7 +250,7 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
                                         ) : (
                                             <>
                                                 <Search className="h-4 w-4 mr-2" />
-                                                {searchMode === 'ai' ? 'Search with AI' : 'Search'}
+                                                {searchMode === 'ai' ? 'Smart Search' : 'Search'}
                                             </>
                                         )}
                                     </Button>
@@ -261,7 +261,7 @@ const EnhancedSearchPanel = ({ isOpen, onClose, onSearch }) => {
                             <div className="mt-4 text-center">
                                 <p className="text-xs text-gray-500">
                                     {searchMode === 'ai' 
-                                        ? "AI search uses natural language to find the best matching tutors based on your description."
+                                        ? "Smart Search reads your natural-language description to find the best matching tutors — instant, no AI cost."
                                         : "Use keywords to search through tutor names, subjects, and specializations."
                                     }
                                 </p>

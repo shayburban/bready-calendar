@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSearchQuery, trigramSimilarity } from '../queryParser';
+import { parseSearchQuery, parseSearchQueryCached, trigramSimilarity } from '../queryParser';
 
 // All cases use the built-in DEFAULT_CATALOG (no catalog passed).
 
@@ -75,6 +75,15 @@ describe('disambiguation', () => {
     const p = parseSearchQuery('chemistry');
     expect(p.subjects).toContain('Chemistry');
     expect(p.confidence).toBe(1);
+  });
+});
+
+describe('parseSearchQueryCached', () => {
+  it('returns the same cached object for an equivalent (normalized) query', () => {
+    const a = parseSearchQueryCached('Organic Chem under 50');
+    const b = parseSearchQueryCached('  organic   chem   under 50 ');
+    expect(b).toBe(a); // same reference => cache hit
+    expect(a.specializations).toContain('Organic Chemistry');
   });
 });
 

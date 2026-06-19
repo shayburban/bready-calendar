@@ -3,7 +3,7 @@ import { User } from '@/api/entities';
 import { searchTeachers, listTeacherCards } from '@/api/teacherSearchApi';
 import { supabase } from '@/api/supabaseClient';
 import { fetchRegistrationCatalog } from '@/api/registrationCatalog';
-import { parseSearchQuery } from '@/lib/search/queryParser';
+import { parseSearchQueryCached } from '@/lib/search/queryParser';
 
 // ---------------------------------------------------------------------------
 // Daily search cap.
@@ -142,7 +142,7 @@ const AISearchService = {
 
         try {
             const catalog = await getCatalog();
-            const parsed = parseSearchQuery(query, catalog);
+            const parsed = parseSearchQueryCached(query, catalog);
             const { results, relaxed, fellBackToTop } = await runFallbackLadder(parsed);
 
             logSearch(query, results.length);

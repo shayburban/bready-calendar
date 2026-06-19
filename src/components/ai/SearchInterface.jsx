@@ -32,11 +32,11 @@ const SearchInterface = ({ onSearch }) => {
             setIsLoading(true);
             const response = await AISearchService.performAISearch(searchQuery);
             if (response.success) {
-                toast({ title: "AI search successful!", description: `Found ${response.results.length} potential matches.` });
+                toast({ title: "Smart Search complete", description: `Found ${response.results.length} matching tutor${response.results.length === 1 ? '' : 's'}.` });
                 onSearch({ type: 'ai', results: response.results });
                 fetchSearchStatus(); // Refresh count
             } else {
-                toast({ title: "AI Search Failed", description: response.error, variant: "destructive" });
+                toast({ title: "Smart Search failed", description: response.error, variant: "destructive" });
             }
             setIsLoading(false);
         } else {
@@ -57,7 +57,7 @@ const SearchInterface = ({ onSearch }) => {
                 onClick={() => setSearchMode('ai')}
                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-full transition-colors ${searchMode === 'ai' ? 'bg-white text-gray-800 shadow' : 'text-gray-500 hover:bg-gray-200'}`}
             >
-                <Zap size={16} /> AI Search
+                <Zap size={16} /> Smart Search
             </button>
         </div>
     );
