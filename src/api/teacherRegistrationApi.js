@@ -148,11 +148,31 @@ export async function submitTeacherProfile(profileData) {
       ...buildSearchDocument(profileData),
     };
 
-    const { data, error } = await supabase
+    // Idempotent: at most one profile per user. Update an existing row instead
+    // of inserting a duplicate, so a double-click / retry can't create two.
+    const { data: existingRows } = await supabase
       .from('teacher_profiles')
-      .insert(row)
-      .select()
-      .single();
+      .select('id')
+      .eq('user_id', userId)
+      .limit(1);
+    const existingId = existingRows?.[0]?.id;
+
+    let data;
+    let error;
+    if (existingId) {
+      ({ data, error } = await supabase
+        .from('teacher_profiles')
+        .update(row)
+        .eq('id', existingId)
+        .select()
+        .single());
+    } else {
+      ({ data, error } = await supabase
+        .from('teacher_profiles')
+        .insert(row)
+        .select()
+        .single());
+    }
     if (error) throw error;
 
     // Mark the draft submitted (best-effort; ignore failures).

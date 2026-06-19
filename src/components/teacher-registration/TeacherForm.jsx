@@ -1,13 +1,28 @@
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { User } from '@/api/entities';
 import { TeacherProfile } from '@/api/entities';
-import { saveDraft, loadDraft, submitTeacherProfile } from '@/api/teacherRegistrationApi';
+import { submitTeacherProfile } from '@/api/teacherRegistrationApi';
 
 import { useTeacher } from './TeacherContext';
+import { useFormAutoSave } from './persistence/useFormAutoSave';
+import { serializeFormState, hydrateFormState } from './persistence/serialize';
+import CustomDataSubmissionService from './approval/CustomDataSubmissionService';
+
+// localStorage key tracking which custom catalog entries already have a
+// pending_data row, so a retry/double-submit never creates duplicates.
+const PENDING_SUBMITTED_KEY = 'teacher_reg_pending_submitted';
+
+const readSubmittedSet = () => {
+  try { return new Set(JSON.parse(localStorage.getItem(PENDING_SUBMITTED_KEY) || '[]')); }
+  catch { return new Set(); }
+};
+const writeSubmittedSet = (set) => {
+  try { localStorage.setItem(PENDING_SUBMITTED_KEY, JSON.stringify([...set])); } catch { /* noop */ }
+};
 
 // Import components
 import PersonalInfoForm from './PersonalInfoForm';
@@ -18,7 +33,6 @@ import AvailabilityAndPricingForm from './AvailabilityAndPricingForm';
 import FormValidation from './FormValidation';
 import AuthorizationGate from './AuthorizationGate';
 import ProgressBar from '../common/ProgressBar';
-import { persistenceManager } from '../common/PersistenceManager';
 import CustomAlertModal from '../common/CustomAlertModal';
 
 // Development mode bypass
@@ -31,6 +45,7 @@ const TeacherForm = () => {
   const [isComplete, setIsComplete] = useState(false);
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(false);
+  const submittingRef = useRef(false); // in-flight guard against double-submit
   const [isStepValid, setIsStepValid] = useState(false);
   const [showValidationErrors, setShowValidationErrors] = useState(false); // NEW: Track when to show validation
   const [hasPricingErrors, setHasPricingErrors] = useState(false);
@@ -52,88 +67,113 @@ const TeacherForm = () => {
     availability, dispatchAvailability
   } = useTeacher();
 
-  // Access package tiers configuration
+  // ---- Centralized autosave engine (localStorage + Supabase draft) ----
+  const [hydrated, setHydrated] = useState(false);
+  const [resumePrompt, setResumePrompt] = useState(null); // { candidate, step, subStep, source }
 
-  // Load state from localStorage on initial mount - RESTORED: Uncommented this logic
-  useEffect(() => {
-    const loadProgress = async () => {
-      // Prefer the backend draft (cross-device); fall back to localStorage when
-      // there's no session / no remote draft. A submitted draft is ignored so a
-      // finished teacher isn't dropped back into the wizard.
-      let savedStep = await persistenceManager.get('currentStep', 1);
-      let savedSubStep = await persistenceManager.get('currentSubStep', 1);
-      let savedData = await persistenceManager.get('formData');
-
-      try {
-        const remote = await loadDraft();
-        if (remote.ok && remote.data && !remote.data.submitted) {
-          if (remote.data.form_data && Object.keys(remote.data.form_data).length > 0) {
-            savedData = remote.data.form_data;
-          }
-          if (remote.data.current_step) savedStep = remote.data.current_step;
-          if (remote.data.current_sub_step) savedSubStep = remote.data.current_sub_step;
-        }
-      } catch {
-        // ignore — localStorage values already loaded above
-      }
-
-      if (savedData) {
-        if (savedData.personalInfo) setPersonalInfo(savedData.personalInfo);
-        if (savedData.isAgeConfirmed !== undefined) setIsAgeConfirmed(savedData.isAgeConfirmed);
-        if (savedData.teachingSubjects) dispatchTeachingSubjects({ type: 'SET_TEACHING_SUBJECTS', payload: savedData.teachingSubjects });
-        if (savedData.allSpecs) dispatchAllSpecs({ type: 'SET_ALL_SPECS', payload: savedData.allSpecs });
-        if (savedData.allBoards) dispatchAllBoards({ type: 'SET_ALL_BOARDS', payload: savedData.allBoards });
-        if (savedData.allExams) dispatchAllExams({ type: 'SET_ALL_EXAMS', payload: savedData.allExams });
-        if (savedData.availability) dispatchAvailability({ type: 'SET_AVAILABILITY', payload: savedData.availability });
-        if (savedData.services) setServices(savedData.services);
-        if (savedData.packages) setPackages(savedData.packages);
-      }
-      setCurrentStep(savedStep);
-      setCurrentSubStep(savedSubStep);
-    };
-    loadProgress();
+  // Apply a hydrated snapshot into context (shared by initial load + resume).
+  const applySavedData = useCallback((savedData) => {
+    if (!savedData) return;
+    if (savedData.personalInfo) setPersonalInfo(savedData.personalInfo);
+    if (savedData.isAgeConfirmed !== undefined) setIsAgeConfirmed(savedData.isAgeConfirmed);
+    if (savedData.teachingSubjects) dispatchTeachingSubjects({ type: 'SET_TEACHING_SUBJECTS', payload: savedData.teachingSubjects });
+    if (savedData.allSpecs) dispatchAllSpecs({ type: 'SET_ALL_SPECS', payload: savedData.allSpecs });
+    if (savedData.allBoards) dispatchAllBoards({ type: 'SET_ALL_BOARDS', payload: savedData.allBoards });
+    if (savedData.allExams) dispatchAllExams({ type: 'SET_ALL_EXAMS', payload: savedData.allExams });
+    if (savedData.availability) dispatchAvailability({ type: 'SET_AVAILABILITY', payload: savedData.availability });
+    if (savedData.services) setServices(savedData.services);
+    if (savedData.packages) setPackages(savedData.packages);
   }, [setPersonalInfo, setIsAgeConfirmed, dispatchTeachingSubjects, dispatchAllSpecs, dispatchAllBoards, dispatchAllExams, dispatchAvailability, setServices, setPackages]);
 
-  // Save state to localStorage whenever it changes
-  useEffect(() => {
-    persistenceManager.save('currentStep', currentStep);
-    persistenceManager.save('currentSubStep', currentSubStep);
-    // Gather all relevant form data into a single object for persistence
-    const formDataToSave = {
-      personalInfo,
-      isAgeConfirmed,
-      teachingSubjects,
-      allSpecs,
-      allBoards,
-      allExams,
-      availability,
-      services, // Added for persistence
-      packages // Added for persistence
-    };
-    persistenceManager.save('formData', formDataToSave);
-  }, [currentStep, currentSubStep, personalInfo, isAgeConfirmed, teachingSubjects, allSpecs, allBoards, allExams, availability, services, packages]);
+  // Compact, sanitized snapshot of the whole form — the unit of persistence.
+  const snapshot = useMemo(
+    () => serializeFormState({
+      personalInfo, isAgeConfirmed, teachingSubjects, allSpecs,
+      allBoards, allExams, availability, services, packages,
+    }),
+    [personalInfo, isAgeConfirmed, teachingSubjects, allSpecs, allBoards, allExams, availability, services, packages]
+  );
+  const snapshotRef = useRef(snapshot);
+  snapshotRef.current = snapshot;
 
-  // Backend draft autosave (debounced). Mirrors the localStorage save to
-  // teacher_registration_drafts so progress through stages 1–5c survives across
-  // devices/sessions. Best-effort: no-ops without a Supabase session, and never
-  // blocks the UI (localStorage above remains the synchronous source of truth).
+  const autosave = useFormAutoSave({ snapshot, currentStep, currentSubStep, enabled: hydrated });
+
+  // Initial load: pick the freshest of {localStorage, backend draft}, hydrate,
+  // prime the engine so it doesn't immediately re-save what we just loaded, and
+  // surface a Resume prompt when local and remote meaningfully diverge.
   useEffect(() => {
-    const formDataToSave = {
-      personalInfo,
-      isAgeConfirmed,
-      teachingSubjects,
-      allSpecs,
-      allBoards,
-      allExams,
-      availability,
-      services,
-      packages,
+    let cancelled = false;
+    (async () => {
+      const initial = await autosave.loadInitial();
+      if (cancelled) return;
+      if (initial.source !== 'submitted' && initial.snapshot) {
+        const data = hydrateFormState(initial.snapshot);
+        applySavedData(data);
+        setCurrentStep(initial.currentStep || 1);
+        setCurrentSubStep(initial.currentSubStep || 1);
+        autosave.setBaseVersion(initial.version || 0);
+        autosave.markSynced(serializeFormState(data));
+        if (initial.hasConflict && initial.localSnapshot) {
+          setResumePrompt({
+            candidate: initial.localSnapshot,
+            step: initial.localStep,
+            subStep: initial.localSubStep,
+            source: 'local',
+          });
+        }
+      }
+      setHydrated(true);
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Multi-tab/device reconcile: on window focus, re-read the backend draft; if
+  // it diverges from what's on screen, offer to load it (never clobber silently).
+  useEffect(() => {
+    if (!hydrated) return undefined;
+    const onFocus = async () => {
+      const res = await autosave.reconcileRemote();
+      if (res.ok && res.data && !res.data.submitted && res.data.form_data) {
+        if (JSON.stringify(res.data.form_data) !== JSON.stringify(snapshotRef.current)) {
+          setResumePrompt({
+            candidate: res.data.form_data,
+            step: res.data.current_step,
+            subStep: res.data.current_sub_step,
+            source: 'remote',
+          });
+        }
+      }
     };
-    const timer = setTimeout(() => {
-      saveDraft(formDataToSave, currentStep, currentSubStep);
-    }, 800);
-    return () => clearTimeout(timer);
-  }, [currentStep, currentSubStep, personalInfo, isAgeConfirmed, teachingSubjects, allSpecs, allBoards, allExams, availability, services, packages]);
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [hydrated, autosave]);
+
+  const applyResume = useCallback(() => {
+    if (!resumePrompt) return;
+    applySavedData(hydrateFormState(resumePrompt.candidate));
+    if (resumePrompt.step) setCurrentStep(resumePrompt.step);
+    if (resumePrompt.subStep) setCurrentSubStep(resumePrompt.subStep);
+    setResumePrompt(null);
+    setTimeout(() => autosave.flushSync(), 0);
+  }, [resumePrompt, applySavedData, autosave]);
+
+  const dismissResume = useCallback(() => {
+    setResumePrompt(null);
+    // Keep what's on screen as the winner — flush it so it wins the next sync.
+    setTimeout(() => autosave.flushSync(), 0);
+  }, [autosave]);
+
+  // A freshly-uploaded photo URL is the most expensive thing to lose — persist
+  // it immediately (don't wait for the debounce) once a real URL lands.
+  useEffect(() => {
+    if (hydrated && personalInfo.profilePicture && !String(personalInfo.profilePicture).startsWith('blob:')) {
+      autosave.flushSync();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personalInfo.profilePicture, hydrated]);
+
+  // (localStorage + backend draft autosave is now handled by useFormAutoSave.)
 
   // Load user data
   useEffect(() => {
@@ -364,6 +404,8 @@ const TeacherForm = () => {
   }, [showValidationErrors, currentStep, currentSubStep, personalInfo, teachingSubjects, availability, services, packages, validateStep]);
   
   const next = () => {
+    // Step boundary = guaranteed save checkpoint (bypasses debounce).
+    autosave.flushSync();
     // Gate Step 5a: aggregate both errors into one popup (no early returns)
     if (currentStep === 5 && currentSubStep === 1) {
       const messages = [];
@@ -435,8 +477,9 @@ const TeacherForm = () => {
   };
 
   const prev = () => {
+    autosave.flushSync();
     setShowValidationErrors(false);
-    
+
     if (currentStep === 5) {
       if (currentSubStep > 1) {
         setCurrentSubStep(prev => prev - 1);
@@ -495,13 +538,38 @@ const TeacherForm = () => {
     return [...new Set(tags)];
   };
 
+  // Submit custom catalog entries to pending_data exactly once. Deduped via a
+  // localStorage signature set so retries/double-submits never create duplicates.
+  const submitPendingCustomEntries = useCallback(async () => {
+    const submitted = readSubmittedSet();
+    const items = [];
+    (teachingSubjects || []).filter(s => s.isCustom).forEach(s => items.push({ type: 'subject', value: s.subject, related: null }));
+    (allSpecs || []).filter(s => s.isCustom).forEach(s => items.push({ type: 'specialization', value: s.specialization, related: s.subject }));
+    (allBoards || []).filter(b => b.isCustom).forEach(b => items.push({ type: 'board', value: b.boardName, related: b.subject }));
+    (allExams || []).filter(e => e.isCustom).forEach(e => items.push({ type: 'exam', value: e.examName, related: e.subject }));
+    ((personalInfo && personalInfo.languages) || []).filter(l => l.pending).forEach(l => items.push({ type: 'language', value: l.language, related: null }));
+
+    for (const it of items) {
+      if (!it.value) continue;
+      const key = `${it.type}:${it.value}:${it.related || ''}`.toLowerCase();
+      if (submitted.has(key)) continue;
+      try {
+        const res = await CustomDataSubmissionService.submitCustomData(it.type, it.value, {}, it.related);
+        if (res?.success) { submitted.add(key); writeSubmittedSet(submitted); }
+      } catch { /* best-effort; retried on next submit */ }
+    }
+  }, [teachingSubjects, allSpecs, allBoards, allExams, personalInfo]);
+
   const handleSubmit = async () => {
+    if (submittingRef.current) return; // in-flight guard against double-submit
+    submittingRef.current = true;
     setLoading(true);
     if (!validateStep(currentStep, false, true)) {
       setLoading(false);
+      submittingRef.current = false;
       return;
     }
-    
+
     try {
       const searchTags = generateSearchTags();
       const availabilitySearchData = {
@@ -590,6 +658,9 @@ const TeacherForm = () => {
         }
       };
 
+      // Custom catalog entries → pending_data, exactly once (deduped).
+      await submitPendingCustomEntries();
+
       // Live backend first; fall back to the in-memory mock when there's no
       // Supabase session (dev mode / offline) so the flow always completes.
       const remote = await submitTeacherProfile(profileData);
@@ -597,13 +668,17 @@ const TeacherForm = () => {
         await TeacherProfile.create(profileData);
       }
       setIsComplete(true);
-      await persistenceManager.clear();
+      // Only after a confirmed success: clear the local draft (incl. PII) and
+      // mark the backend draft submitted.
+      await autosave.clearAll();
+      try { localStorage.removeItem(PENDING_SUBMITTED_KEY); } catch { /* noop */ }
       alert('Application submitted successfully!');
     } catch (error) {
       console.error('Registration failed:', error);
       setErrors({ submit: 'Registration failed. Please try again.' });
     } finally {
       setLoading(false);
+      submittingRef.current = false;
     }
   };
 
@@ -663,6 +738,22 @@ const TeacherForm = () => {
         onClose={() => setAlertInfo({ isOpen: false, message: '' })}
         message={alertInfo.message}
       />
+      {resumePrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Resume your progress?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              {resumePrompt.source === 'remote'
+                ? 'A more recent version of this form was saved on another tab or device. Load it? Your current changes on this screen will be replaced.'
+                : 'We found a more recent draft saved on this device. Load it instead of the version from your account?'}
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button variant="outline" onClick={dismissResume}>Keep current</Button>
+              <Button onClick={applyResume}>Load saved version</Button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="container mx-auto px-4">
         <div className="max-w-5xl mx-auto">
           <ProgressBar 
@@ -673,6 +764,16 @@ const TeacherForm = () => {
             subStepTargetStep={5}
             subStepsCount={3}
           />
+
+          <div className="flex justify-end mb-2 min-h-[18px] text-xs" aria-live="polite">
+            {autosave.status === 'saving' && <span className="text-gray-400">Saving…</span>}
+            {autosave.status === 'saved' && <span className="text-green-600">Progress saved</span>}
+            {autosave.status === 'offline' && <span className="text-amber-600">Offline — saved on this device</span>}
+            {autosave.status === 'error' && <span className="text-amber-600">Saved on this device</span>}
+            {autosave.quotaWarning && (
+              <span className="ml-2 text-amber-600">Storage full — progress may not survive a refresh</span>
+            )}
+          </div>
 
           <div className="w-full max-w-4xl mx-auto mb-8">
               <CurrentStepComponent 
