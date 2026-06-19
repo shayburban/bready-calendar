@@ -44,7 +44,14 @@ import TeacherPageTabs from '../components/common/TeacherPageTabs';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { supabase } from '@/api/supabaseClient';
-import { instantBookingEnabled, schedulingRulesEnabled } from '@/lib/scheduling/flags';
+import { schedulingRulesEnabled } from '@/lib/scheduling/flags';
+
+// Grace window (ms) after a teacher's LAST availability edit before it is
+// published to the public instant-booking backend (availability_one_off). The
+// teacher's own calendar updates immediately (localStorage); only the public
+// publish waits, so a mistake can be corrected before any student can book it.
+// Single tunable knob — change this number to adjust the delay.
+const AVAILABILITY_PUBLISH_DEBOUNCE_MS = 25_000;
 import { detectViewerTz } from '@/lib/scheduling/timekit';
 import { availabilityToRows } from '@/lib/scheduling/availabilityToRows';
 import { setAvailabilityOneOff } from '@/lib/scheduling/availabilityApi';
@@ -810,28 +817,62 @@ export default function TeacherCalendar() {
   // removes any saved slot matching the supplied (date, [startTime, endTime])
   // tuples — slots without time fields wildcard-match every saved slot on
   // that date.
+  // Debounced publisher: the teacher's full FUTURE availability set -> the
+  // public instant-booking backend (availability_one_off via
+  // set_availability_one_off, 0012). Wall-clock is converted to absolute UTC via
+  // TimeKit (R24/R20). UNCONDITIONAL (no feature flag) but delayed
+  // AVAILABILITY_PUBLISH_DEBOUNCE_MS after the last edit, so a teacher can fix a
+  // mistake before any student can instant-book it. Each edit resets the timer;
+  // the latest set wins. Best-effort, non-blocking.
+  const availPublishTimerRef = useRef(null);
+  const availPendingRef = useRef(null);
+
+  const publishAvailabilityNow = async (slots) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const teacherId = session?.user?.id;
+      if (teacherId) {
+        await setAvailabilityOneOff(teacherId, availabilityToRows(slots, detectViewerTz() || 'UTC'));
+      }
+    } catch (e) {
+      console.warn('Supabase availability sync skipped:', e?.message || e);
+    }
+  };
+
+  const scheduleAvailabilityPublish = (slots) => {
+    availPendingRef.current = slots;
+    if (availPublishTimerRef.current) clearTimeout(availPublishTimerRef.current);
+    availPublishTimerRef.current = setTimeout(() => {
+      availPublishTimerRef.current = null;
+      const pending = availPendingRef.current;
+      availPendingRef.current = null;
+      if (pending) publishAvailabilityNow(pending);
+    }, AVAILABILITY_PUBLISH_DEBOUNCE_MS);
+  };
+
+  // Flush a pending publish on unmount so navigating away within the grace
+  // window still pushes the latest availability (no lost update).
+  useEffect(() => {
+    return () => {
+      if (availPublishTimerRef.current) {
+        clearTimeout(availPublishTimerRef.current);
+        const pending = availPendingRef.current;
+        availPendingRef.current = null;
+        if (pending) publishAvailabilityNow(pending);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleSaveAvailability = (slots, mode) => {
     setSavedAvailabilitySlots((prev) => {
       const next = applySaveAvailability(prev, slots, mode);
       persistAvailabilitySlots(next);
-      // ADDITIVE (scheduling): mirror the full FUTURE availability set to Supabase
-      // (set_availability_one_off, 0012) so the public picker (bookable_slots) has
-      // real data. Flag-gated + fire-and-forget + non-blocking — localStorage above
-      // stays the source for the teacher's own calendar UI and is unaffected by a
-      // sync failure. Wall-clock is converted to absolute UTC via TimeKit (R24/R20).
-      if (instantBookingEnabled()) {
-        (async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const teacherId = session?.user?.id;
-            if (teacherId) {
-              await setAvailabilityOneOff(teacherId, availabilityToRows(next, detectViewerTz() || 'UTC'));
-            }
-          } catch (e) {
-            console.warn('Supabase availability sync skipped:', e?.message || e);
-          }
-        })();
-      }
+      // Publish the full FUTURE availability set to the public instant-booking
+      // backend — UNCONDITIONAL (no flag) + debounced (~25s grace window) so a
+      // mistake can be fixed before any student can book it. localStorage above
+      // stays the immediate source for the teacher's own calendar UI.
+      scheduleAvailabilityPublish(next);
       return next;
     });
   };
@@ -848,21 +889,9 @@ export default function TeacherCalendar() {
         (s) => !(s.date === slot.date && s.startTime === slot.startTime && s.endTime === slot.endTime)
       );
       persistAvailabilitySlots(next);
-      // Same flag-gated, fire-and-forget Supabase mirror as the save path, so a
-      // closed slot leaves the public picker too (not just the local calendar).
-      if (instantBookingEnabled()) {
-        (async () => {
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const teacherId = session?.user?.id;
-            if (teacherId) {
-              await setAvailabilityOneOff(teacherId, availabilityToRows(next, detectViewerTz() || 'UTC'));
-            }
-          } catch (e) {
-            console.warn('Supabase availability sync skipped:', e?.message || e);
-          }
-        })();
-      }
+      // Same unconditional, debounced publish as the save path, so a closed slot
+      // leaves the public picker too (after the ~25s grace window).
+      scheduleAvailabilityPublish(next);
       return next;
     });
   };
