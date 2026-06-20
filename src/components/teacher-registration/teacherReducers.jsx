@@ -368,18 +368,19 @@ export const availabilityInitialState = {
     acc[day] = [{ start: '', end: '', error: null }];
     return acc;
   }, {}),
-  // Defaults now come from the shared single-source module so the Calendar
-  // Sidebar's scheduling-preferences panel shows the SAME 14-week / 4-week
-  // defaults as Page 5c (see lib/scheduling/schedulingDefaults). `preferenceType`
-  // stays lowercase to match the Select option values in
-  // common/AvailabilityWindow.jsx / AdvanceBookingSelector.jsx
-  // ('days' | 'weeks' | 'months'); the 14-week window also drives the
-  // instant-booking materialization horizon (registrationAvailability.windowToDays).
+  // Defaults come from the shared single-source module so the Calendar Sidebar's
+  // scheduling-preferences panel shows the SAME defaults as Page 5c (see
+  // lib/scheduling/schedulingDefaults): a 14-week Availability Window, and NO
+  // default for advance booking / break — those show only their placeholder
+  // until the teacher picks a value. `preferenceType` stays lowercase to match
+  // the Select option values in common/AvailabilityWindow.jsx /
+  // AdvanceBookingSelector.jsx ('days' | 'weeks' | 'months'); the 14-week window
+  // also drives the instant-booking materialization horizon
+  // (registrationAvailability.windowToDays).
   availabilityWindow: { ...DEFAULT_AVAILABILITY_WINDOW },
-  farAdvanceBookingFromStudent: { ...DEFAULT_ADVANCE_BOOKING },
-  // Break stays pristine/unset (null) by default; the BreakTimeSelector
-  // expects the {preference, preferenceType} pair, and BookingPreferences
-  // normalises null to the empty pair before passing into the wrapper.
+  // null default — NOT spread (`{ ...null }` would become an invalid `{}`).
+  // BookingPreferences normalises null to the empty pair for the wrapper.
+  farAdvanceBookingFromStudent: DEFAULT_ADVANCE_BOOKING,
   breakAfterClassInHours: DEFAULT_BREAK_AFTER_CLASS,
 };
 

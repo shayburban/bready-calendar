@@ -20,17 +20,24 @@
 // and consume — `preferenceType` is the lowercase select-option value.
 
 export const DEFAULT_AVAILABILITY_WINDOW = { preference: 14, preferenceType: 'weeks' };
-export const DEFAULT_ADVANCE_BOOKING = { preference: 4, preferenceType: 'weeks' };
+// Advance-booking notice has NO default — it shows only the placeholder (null)
+// until the teacher picks a value, on BOTH Page 5c and the Calendar Sidebar.
+export const DEFAULT_ADVANCE_BOOKING = null;
 // Break is intentionally unset by default (pristine empty pair handled by the
 // consumers); `null` is the safe "no break configured" value.
 export const DEFAULT_BREAK_AFTER_CLASS = null;
 
-// Fresh clone of the full scheduling-preferences object, keyed by the
+// Null-safe shallow clone of a {preference, preferenceType} default (or null).
+// Spreading a null default (`{ ...null }`) silently produces `{}` — an invalid
+// half-empty pair — so every default is routed through this instead.
+const cloneDefault = (pref) => (pref && typeof pref === 'object' ? { ...pref } : pref);
+
+// Fresh copy of the full scheduling-preferences object, keyed by the
 // TeacherProfile field names the sidebar hydrates from / persists to. A factory
 // (not a shared constant) so callers can mutate / replace freely without
 // touching the shared default references.
 export const defaultSchedulingPrefs = () => ({
-  availability_window: { ...DEFAULT_AVAILABILITY_WINDOW },
-  advance_booking_policy: { ...DEFAULT_ADVANCE_BOOKING },
-  break_after_class_hours: DEFAULT_BREAK_AFTER_CLASS,
+  availability_window: cloneDefault(DEFAULT_AVAILABILITY_WINDOW),
+  advance_booking_policy: cloneDefault(DEFAULT_ADVANCE_BOOKING),
+  break_after_class_hours: cloneDefault(DEFAULT_BREAK_AFTER_CLASS),
 });

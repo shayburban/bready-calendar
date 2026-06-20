@@ -344,7 +344,8 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
           // field hasn't been persisted yet, so the sidebar never shows an empty
           // Availability Window where Page 5c shows 14 weeks.
           availability_window: profile.availability_window || { ...DEFAULT_AVAILABILITY_WINDOW },
-          advance_booking_policy: profile.advance_booking_policy || { ...DEFAULT_ADVANCE_BOOKING },
+          // null default — NOT spread; show the persisted value or the placeholder.
+          advance_booking_policy: profile.advance_booking_policy || DEFAULT_ADVANCE_BOOKING,
           break_after_class_hours: profile.break_after_class_hours || DEFAULT_BREAK_AFTER_CLASS,
         };
         setSchedPrefs(hydrated);

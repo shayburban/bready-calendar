@@ -13,13 +13,11 @@
 //
 // Keep these two the ONLY place state <-> persistence conversion happens.
 
-// Shared single-source defaults (also used by the Page-5c reducer and the
-// Calendar Sidebar) so every surface hydrates to the SAME 14-week / 4-week
-// defaults — see lib/scheduling/schedulingDefaults.
-import {
-  DEFAULT_AVAILABILITY_WINDOW as DEFAULT_WINDOW,
-  DEFAULT_ADVANCE_BOOKING as DEFAULT_ADVANCE,
-} from '@/lib/scheduling/schedulingDefaults';
+// Shared single-source default (also used by the Page-5c reducer and the
+// Calendar Sidebar) so every surface hydrates to the SAME 14-week Availability
+// Window default — see lib/scheduling/schedulingDefaults. Advance booking and
+// break have NO default; they hydrate to null (placeholder) when unset.
+import { DEFAULT_AVAILABILITY_WINDOW as DEFAULT_WINDOW } from '@/lib/scheduling/schedulingDefaults';
 
 function normalizePair(pair) {
   if (pair == null || typeof pair !== 'object') return pair ?? null;
@@ -104,7 +102,8 @@ export function hydrateFormState(snapshot) {
       timezone: av.timezone || '',
       slots,
       availabilityWindow: normalizePair(av.availabilityWindow) || { ...DEFAULT_WINDOW },
-      farAdvanceBookingFromStudent: normalizePair(av.farAdvanceBookingFromStudent) || { ...DEFAULT_ADVANCE },
+      // No default — advance booking stays null (placeholder) until set, same as break.
+      farAdvanceBookingFromStudent: normalizePair(av.farAdvanceBookingFromStudent ?? null),
       breakAfterClassInHours: normalizePair(av.breakAfterClassInHours ?? null),
     },
     services: snapshot.services || [],
