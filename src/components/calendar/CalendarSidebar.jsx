@@ -26,6 +26,18 @@ import TeacherSchedulingPreferences from '@/components/common/teacher-scheduling
 import { supabase } from '@/api/supabaseClient';
 import { schedulingRulesEnabled } from '@/lib/scheduling/flags';
 import { detectViewerTz } from '@/lib/scheduling/timekit';
+// Future-only floor for the Set Availability time pickers (same helper the
+// "Add New Booking Or Availability" modal uses) so a slot can't start in the
+// past on today.
+import { timeFloorForDate } from '@/lib/calendar/futureTime';
+// Shared platform defaults (14-week window / 4-week notice / no break) so the
+// sidebar shows the SAME scheduling-preference defaults as Page 5c.
+import {
+  defaultSchedulingPrefs,
+  DEFAULT_AVAILABILITY_WINDOW,
+  DEFAULT_ADVANCE_BOOKING,
+  DEFAULT_BREAK_AFTER_CLASS,
+} from '@/lib/scheduling/schedulingDefaults';
 
 // Master category definitions - static internal structure
 // Each category has a 'perspectives' array indicating which role_ids (from AppRole) it applies to.
@@ -115,7 +127,7 @@ const ActionTab = ({ activeTab, tabName, label, setActiveTab }) =>
 // prop. The existing `endTime <= startTime` order check still applies to
 // both fields. Fully-empty rows are NOT highlighted (they are not invalid;
 // the user simply hasn't filled them yet).
-const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showErrors }) => {
+const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showErrors, minTime }) => {
   const isInvalidOrder = !!(row.startTime && row.endTime && row.endTime <= row.startTime);
   const isPartial = !!row.startTime !== !!row.endTime;
   const startInvalid = isInvalidOrder || (showErrors && isPartial && !row.startTime);
@@ -135,6 +147,9 @@ const TimeAvailabilityRow = ({ row, onChange, onRemove, onAdd, canRemove, showEr
         startInvalid={startInvalid}
         endInvalid={endInvalid}
         manualEnd
+        // Future-only floor (today → current time). When set, TimeSelect only
+        // offers later quarter-hours, so a past start time can't be picked.
+        minTime={minTime}
       />
       <Button
         variant="ghost"
@@ -226,11 +241,11 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // attempts to find the current user's TeacherProfile row and seed
   // these from it; if no row exists yet the sidebar starts empty and
   // creates a row on first Save.
-  const [schedPrefs, setSchedPrefs] = useState({
-    availability_window: null,
-    advance_booking_policy: null,
-    break_after_class_hours: null,
-  });
+  // Seed the SAME platform defaults Page 5c uses (14-week window / 4-week
+  // notice / no break) so the sidebar shows them identically when the teacher
+  // has no saved TeacherProfile values yet. Hydration below overrides per-field
+  // with any persisted value.
+  const [schedPrefs, setSchedPrefs] = useState(defaultSchedulingPrefs);
   const [schedProfileId, setSchedProfileId] = useState(null);
   const [isSavingSchedPrefs, setIsSavingSchedPrefs] = useState(false);
   // Baseline = the values currently persisted to TeacherProfile.
@@ -238,11 +253,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // when the user enters edit mode. Cancel restores from this so a
   // discarded edit can never silently leave the form out of sync with
   // the DB row. Initialised to the same empty shape as schedPrefs.
-  const [schedPrefsBaseline, setSchedPrefsBaseline] = useState({
-    availability_window: null,
-    advance_booking_policy: null,
-    break_after_class_hours: null,
-  });
+  const [schedPrefsBaseline, setSchedPrefsBaseline] = useState(defaultSchedulingPrefs);
   // Task 3 — submit-triggered validation. Flips to true ONLY when the
   // user clicks Save with an invalid form, and resets to false on
   // Cancel / Pencil-toggle-out / successful save. Cascades to the
@@ -329,9 +340,12 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
         if (cancelled || !profile) return;
         setSchedProfileId(profile.id);
         const hydrated = {
-          availability_window: profile.availability_window || null,
-          advance_booking_policy: profile.advance_booking_policy || null,
-          break_after_class_hours: profile.break_after_class_hours || null,
+          // Fall back to the shared platform defaults (matching Page 5c) when a
+          // field hasn't been persisted yet, so the sidebar never shows an empty
+          // Availability Window where Page 5c shows 14 weeks.
+          availability_window: profile.availability_window || { ...DEFAULT_AVAILABILITY_WINDOW },
+          advance_booking_policy: profile.advance_booking_policy || { ...DEFAULT_ADVANCE_BOOKING },
+          break_after_class_hours: profile.break_after_class_hours || DEFAULT_BREAK_AFTER_CLASS,
         };
         setSchedPrefs(hydrated);
         // Seed the baseline so a subsequent Cancel reverts to what's
@@ -931,6 +945,35 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     extraRows.some(isDateRowPartial);
   const hasPartialPair = hasPartialTimeRow || hasPartialDateRow;
 
+  // ── Future-only floor (Part 1) ──────────────────────────────────────────
+  // Availability is a present/future event, so a slot can never START in the
+  // past. The date pickers already block past DAYS; this also blocks a past
+  // TIME on today — mirroring the "Add New Booking Or Availability" modal
+  // (OpenAvailabilityPane), which floors its time picker to
+  // timeFloorForDate(date) when the date is today.
+  //
+  // The selected time rows apply to EVERY date in the range, so we floor by the
+  // EARLIEST selected start date: when that day is today the floor is the
+  // current HH:MM (TimeSelect then only offers later quarter-hours); when it's a
+  // future day there is no floor. Only meaningful when OPENING availability —
+  // CLOSED mode (removing slots) keeps its existing freedom so an already-open
+  // today slot can still be closed.
+  const selectedStartDates = [primaryRangeValue?.startDate, ...extraRows.map((r) => r?.startDate)]
+    .filter(Boolean);
+  const earliestSelectedStart = selectedStartDates.length
+    ? selectedStartDates.reduce((min, d) =>
+        (new Date(d).getTime() < new Date(min).getTime() ? d : min))
+    : null;
+  const timeFloor =
+    availabilityMode === 'open' ? timeFloorForDate(earliestSelectedStart) : '';
+  // A start time at/before the current time on today would open availability in
+  // the past. Blocked exactly like the modal's startIsFuture guard. (timeFloor
+  // is non-empty ONLY when the earliest selected day is today.)
+  const hasPastTodayTime =
+    !!timeFloor &&
+    timeAvailEnabled &&
+    timeRanges.some((r) => !!r && !!r.startTime && r.startTime <= timeFloor);
+
   // Bug-fix — chronological time validation now feeds the global form
   // state. Previously TimeAvailabilityRow detected `endTime <= startTime`
   // locally and applied red rings to both inputs, but that flag never
@@ -949,7 +992,7 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
   // gray styling AND handleSaveClick's short-circuit BOTH read this
   // so the chronological check is treated identically to partial
   // pairs — no decoupled states.
-  const hasAnyValidationError = hasPartialPair || hasInvalidTimeOrder;
+  const hasAnyValidationError = hasPartialPair || hasInvalidTimeOrder || hasPastTodayTime;
 
   // saveErrorMsg precedence (most specific → most generic):
   //   1. partial date row  → exact spec copy for the comprehensive
@@ -1004,6 +1047,12 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
     if (timeAvailEnabled) {
       timeRanges.forEach((row, idx) => {
         const loc = `${viewLabel} view, Time Row ${idx + 1}`;
+        // Past-on-today takes priority — a start at/before "now" on today can
+        // never be opened (availability is future-only).
+        if (timeFloor && row?.startTime && row.startTime <= timeFloor) {
+          issues.push(`Start time in ${loc} must be in the future — earlier times today have already passed`);
+          return;
+        }
         if (row?.startTime && row?.endTime && row.endTime <= row.startTime) {
           issues.push(`Time conflict in ${loc} (end must be after start)`);
           return;
@@ -1333,6 +1382,9 @@ export default function CalendarSidebar({ view, setView, onLegendFilterChange, e
               // showErrors lights up the partial side(s) of a
               // start/end pair when the user has clicked Save.
               showErrors={showErrors}
+              // Part 1 — future-only floor: when the earliest selected day is
+              // today, only times after "now" are pickable (empty otherwise).
+              minTime={timeFloor || undefined}
             />
             ))}
                         </div>

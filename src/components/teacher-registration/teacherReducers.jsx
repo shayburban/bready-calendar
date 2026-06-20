@@ -6,6 +6,12 @@
 
 // REDUCERS LOGIC START
 
+import {
+  DEFAULT_AVAILABILITY_WINDOW,
+  DEFAULT_ADVANCE_BOOKING,
+  DEFAULT_BREAK_AFTER_CLASS,
+} from '@/lib/scheduling/schedulingDefaults';
+
 //* SUBJECT CATEGORY
 export const subCategoryReducer = (state, action) => {
   if (action.type === "CAT_SEARCH") {
@@ -362,32 +368,19 @@ export const availabilityInitialState = {
     acc[day] = [{ start: '', end: '', error: null }];
     return acc;
   }, {}),
-  // Bug fix — `preferenceType` MUST match the lowercase Select option
-  // values in common/AvailabilityWindow.jsx / AdvanceBookingSelector.jsx
-  // ('days' | 'weeks' | 'months'). Previously this was 'Weeks' (capital)
-  // which meant Select.value didn't match any SelectItem.value, so the
-  // Time Unit dropdown rendered an empty placeholder on Page 5c even
-  // though the reducer state held a default. Saving without touching
-  // these fields then persisted wrong-cased data.
-  availabilityWindow: {
-    // Default availability window: 14 weeks. Auto-fills the Page-5c
-    // "Availability Window" field and drives the instant-booking
-    // materialization horizon (see registrationAvailability.windowToDays) —
-    // changing it here (or in the field) changes both.
-    preference: 14,
-    preferenceType: 'weeks',
-  },
-  farAdvanceBookingFromStudent: {
-    preference: 4,
-    preferenceType: 'weeks',
-  },
-  // Bug fix — was `0` (number); the BreakTimeSelector expects the
-  // {preference, preferenceType} object shape. Starting as `null` is the
-  // safest pristine value: BookingPreferences normalises to the empty
-  // pair before passing into the wrapper, and TeacherProfile.create
-  // receives a consistent shape regardless of whether the teacher
-  // interacts with the field.
-  breakAfterClassInHours: null
+  // Defaults now come from the shared single-source module so the Calendar
+  // Sidebar's scheduling-preferences panel shows the SAME 14-week / 4-week
+  // defaults as Page 5c (see lib/scheduling/schedulingDefaults). `preferenceType`
+  // stays lowercase to match the Select option values in
+  // common/AvailabilityWindow.jsx / AdvanceBookingSelector.jsx
+  // ('days' | 'weeks' | 'months'); the 14-week window also drives the
+  // instant-booking materialization horizon (registrationAvailability.windowToDays).
+  availabilityWindow: { ...DEFAULT_AVAILABILITY_WINDOW },
+  farAdvanceBookingFromStudent: { ...DEFAULT_ADVANCE_BOOKING },
+  // Break stays pristine/unset (null) by default; the BreakTimeSelector
+  // expects the {preference, preferenceType} pair, and BookingPreferences
+  // normalises null to the empty pair before passing into the wrapper.
+  breakAfterClassInHours: DEFAULT_BREAK_AFTER_CLASS,
 };
 
 export const availabilityReducer = (state, action) => {

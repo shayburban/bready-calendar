@@ -40,6 +40,25 @@ const TOOLTIP_AVAILABILITY_WINDOW = TOOLTIPS.availabilityWindow;
 const TOOLTIP_ADVANCE_BOOKING = TOOLTIPS.advanceBooking;
 const TOOLTIP_BREAK = TOOLTIPS.breakAfterClass;
 
+// Render a long tooltip string as spaced paragraphs so it's easier to read.
+// The §7 copy for all three settings is written as "<definition>. Example:
+// <example>", so we break at the first "Example:" and let the definition and
+// the example sit on their own lines with vertical breathing room (combined
+// with leading-relaxed + extra padding on the TooltipContent below).
+const renderTooltipBody = (text) => {
+  if (typeof text !== 'string') return null;
+  const idx = text.indexOf('Example:');
+  if (idx === -1) return <p>{text}</p>;
+  const lead = text.slice(0, idx).trim();
+  const example = text.slice(idx).trim();
+  return (
+    <>
+      {lead && <p>{lead}</p>}
+      <p>{example}</p>
+    </>
+  );
+};
+
 const HeadingWithTooltip = ({ title, tooltip, variant }) => {
   const headingClass =
     variant === 'sidebar'
@@ -55,8 +74,10 @@ const HeadingWithTooltip = ({ title, tooltip, variant }) => {
               <Info className="w-4 h-4 text-gray-400 cursor-help" />
             </button>
           </TooltipTrigger>
-          <TooltipContent className="bg-black text-white text-xs rounded-md shadow-lg p-2">
-            <p className="max-w-xs">{tooltip}</p>
+          <TooltipContent className="bg-black text-white text-xs rounded-md shadow-lg p-3">
+            <div className="max-w-xs space-y-2 leading-relaxed">
+              {renderTooltipBody(tooltip)}
+            </div>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
@@ -221,7 +242,6 @@ export default function TeacherSchedulingPreferences({
           tooltip={TOOLTIP_ADVANCE_BOOKING}
           variant={variant}
         />
-        <p className="text-xs text-gray-500">{TOOLTIPS.advanceBookingHelper}</p>
         <AdvanceBookingSelector
           value={current.advance_booking_policy || EMPTY_FIELD}
           onChange={handleAdvance}
