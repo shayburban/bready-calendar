@@ -39,6 +39,7 @@ import {
 import { toast } from '@/components/ui/use-toast';
 import { Availability } from '@/api/entities'; // New import
 import { timeFloorForDate, isFutureDateTime } from '@/lib/calendar/futureTime';
+import { computeBookableWindow, parseTimeRange, formatRemaining } from '@/lib/calendar/bookableWindow';
 
 export default function TeacherAvailabilityCard({ event, onClose, onDateChange, onAvailabilityChanged, savedAvailabilitySlots = [], syncedDayEvents = [], showEditIcon = true }) {
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -299,7 +300,22 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
   }, [event]);
 
   if (!event) return null;
-  
+
+  // Live bookable window for THIS slot (Q2 — the front edge rolls forward with
+  // the clock while the END stays pinned). The teacher keeps seeing their
+  // committed range; the elapsed part is greyed and the rolled "bookable from"
+  // is annotated. noticeMinutes defaults to 0 (the platform default — advance
+  // booking now defaults to no notice); thread the teacher's real notice here
+  // if/when their settings flow into this card.
+  const slotRange = parseTimeRange(event.time || '');
+  const win = slotRange
+    ? computeBookableWindow({
+        date: event.dateString || selectedDate,
+        startTime: slotRange.startTime,
+        endTime: slotRange.endTime,
+      })
+    : null;
+
   const roleDisplay = event.role ? `(${event.role})` : '';
 
   const handleDateSelect = (date) => {
@@ -418,7 +434,34 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
 
       <div className="space-y-1">
         <p className="font-bold text-gray-800 underline">Your Availability</p>
-        <p className="text-sm text-gray-600">{format(selectedDate, 'dd.MM.yyyy')} | {event.time || activeTimeSlot}</p>
+        {win && win.valid ? (
+          <>
+            <p className="text-sm text-gray-600">
+              {format(selectedDate, 'dd.MM.yyyy')} |{' '}
+              {win.state === 'ended' ? (
+                <span className="text-gray-400 line-through">{win.originalStart} – {win.originalEnd}</span>
+              ) : win.isPartlyElapsed ? (
+                <>
+                  {/* The elapsed hours are greyed/struck; the live remainder stays normal. */}
+                  <span className="text-gray-400 line-through">{win.originalStart}</span>
+                  <span> – {win.originalEnd}</span>
+                </>
+              ) : (
+                <span>{win.originalStart} – {win.originalEnd}</span>
+              )}
+            </p>
+            {win.state === 'live' && (
+              <p className="text-xs text-green-700">
+                Bookable from {win.effectiveStart} · {formatRemaining(win.remainingMinutes)} left
+              </p>
+            )}
+            {win.state === 'ended' && (
+              <p className="text-xs text-gray-400">This availability has already ended.</p>
+            )}
+          </>
+        ) : (
+          <p className="text-sm text-gray-600">{format(selectedDate, 'dd.MM.yyyy')} | {event.time || activeTimeSlot}</p>
+        )}
       </div>
 
       <div className="space-y-3">

@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 // the My Availability (T) popup card).
 import TimeRangeFields from '../common/TimeRangeFields';
 import { pastDaysMatcher, timeFloorForDate } from '@/lib/calendar/futureTime';
+import { computeBookableWindow, parseTimeRange } from '@/lib/calendar/bookableWindow';
 
 export default function TeacherAvailabilityStudentCard({ event, onClose }) {
     const initialDate = event?.dateString ? new Date(event.dateString) : new Date(2021, 6, 19);
@@ -50,6 +51,15 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
     const toggleDay = (id) => {
         setActiveDays(prev => prev.includes(id) ? prev.filter(d => d !== id) : [...prev, id]);
     };
+
+    // Effective bookable window (Q2 — a student only sees what's still bookable:
+    // the front edge rolls forward to now [+ notice], the END stays pinned).
+    // Guarded on a REAL slot date so the static mock demo (hardcoded 2021 date)
+    // keeps its current raw-time display; only genuine slots get the rolled view.
+    const slotRange = parseTimeRange(event?.time || activeTimeSlot || '');
+    const win = (event?.dateString && slotRange)
+        ? computeBookableWindow({ date, startTime: slotRange.startTime, endTime: slotRange.endTime })
+        : null;
 
     return (
         <div className="bg-white rounded-lg shadow-md p-4 w-full max-w-sm mx-auto" onClick={(e) => e.stopPropagation()}>
@@ -98,7 +108,15 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
 
             <div className="text-sm space-y-1 mb-3">
                 <p className="text-gray-900 font-bold underline">Aman R.</p>
-                <p>{event?.time || activeTimeSlot} &nbsp; {format(date, 'dd.MM.yyyy')}</p>
+                <p>
+                    {win && win.valid && win.state !== 'ended'
+                        ? `${win.effectiveStart} – ${win.originalEnd}`
+                        : (event?.time || activeTimeSlot)}
+                    &nbsp; {format(date, 'dd.MM.yyyy')}
+                    {win && win.valid && win.state === 'ended' && (
+                        <span className="text-red-500 ml-1">(no longer available)</span>
+                    )}
+                </p>
                 <p>Delhi, India</p>
             </div>
 
