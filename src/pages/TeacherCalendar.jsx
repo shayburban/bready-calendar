@@ -1435,6 +1435,7 @@ export default function TeacherCalendar() {
         event={selectedEvent}
         isOpen={showSyncedModal}
         onClose={() => setShowSyncedModal(false)}
+        events={events}
       />
       <AddNewBookingOrAvailabilityModal
         isOpen={showAddModal}
