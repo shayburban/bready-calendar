@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarIcon, MoreVertical, Pencil, Trash2, Mail, Bell, CreditCard, ChevronDown, Plus, RefreshCw, X, Copy } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
+import CardDateDropdown from './CardDateDropdown';
 import TabSelector from '../common/TabSelector'; // Added import for TabSelector
 
 const NotificationRow = ({ value = "30", onRemove }) =>
@@ -32,7 +33,7 @@ const NotificationRow = ({ value = "30", onRemove }) =>
     </div>;
 
 
-export default function GlobalBookingCard({ event, onClose }) {
+export default function GlobalBookingCard({ event, onClose, onDateChange }) {
     const [notifications, setNotifications] = useState([1]);
     const [emailNotifications, setEmailNotifications] = useState([1]);
     const [date, setDate] = useState(new Date(2021, 6, 19));
@@ -58,22 +59,11 @@ export default function GlobalBookingCard({ event, onClose }) {
         <div className="bg-white rounded-lg shadow-md p-4 w-full max-w-sm mx-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-center font-bold text-lg mb-1">Booked (T)</h3>
 
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-center flex items-center gap-2 mb-2">
-                        <span>{date.toLocaleDateString('de-DE')}</span>
-                        <ChevronDown className="w-4 h-4" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                    <Calendar
-                        mode="single"
-                        selected={date}
-                        onSelect={setDate}
-                        initialFocus />
-
-                </PopoverContent>
-            </Popover>
+            <CardDateDropdown
+                selectedDate={event?.dateString}
+                availableDates={event?.availableDatesForCategory}
+                onDateChange={onDateChange}
+            />
 
             <div className="flex justify-center items-center gap-2 mb-3">
                 {event.slotHeader || (

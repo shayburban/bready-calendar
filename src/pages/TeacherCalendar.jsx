@@ -1427,6 +1427,7 @@ export default function TeacherCalendar() {
         isOpen={showAvailabilityModal}
         onClose={() => setShowAvailabilityModal(false)}
         savedAvailabilitySlots={savedAvailabilitySlots}
+        events={events}
         onAvailabilityChanged={handleAvailabilityChanged}
         onRequestResponded={loadEvents}
       />

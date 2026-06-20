@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
+import CardDateDropdown from './CardDateDropdown';
 import TabSelector from '../common/TabSelector';
 
-export default function CompletedTeacherCard({ event, onClose }) {
+export default function CompletedTeacherCard({ event, onClose, onDateChange }) {
     const [date, setDate] = useState(new Date(2021, 6, 19));
     const [activeTimeSlot, setActiveTimeSlot] = useState('15:00 - 16:00');
 
@@ -26,17 +27,11 @@ export default function CompletedTeacherCard({ event, onClose }) {
                 <h3 className="text-center font-bold text-lg mb-0">Completed (T)</h3>
             </div>
 
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-center flex items-center gap-2 mb-2">
-                        <span>{date.toLocaleDateString('de-DE')}</span>
-                        <ChevronDown className="w-4 h-4" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
-                </PopoverContent>
-            </Popover>
+            <CardDateDropdown
+                selectedDate={event?.dateString}
+                availableDates={event?.availableDatesForCategory}
+                onDateChange={onDateChange}
+            />
 
             <div className="flex justify-center items-center gap-2 mb-3">
                 {event.slotHeader || (

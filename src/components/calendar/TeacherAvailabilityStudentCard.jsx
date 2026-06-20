@@ -16,8 +16,9 @@ import { cn } from '@/lib/utils';
 import TimeRangeFields from '../common/TimeRangeFields';
 import { pastDaysMatcher, timeFloorForDate } from '@/lib/calendar/futureTime';
 import { computeBookableWindow, parseTimeRange } from '@/lib/calendar/bookableWindow';
+import CardDateDropdown from './CardDateDropdown';
 
-export default function TeacherAvailabilityStudentCard({ event, onClose }) {
+export default function TeacherAvailabilityStudentCard({ event, onClose, onDateChange }) {
     const initialDate = event?.dateString ? new Date(event.dateString) : new Date(2021, 6, 19);
     const [date, setDate] = useState(initialDate);
     const [activeTimeSlot, setActiveTimeSlot] = useState(event?.time || '15:00 - 16:00');
@@ -65,17 +66,11 @@ export default function TeacherAvailabilityStudentCard({ event, onClose }) {
         <div className="bg-white rounded-lg shadow-md p-4 w-full max-w-sm mx-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-center font-bold text-lg mb-2">Teacher Availability (S)</h3>
 
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="ghost" className="w-full justify-center flex items-center gap-2 mb-2">
-                        <span>{date.toLocaleDateString('de-DE')}</span>
-                        <ChevronDown className="w-4 h-4" />
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} disabled={pastDaysMatcher()} initialFocus />
-                </PopoverContent>
-            </Popover>
+            <CardDateDropdown
+                selectedDate={event?.dateString || date}
+                availableDates={event?.availableDatesForCategory}
+                onDateChange={onDateChange}
+            />
 
             <div className="flex justify-center items-center gap-2 mb-3">
                 {event.slotHeader || (

@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { format } from 'date-fns';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import NavigationWithinLegend from './NavigationWithinLegend';
-import { synthesizeSavedAvailEvent, dayOfMonthFromSlot } from '@/lib/eventSiblings';
+import { categoryDatesForPicker, eventsForDate } from '@/lib/calendar/categoryDates';
 import TeacherAvailabilityCard from './TeacherAvailabilityCard';
 import GlobalBookingCard from './GlobalBookingCard';
 import BookedAsStudentCard from './BookedAsStudentCard';
@@ -27,21 +26,23 @@ const startMinutesOf = (e) => {
   return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
 };
 
-export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [], onAvailabilityChanged, onRequestResponded }) {
-  // Global picker highlight list — sourced ONCE from savedAvailabilitySlots so
-  // the calendar highlights the same days regardless of which sibling chip is
-  // active (Bug 1 fix). Output format matches what CalendarWithinCalendarCards
-  // already accepts (full ISO via local Date + toISOString reparse).
-  const globalSavedDates = useMemo(() => {
-    // Defensive filter: skip null/malformed slots so a single bad localStorage
-    // entry can't crash the modal at mount time.
-    return Array.from(new Set((savedAvailabilitySlots || [])
-      .filter((s) => s && typeof s.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date))
-      .map((s) => {
-        const [y, m, d] = s.date.split('-').map(Number);
-        return new Date(y, m - 1, d).toISOString();
-      })));
-  }, [savedAvailabilitySlots]);
+export default function AvailabilityModal({ event, isOpen, onClose, savedAvailabilitySlots = [], events = [], onAvailabilityChanged, onRequestResponded }) {
+  // Contextual date set for the in-card dropdown (spec #1 + #2): the dates that
+  // HAVE an event of THIS card's type+role. Availability (role 'T') is backed by
+  // the teacher's real saved slots; every other type by the master calendar
+  // events. CalendarWithinCalendarCards enables exactly these and disables the
+  // rest. Keyed off the clicked event's type/role so it stays stable across
+  // sibling chips on the same day.
+  const availableDates = useMemo(() => {
+    if (!event) return [];
+    return categoryDatesForPicker({
+      events,
+      savedSlots: savedAvailabilitySlots,
+      type: event.type,
+      role: event.role,
+      center: event.dateString ? new Date(event.dateString) : new Date(),
+    });
+  }, [event, events, savedAvailabilitySlots]);
 
   // The modal owns the "active date" so chips, "Your Availability" text,
   // and the picker can stay in sync as the user picks a new date. Initialized
@@ -81,28 +82,19 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
       });
       return [event, ...dedupSiblings];
     }
-    // Different date picked via the picker — synthesize sibling-shaped events
-    // from savedAvailabilitySlots filtered to that day. Wrap the parse in
-    // try/catch so a malformed activeDate falls back to [event] instead of
-    // crashing the modal during render.
-    let activeYMD;
-    try {
-      activeYMD = format(new Date(activeDate), 'yyyy-MM-dd');
-    } catch {
-      return [event];
-    }
-    const matched = (savedAvailabilitySlots || [])
-      .filter((s) => s && typeof s.date === 'string' && s.date === activeYMD && s.startTime && s.endTime)
-      .slice()
-      .sort((a, b) => {
-        const am = parseInt(a.startTime.split(':')[0], 10) * 60 + parseInt(a.startTime.split(':')[1], 10);
-        const bm = parseInt(b.startTime.split(':')[0], 10) * 60 + parseInt(b.startTime.split(':')[1], 10);
-        return am - bm;
-      });
-    return matched.map((s, idx) =>
-      synthesizeSavedAvailEvent(s, dayOfMonthFromSlot(s) ?? 1, activeDate, idx)
-    );
-  }, [event, activeDate, savedAvailabilitySlots]);
+    // Different date picked via the picker — the matching events of THIS card's
+    // type+role on that date (availability synthesized from saved slots; every
+    // other type from the master events). Falls back to [event] if nothing
+    // matches so the modal never renders an empty card.
+    const matched = eventsForDate({
+      events,
+      savedSlots: savedAvailabilitySlots,
+      type: event.type,
+      role: event.role,
+      dateISO: activeDate,
+    });
+    return matched.length > 0 ? matched : [event];
+  }, [event, activeDate, savedAvailabilitySlots, events]);
 
   const [selectedTime, setSelectedTime] = useState(event?.time || '');
 
@@ -113,25 +105,21 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
   // Picker → date change handler. Updates activeDate AND snaps the active
   // chip to the first slot of the newly selected day so the modal content
   // (chips, "Your Availability" text, form details) follows (Bug 2 fix).
+  // Picker → date change handler (spec #3). Updates the active date AND snaps the
+  // active chip to the first matching event of that day so the WHOLE card
+  // re-hydrates (chips, date text, details) WITHOUT closing. Generic over the
+  // card's type+role.
   const handleDateChange = (newDateISO) => {
-    if (!newDateISO) return;
-    // Guard the parse so a malformed date string can't crash the modal.
-    let newYMD;
-    try {
-      newYMD = format(new Date(newDateISO), 'yyyy-MM-dd');
-    } catch {
-      return;
-    }
+    if (!newDateISO || !event) return;
     setActiveDate(newDateISO);
-    const matched = (savedAvailabilitySlots || [])
-      .filter((s) => s && typeof s.date === 'string' && s.date === newYMD && s.startTime && s.endTime)
-      .slice()
-      .sort((a, b) => {
-        const am = parseInt(a.startTime.split(':')[0], 10) * 60 + parseInt(a.startTime.split(':')[1], 10);
-        const bm = parseInt(b.startTime.split(':')[0], 10) * 60 + parseInt(b.startTime.split(':')[1], 10);
-        return am - bm;
-      });
-    setSelectedTime(matched.length > 0 ? `${matched[0].startTime} - ${matched[0].endTime}` : '');
+    const matched = eventsForDate({
+      events,
+      savedSlots: savedAvailabilitySlots,
+      type: event.type,
+      role: event.role,
+      dateISO: newDateISO,
+    });
+    setSelectedTime(matched.length > 0 ? matched[0].time : '');
   };
 
   if (!event) return null;
@@ -152,9 +140,9 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
       </div>
     ) : null;
   // Override dateString to the active date so the card's date-driven UI
-  // follows; override availableDatesForCategory so the picker always shows
-  // the global savedAvailabilitySlots highlights regardless of which sibling
-  // chip is currently active (Bug 1 fix).
+  // follows; set availableDatesForCategory to the per-type date set so the
+  // in-card dropdown enables only the days that have a matching-type event
+  // (stable across sibling chips).
   const activeEvent = {
     ...baseActive,
     // Fall back to event.dateString so the very first render — when activeDate
@@ -162,46 +150,48 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
     // instead of an empty string that the card's downstream effect would skip.
     dateString: activeDate || event.dateString,
     slotHeader,
-    availableDatesForCategory: globalSavedDates,
+    availableDatesForCategory: availableDates,
   };
 
+  // Every card receives onDateChange={handleDateChange} so its in-card date
+  // dropdown can re-hydrate the whole card for a newly picked date (spec #3).
   const renderCard = () => {
     switch (activeEvent.type) {
       case 'availability':
-        if (activeEvent.role === 'S') return <TeacherAvailabilityStudentCard event={activeEvent} onClose={onClose} />;
+        if (activeEvent.role === 'S') return <TeacherAvailabilityStudentCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
         return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} savedAvailabilitySlots={savedAvailabilitySlots} onAvailabilityChanged={onAvailabilityChanged} showEditIcon={false} />;
       case 'booked':
         if (activeEvent.role === 'S') {
-          if (activeEvent.reschedule) return <BookedAsStudentRescheduleCard event={activeEvent} onClose={onClose} />;
-          return <BookedAsStudentCard event={activeEvent} onClose={onClose} />;
+          if (activeEvent.reschedule) return <BookedAsStudentRescheduleCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+          return <BookedAsStudentCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
         }
         if (activeEvent.role === 'T' && activeEvent.reschedule) {
-          return <BookedAsTeacherRescheduleCard event={activeEvent} onClose={onClose} />;
+          return <BookedAsTeacherRescheduleCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
         }
-        return <GlobalBookingCard event={activeEvent} onClose={onClose} />;
+        return <GlobalBookingCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       case 'cancelled':
-        if (activeEvent.role === 'T') return <CancellationFeesTeacherCard event={activeEvent} onClose={onClose} />;
-        return <CancellationFeesCard event={activeEvent} onClose={onClose} />;
+        if (activeEvent.role === 'T') return <CancellationFeesTeacherCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+        return <CancellationFeesCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       case 'waiting':
         if (activeEvent.role === 'T') {
-          if (activeEvent.reschedule) return <WaitingForConfirmationTeacherRescheduleCard event={activeEvent} onClose={onClose} />;
-          return <WaitingForConfirmationTeacherCard event={activeEvent} onClose={onClose} onResponded={onRequestResponded} />;
+          if (activeEvent.reschedule) return <WaitingForConfirmationTeacherRescheduleCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+          return <WaitingForConfirmationTeacherCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} onResponded={onRequestResponded} />;
         }
         if (activeEvent.role === 'S') {
-          if (activeEvent.reschedule) return <WaitingForConfirmationStudentRescheduleCard event={activeEvent} onClose={onClose} />;
-          return <WaitingForConfirmationStudentCard event={activeEvent} onClose={onClose} />;
+          if (activeEvent.reschedule) return <WaitingForConfirmationStudentRescheduleCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+          return <WaitingForConfirmationStudentCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
         }
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       case 'not-reviewed':
-        if (activeEvent.role === 'T') return <NotReviewedTeacherCard event={activeEvent} onClose={onClose} />;
-        if (activeEvent.role === 'S') return <NotReviewedStudentCard event={activeEvent} onClose={onClose} />;
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} />;
+        if (activeEvent.role === 'T') return <NotReviewedTeacherCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+        if (activeEvent.role === 'S') return <NotReviewedStudentCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       case 'completed':
-        if (activeEvent.role === 'T') return <CompletedTeacherCard event={activeEvent} onClose={onClose} />;
-        if (activeEvent.role === 'S') return <CompletedStudentCard event={activeEvent} onClose={onClose} />;
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} />;
+        if (activeEvent.role === 'T') return <CompletedTeacherCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+        if (activeEvent.role === 'S') return <CompletedStudentCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       default:
-        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} />;
+        return <TeacherAvailabilityCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
     }
   };
 
