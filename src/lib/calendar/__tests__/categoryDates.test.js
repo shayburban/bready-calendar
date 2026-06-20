@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { categoryDatesForPicker, eventsForDate } from '@/lib/calendar/categoryDates';
 
-const dayFromISO = (iso) => new Date(iso).getDate();
+// Output is local 'YYYY-MM-DD' — parse the string directly (timezone-independent).
+const dayFromISO = (s) => Number(s.split('-')[2]);
+const monthFromISO = (s) => Number(s.split('-')[1]) - 1;
 
 const events = [
   { id: 3, date: 19, time: '13:00 - 14:00', type: 'booked', role: 'T' },
@@ -27,6 +29,11 @@ describe('categoryDatesForPicker', () => {
     });
     const days = out.map(dayFromISO).sort((a, b) => a - b);
     expect(days).toEqual([15, 18]);
+    // Regression: dates must be the EXACT local 'YYYY-MM-DD' the teacher saved,
+    // never shifted by a toISOString() round-trip (was June 15 -> June 14 in
+    // east-of-UTC zones, so the real slot didn't highlight in the picker).
+    expect(out).toContain('2026-06-15');
+    expect(out).toContain('2026-06-18');
   });
 
   it('materializes a month-agnostic booked:T event on its day across the window', () => {
@@ -42,7 +49,7 @@ describe('categoryDatesForPicker', () => {
     // booked:T is day 19; window is May/Jun/Jul 2026 → three dates, all day 19.
     expect(out).toHaveLength(3);
     expect(out.every((iso) => dayFromISO(iso) === 19)).toBe(true);
-    const months = out.map((iso) => new Date(iso).getMonth()).sort((a, b) => a - b);
+    const months = out.map(monthFromISO).sort((a, b) => a - b);
     expect(months).toEqual([4, 5, 6]);
   });
 

@@ -15,7 +15,15 @@
 
 import { synthesizeSavedAvailEvent } from '@/lib/eventSiblings';
 
-const isoLocal = (y, mIdx, d) => new Date(y, mIdx, d).toISOString();
+// Local calendar date as 'YYYY-MM-DD'. We DELIBERATELY do not go through
+// `new Date(y,m,d).toISOString()`: that converts local midnight to UTC, which
+// for any zone east of UTC (e.g. Israel, UTC+2/+3) rolls the day BACK by one —
+// so a real 2026-06-22 slot would light up June 21 in the picker while the
+// calendar grid (which reads the date in local time) correctly shows June 22.
+// CalendarWithinCalendarCards compares these against format(day,'yyyy-MM-dd')
+// (also local), so emitting the literal local date keeps the two in lockstep.
+const ymdOf = (y, mIdx, d) =>
+  `${y}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 const daysInMonth = (y, mIdx) => new Date(y, mIdx + 1, 0).getDate();
 const ymd = (d) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -41,8 +49,9 @@ export const categoryDatesForPicker = ({
   if (type === 'availability' && role === 'T') {
     (savedSlots || []).forEach((s) => {
       if (!s || typeof s.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.date)) return;
-      const [y, m, d] = s.date.split('-').map(Number);
-      set.add(isoLocal(y, m - 1, d));
+      // Already the canonical local 'YYYY-MM-DD' — add it verbatim (no Date
+      // round-trip) so it matches the calendar grid exactly, no timezone drift.
+      set.add(s.date);
     });
   }
 
@@ -58,7 +67,7 @@ export const categoryDatesForPicker = ({
         if (e.month != null && e.month !== mIdx) return;
         const day = Number(e.date);
         if (!Number.isInteger(day) || day < 1) return;
-        set.add(isoLocal(y, mIdx, Math.min(day, daysInMonth(y, mIdx))));
+        set.add(ymdOf(y, mIdx, Math.min(day, daysInMonth(y, mIdx))));
       });
     }
   }

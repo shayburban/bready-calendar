@@ -17,11 +17,9 @@ import { expandRepeatDates } from '@/lib/calendar/repeatDates';
 import { applySaveAvailability } from '@/lib/availabilityStore';
 import { categoryDatesForPicker } from '@/lib/calendar/categoryDates';
 
-const hasDate = (isoList, y, mIdx, d) =>
-  isoList.some((iso) => {
-    const x = new Date(iso);
-    return x.getFullYear() === y && x.getMonth() === mIdx && x.getDate() === d;
-  });
+// Output is local 'YYYY-MM-DD' — compare strings directly (timezone-independent).
+const hasDate = (list, y, mIdx, d) =>
+  list.includes(`${y}-${String(mIdx + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
 
 // Master events shaped like sampleEvents: availability T + S (day 19) and a
 // booked:T (day 19) — month-agnostic day-of-month templates.
