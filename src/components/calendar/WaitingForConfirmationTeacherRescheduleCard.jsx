@@ -9,6 +9,21 @@ import { Calendar } from '@/components/ui/calendar';
 import CardDateDropdown from './CardDateDropdown';
 import { pastDaysMatcher } from '@/lib/calendar/futureTime';
 import TabSelector from '../common/TabSelector';
+import { rescheduleBlocks } from '@/lib/calendar/rescheduleBlocks';
+import { respondReschedule } from '@/lib/scheduling/bookingApi';
+
+// One booking block (Existing / Proposed), rendered from a {name, when, price}
+// derived by rescheduleBlocks. Markup matches the original static copy exactly.
+const BookingBlock = ({ title, block }) => (
+    <div className="text-sm space-y-1 mb-4">
+        <p className="font-bold">{title}</p>
+        <p className="underline">{block.name}</p>
+        {block.when && <p>{block.when}</p>}
+        {block.price && (
+            <p><span className="text-blue-600 font-semibold">{block.price.amount}$</span>{block.price.detail}</p>
+        )}
+    </div>
+);
 
 const NotificationRow = ({ value = "30", onRemove }) =>
     <div className="flex items-center space-x-2">
@@ -33,11 +48,29 @@ const NotificationRow = ({ value = "30", onRemove }) =>
         }
     </div>;
 
-export default function WaitingForConfirmationTeacherRescheduleCard({ event, onClose, onDateChange }) {
+export default function WaitingForConfirmationTeacherRescheduleCard({ event, onClose, onDateChange, onResponded }) {
     const [notifications, setNotifications] = useState([1]);
     const [emailNotifications, setEmailNotifications] = useState([1]);
     const [date, setDate] = useState(new Date(2021, 6, 19));
     const [activeTimeSlot, setActiveTimeSlot] = useState('15:00 - 16:00');
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState(null);
+
+    // The student asked to move a current booked (T) lesson: the EXISTING booking
+    // vs the student's PROPOSED new time. Falls back to placeholder copy for demo
+    // events that carry no real reschedule payload.
+    const { existing, proposed } = rescheduleBlocks(event, { counterpart: 'student' });
+
+    // Approve -> confirmed reschedule, Reject -> proposal declined (real RPC).
+    // Demo/mock events have no rescheduleId, so the buttons just close the card.
+    const respond = async (action) => {
+        if (!event?.rescheduleId) { onClose?.(); return; }
+        setBusy(true); setError(null);
+        const r = await respondReschedule(event.rescheduleId, action);
+        setBusy(false);
+        if (r.ok) { onResponded?.(); onClose?.(); }
+        else setError(r.message || 'Could not update this reschedule. Please try again.');
+    };
 
     const addNotification = (setter, state) => setter([...state, Date.now()]);
     const removeNotification = (setter, state, id) => setter(state.filter((item) => item !== id));
@@ -91,19 +124,9 @@ export default function WaitingForConfirmationTeacherRescheduleCard({ event, onC
                 </Popover>
             </div>
 
-            <div className="text-sm space-y-1 mb-4">
-                <p className="font-bold">Existing Booking</p>
-                <p className="underline">Student N.</p>
-                <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
-                <p><span className="text-blue-600 font-semibold">30$</span> (10$ * 3 Hr = 30$ total price)</p>
-            </div>
+            <BookingBlock title="Existing Booking" block={existing} />
 
-            <div className="text-sm space-y-1 mb-4">
-                <p className="font-bold">Proposed Booking</p>
-                <p className="underline">Student N.</p>
-                <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
-                <p><span className="text-blue-600 font-semibold">30$</span> (10$ * 3 Hr = 30$ total price)</p>
-            </div>
+            <BookingBlock title="Proposed Booking" block={proposed} />
 
             <div className="mb-4">
                 <label className="font-bold text-sm">Meeting subject reminder</label>
@@ -165,9 +188,14 @@ export default function WaitingForConfirmationTeacherRescheduleCard({ event, onC
                 </div>
             </details>
 
+            {error && <p className="text-xs text-red-600 mt-3">{error}</p>}
             <div className="flex gap-3 mt-4">
-                <Button variant="outline" onClick={onClose} className="border-red-500 text-red-600 hover:bg-red-50">Decline</Button>
-                <Button className="bg-green-500 hover:bg-green-600 text-white">Confirm Reschedule</Button>
+                <Button variant="outline" disabled={busy} onClick={() => respond('reject')} className="border-red-500 text-red-600 hover:bg-red-50">
+                    {busy ? '…' : 'Decline'}
+                </Button>
+                <Button disabled={busy} onClick={() => respond('approve')} className="bg-green-500 hover:bg-green-600 text-white">
+                    {busy ? 'Saving…' : 'Confirm Reschedule'}
+                </Button>
             </div>
         </div>
     );

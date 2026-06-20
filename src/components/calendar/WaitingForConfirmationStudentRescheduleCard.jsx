@@ -9,6 +9,20 @@ import { Calendar } from '@/components/ui/calendar';
 import CardDateDropdown from './CardDateDropdown';
 import { pastDaysMatcher } from '@/lib/calendar/futureTime';
 import TabSelector from '../common/TabSelector';
+import { rescheduleBlocks } from '@/lib/calendar/rescheduleBlocks';
+
+// One booking block (Existing / Proposed), rendered from a {name, when, price}
+// derived by rescheduleBlocks. Markup matches the original static copy exactly.
+const BookingBlock = ({ title, block }) => (
+    <div className="text-sm space-y-1 mb-4">
+        <p className="font-bold">{title}</p>
+        <p className="underline">{block.name}</p>
+        {block.when && <p>{block.when}</p>}
+        {block.price && (
+            <p><span className="text-blue-600 font-semibold">{block.price.amount}$</span>{block.price.detail}</p>
+        )}
+    </div>
+);
 
 const NotificationRow = ({ value = "30", onRemove }) =>
     <div className="flex items-center space-x-2">
@@ -38,6 +52,11 @@ export default function WaitingForConfirmationStudentRescheduleCard({ event, onC
     const [emailNotifications, setEmailNotifications] = useState([1]);
     const [date, setDate] = useState(new Date(2021, 6, 19));
     const [activeTimeSlot, setActiveTimeSlot] = useState('15:00 - 16:00');
+
+    // The student's view of the same reschedule: the EXISTING booking with the
+    // teacher vs the PROPOSED new time. Falls back to placeholder copy for demo
+    // events that carry no real reschedule payload.
+    const { existing, proposed } = rescheduleBlocks(event, { counterpart: 'teacher' });
 
     const addNotification = (setter, state) => setter([...state, Date.now()]);
     const removeNotification = (setter, state, id) => setter(state.filter((item) => item !== id));
@@ -91,19 +110,9 @@ export default function WaitingForConfirmationStudentRescheduleCard({ event, onC
                 </Popover>
             </div>
 
-            <div className="text-sm space-y-1 mb-4">
-                <p className="font-bold">Existing Booking</p>
-                <p className="underline">Teacher N.</p>
-                <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
-                <p><span className="text-blue-600 font-semibold">30$</span> (10$ * 3 Hr = 30$ total price)</p>
-            </div>
+            <BookingBlock title="Existing Booking" block={existing} />
 
-            <div className="text-sm space-y-1 mb-4">
-                <p className="font-bold">Proposed Booking</p>
-                <p className="underline">Teacher N.</p>
-                <p>15:00 - 16:00 &nbsp; 19.07.2021</p>
-                <p><span className="text-blue-600 font-semibold">30$</span> (10$ * 3 Hr = 30$ total price)</p>
-            </div>
+            <BookingBlock title="Proposed Booking" block={proposed} />
 
             <div className="mb-4">
                 <label className="font-bold text-sm">Meeting subject reminder</label>
@@ -165,9 +174,12 @@ export default function WaitingForConfirmationStudentRescheduleCard({ event, onC
                 </div>
             </details>
 
+            {/* The student PROPOSED this reschedule — only the teacher can confirm
+                it. So "Decline" withdraws/dismisses, and the confirm slot is a
+                non-actionable status rather than a silent dead button. */}
             <div className="flex gap-3 mt-4">
                 <Button variant="outline" onClick={onClose} className="border-red-500 text-red-600 hover:bg-red-50">Decline</Button>
-                <Button className="bg-green-500 hover:bg-green-600 text-white">Confirm Reschedule</Button>
+                <Button disabled className="bg-green-500 text-white opacity-60 cursor-not-allowed">Awaiting Teacher Confirmation</Button>
             </div>
         </div>
     );

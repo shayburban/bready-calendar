@@ -39,8 +39,20 @@ export const sampleEvents = [
   { id: 15, date: 24, time: '14:00 - 15:00', type: 'waiting', role: 'S', color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - new booking (S)' },
 
   // --- Sat, April 25 ---
-  { id: 16, date: 25, time: '10:00 - 11:00', type: 'waiting', role: 'T', reschedule: true, color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule (T)' },
-  { id: 17, date: 25, time: '14:00 - 15:00', type: 'waiting', role: 'S', reschedule: true, color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - reschedule (S)' },
+  // Reschedule-confirmation events carry both bookings so the card shows the
+  // EXISTING lesson vs the PROPOSED new time (distinctly, not the same slot).
+  {
+    id: 16, date: 25, time: '16:00 - 17:00', type: 'waiting', role: 'T', reschedule: true,
+    color: 'bg-pink-200', student: 'Student N.', description: 'Waiting For Confirmation - reschedule (T)',
+    existing: { time: '13:00 - 14:00', dateLabel: '19.04.2026', amount: 30, hourly_rate: 10, duration_hours: 3 },
+    proposed: { time: '16:00 - 17:00', dateLabel: '25.04.2026', amount: 30, hourly_rate: 10, duration_hours: 3 },
+  },
+  {
+    id: 17, date: 25, time: '16:00 - 17:00', type: 'waiting', role: 'S', reschedule: true,
+    color: 'bg-pink-200', teacher: 'Teacher N.', description: 'Waiting For Confirmation - reschedule (S)',
+    existing: { time: '13:00 - 14:00', dateLabel: '19.04.2026', amount: 30, hourly_rate: 10, duration_hours: 3 },
+    proposed: { time: '16:00 - 17:00', dateLabel: '25.04.2026', amount: 30, hourly_rate: 10, duration_hours: 3 },
+  },
   { id: 18, date: 25, time: '17:00 - 18:00', type: 'synced', color: 'bg-blue-500', description: 'Synced calendar event', timeSlots: ['15:00 - 16:00', '17:00 - 19:00', '17:00 - 19:00'] },
 
   // --- Sun, April 12 (4 Waiting events, mixed S/T — single-category overflow) ---

@@ -174,7 +174,7 @@ export default function AvailabilityModal({ event, isOpen, onClose, savedAvailab
         return <CancellationFeesCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
       case 'waiting':
         if (activeEvent.role === 'T') {
-          if (activeEvent.reschedule) return <WaitingForConfirmationTeacherRescheduleCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} />;
+          if (activeEvent.reschedule) return <WaitingForConfirmationTeacherRescheduleCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} onResponded={onRequestResponded} />;
           return <WaitingForConfirmationTeacherCard event={activeEvent} onClose={onClose} onDateChange={handleDateChange} onResponded={onRequestResponded} />;
         }
         if (activeEvent.role === 'S') {
