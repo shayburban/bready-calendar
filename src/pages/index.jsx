@@ -56,6 +56,8 @@ import TeacherSettings from "./TeacherSettings";
 
 import GuestBooking from "./GuestBooking";
 
+import PopupCardsDemo from "./PopupCardsDemo";
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -115,6 +117,8 @@ const PAGES = {
     TeacherSettings: TeacherSettings,
 
     GuestBooking: GuestBooking,
+
+    PopupCardsDemo: PopupCardsDemo,
 
 }
 
@@ -198,6 +202,8 @@ function PagesContent() {
                 <Route path="/TeacherSettings" element={<TeacherSettings />} />
 
                 <Route path="/GuestBooking" element={<GuestBooking />} />
+
+                <Route path="/PopupCardsDemo" element={<PopupCardsDemo />} />
 
             </Routes>
         </Layout>
