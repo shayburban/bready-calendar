@@ -10,18 +10,21 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { User } from '@/api/entities';
-import { 
-  User as UserIcon, 
-  ChevronDown, 
-  Shield, 
-  Settings, 
+import { setViewAsRole, isSampleData, setSampleData, homePathForRole, SWITCHABLE_ROLES } from '@/lib/perspective';
+import {
+  User as UserIcon,
+  ChevronDown,
+  Shield,
+  Settings,
   LogOut,
   Menu,
-  X
+  X,
+  Eye
 } from 'lucide-react';
 
 export default function AdminHeader({ user, topOffset = '0px' }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [sampleOn, setSampleOn] = useState(isSampleData());
 
   const handleLogout = async () => {
     try {
@@ -32,10 +35,17 @@ export default function AdminHeader({ user, topOffset = '0px' }) {
     }
   };
 
-  const clearViewMode = () => {
-    localStorage.removeItem('adminViewAsMode');
-    localStorage.removeItem('adminImpersonation');
-    window.dispatchEvent(new CustomEvent('adminBannerStateChange'));
+  // Enter a perspective ("wear a hat") — your account stays admin; one click in
+  // the orange bar (or here) returns you to admin.
+  const enterPerspective = (role) => {
+    setViewAsRole(role, user?.id);
+    window.location.href = homePathForRole(role);
+  };
+
+  const toggleSample = () => {
+    const next = !sampleOn;
+    setSampleData(next);
+    setSampleOn(next);
     window.location.reload();
   };
 
@@ -78,12 +88,36 @@ export default function AdminHeader({ user, topOffset = '0px' }) {
                 Roles & Perspectives
               </Link>
               <span className="text-gray-300">|</span>
-              <button
-                onClick={clearViewMode}
-                className="text-orange-600 hover:text-orange-700 font-medium transition-colors"
-              >
-                Exit View Mode
-              </button>
+              {/* Enter a teacher/student/guest perspective without leaving admin */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-1 text-orange-600 hover:text-orange-700 font-medium px-2">
+                    <Eye className="w-4 h-4" />
+                    View as
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-52">
+                  <div className="px-3 py-2 text-xs text-gray-500">
+                    Preview the app as another role. You stay signed in as admin and
+                    can return anytime from the orange bar.
+                  </div>
+                  <DropdownMenuSeparator />
+                  {SWITCHABLE_ROLES.map((r) => (
+                    <DropdownMenuItem key={r} onClick={() => enterPerspective(r)} className="capitalize">
+                      <Eye className="w-4 h-4 mr-2" />
+                      View as {r}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={(e) => { e.preventDefault(); toggleSample(); }}>
+                    <span className="flex-1">Sample data</span>
+                    <span className={`text-xs font-semibold ${sampleOn ? 'text-green-600' : 'text-gray-400'}`}>
+                      {sampleOn ? 'ON' : 'OFF'}
+                    </span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </nav>
             
             {/* Admin User Dropdown */}
@@ -165,15 +199,26 @@ export default function AdminHeader({ user, topOffset = '0px' }) {
                 >
                   Roles & Perspectives
                 </Link>
-                <button
-                  onClick={() => {
-                    clearViewMode();
-                    setIsMobileMenuOpen(false);
-                  }}
-                  className="block text-orange-600 hover:text-orange-700 font-medium py-2"
-                >
-                  Exit View Mode
-                </button>
+                <div className="pt-1">
+                  <p className="text-xs text-gray-500 mb-1">View as (you stay admin):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {SWITCHABLE_ROLES.map((r) => (
+                      <button
+                        key={r}
+                        onClick={() => { setIsMobileMenuOpen(false); enterPerspective(r); }}
+                        className="capitalize text-orange-600 hover:text-orange-700 font-medium border border-orange-200 rounded-full px-3 py-1"
+                      >
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={toggleSample}
+                    className="mt-2 block text-sm text-gray-700 font-medium py-1"
+                  >
+                    Sample data: <span className={sampleOn ? 'text-green-600' : 'text-gray-400'}>{sampleOn ? 'ON' : 'OFF'}</span>
+                  </button>
+                </div>
               </nav>
               
               <div className="border-t pt-4 space-y-3">

@@ -9,7 +9,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 export default function Header({ topOffset = '0px' }) {
     const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
-    const [viewAsMode, setViewAsMode] = useState(null);
     const [isImpersonating, setIsImpersonating] = useState(false);
 
     useEffect(() => {
@@ -28,17 +27,12 @@ export default function Header({ topOffset = '0px' }) {
                     }
                 }
 
+                // User.me() already applies the admin perspective (view-as): when a
+                // real admin is wearing a teacher/student/guest hat it returns that
+                // effective role plus { isViewingAs, realRole }. So the header just
+                // follows currentUser.role — no separate localStorage branch needed.
                 const currentUser = await User.me();
                 setUser(currentUser);
-                
-                // Check for view as mode
-                const viewAsData = localStorage.getItem('adminViewAsMode');
-                if (viewAsData && (currentUser.role === 'admin' || (currentUser.roles && currentUser.roles.includes('admin')))) {
-                    const parsed = JSON.parse(viewAsData);
-                    if (parsed.active) {
-                        setViewAsMode(parsed.role);
-                    }
-                }
             } catch (e) {
                 setUser(null);
             } finally {
@@ -83,28 +77,19 @@ export default function Header({ topOffset = '0px' }) {
         }
     }
 
-    // Handle view as mode - show admin as different role
-    if (user?.role === 'admin' && viewAsMode) {
-        switch (viewAsMode) {
-            case 'student':
-                return <StudentHeader user={{...user, role: 'student'}} isViewAsMode={true} topOffset={topOffset} />;
-            case 'teacher':
-                return <TeacherHeader user={{...user, role: 'teacher'}} isViewAsMode={true} topOffset={topOffset} />;
-            case 'guest':
-                return <GuestHeader isViewAsMode={true} topOffset={topOffset} />;
-            default:
-                return <AdminHeader user={user} topOffset={topOffset} />;
-        }
-    }
-
-    // Normal mode - show user's actual role header
+    // Normal mode + admin "view-as" perspective both flow through here: User.me()
+    // already resolved the effective role, and isViewingAs flags that a real admin
+    // is wearing this hat (so the role headers can show the view-as treatment).
+    const viewing = !!user?.isViewingAs;
     switch (user?.role) {
         case 'student':
-            return <StudentHeader user={user} topOffset={topOffset} />;
+            return <StudentHeader user={user} isViewAsMode={viewing} topOffset={topOffset} />;
         case 'teacher':
-            return <TeacherHeader user={user} topOffset={topOffset} />;
+            return <TeacherHeader user={user} isViewAsMode={viewing} topOffset={topOffset} />;
         case 'admin':
             return <AdminHeader user={user} topOffset={topOffset} />;
+        case 'guest':
+            return <GuestHeader isViewAsMode={viewing} topOffset={topOffset} />;
         default:
             return <GuestHeader topOffset={topOffset} />;
     }

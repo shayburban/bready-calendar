@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '@/api/entities';
 import { TITLE_OPTIONS } from '@/data/teacherTasks';
 import { useTeacherTasksData } from '@/data/useTeacherTasksData';
+import { isSampleData, setSampleData } from '@/lib/perspective';
 import { mapRecordsToTaskRows } from '@/data/taskRowMapping';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -886,7 +887,9 @@ export default function TeacherTasks() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [innerTab, setInnerTab] = useState('todo');
-  const [demoMode, setDemoMode] = useState(false);
+  // Default OFF (your real bookings). Initial value + changes mirror the shared
+  // sample-data flag so the orange bar / admin "View as" menu and this page agree.
+  const [demoMode, setDemoMode] = useState(isSampleData());
 
   const {
     records,
@@ -1074,7 +1077,7 @@ export default function TeacherTasks() {
           </Tabs>
           {/* Dev-only source toggle (Spec I): ON -> demo; OFF -> live (Supabase). */}
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
-            <Checkbox checked={demoMode} onCheckedChange={(v) => setDemoMode(!!v)} aria-label="Toggle demo data" />
+            <Checkbox checked={demoMode} onCheckedChange={(v) => { setDemoMode(!!v); setSampleData(!!v); }} aria-label="Toggle demo data" />
             <span>Demo data</span>
           </label>
         </div>

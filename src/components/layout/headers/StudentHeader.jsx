@@ -19,24 +19,10 @@ export default function StudentHeader({ user, isViewAsMode = false }) {
 
     return (
         <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50 transition-all duration-300">
-            {/* View As Mode Banner */}
-            {isViewAsMode && (
-                <div className="bg-orange-500 text-white text-center py-2 text-sm">
-                    <span className="font-medium">Admin View Mode Active</span> - Viewing as Student
-                    <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="ml-4 text-white hover:bg-orange-600 hover:text-white"
-                        onClick={() => {
-                            localStorage.removeItem('adminViewAsMode');
-                            window.location.href = '/AdminDashboard';
-                        }}
-                    >
-                        Exit View Mode
-                    </Button>
-                </div>
-            )}
-            
+            {/* View-as banner + exit are handled globally by GlobalAdminBanner
+                (Layout). Kept out of here to avoid a duplicate banner and the
+                partial-cleanup exit bug. */}
+
             <div className="container mx-auto px-4">
                 {/* Desktop Header */}
                 <div className="hidden md:flex items-center justify-between h-20">

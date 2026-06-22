@@ -37,6 +37,7 @@ import { createPageUrl } from '@/utils';
 // Teacher Statistics data layer (additive — Spec L). The page now computes real
 // aggregations from the hook's normalized records instead of hardcoded mocks.
 import { useTeacherStatsData } from '@/data/useTeacherStatsData';
+import { isSampleData, setSampleData } from '@/lib/perspective';
 import {
   computeStatCards,
   applyFilters,
@@ -437,11 +438,12 @@ export default function TeacherStatistics() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('month');
-  // Demo toggle (Spec H): ON -> seed (illustrative/fake); OFF -> production
-  // stand-in ('mock' while developing; 'supabase' when real data lands). Default
-  // 'seed' in development. Flipping this is the ONLY thing that swaps the source.
-  const [demoMode, setDemoMode] = useState(true);
-  const source = demoMode ? 'seed' : 'mock';
+  // Demo toggle: ON -> seed (clearly-fake illustrative data); OFF -> your REAL
+  // data (live get_my_bookings). Defaults OFF (real data); the initial value and
+  // every change are mirrored to the shared sample-data flag so the orange bar /
+  // admin "View as" menu and this page always agree.
+  const [demoMode, setDemoMode] = useState(isSampleData());
+  const source = demoMode ? 'seed' : 'supabase';
   const { records, loading: dataLoading, error: dataError } = useTeacherStatsData({ source });
 
   // Real STAT_CARDS, computed per period from the normalized records. Memoized
@@ -509,7 +511,7 @@ export default function TeacherStatistics() {
           <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
             <Checkbox
               checked={demoMode}
-              onCheckedChange={(v) => setDemoMode(!!v)}
+              onCheckedChange={(v) => { setDemoMode(!!v); setSampleData(!!v); }}
               aria-label="Toggle demo data"
             />
             <span>Demo Data</span>
@@ -532,6 +534,16 @@ export default function TeacherStatistics() {
             className="mb-4 rounded-md border border-red-300 bg-red-50 px-4 py-2 text-sm text-red-800"
           >
             Couldn’t load live statistics data ({String(dataError.message || dataError)}). Showing what’s available.
+          </div>
+        )}
+        {/* Real data, but nothing to show yet — explain it (so empty cards don't
+            look broken) and point to the Demo Data toggle for a populated preview. */}
+        {!demoMode && !dataLoading && !dataError && records.length === 0 && (
+          <div
+            role="status"
+            className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-2 text-sm text-blue-800"
+          >
+            No statistics yet — your real bookings will appear here as they happen. Want to preview the layout? Turn on <strong>Demo Data</strong> above for sample numbers.
           </div>
         )}
 

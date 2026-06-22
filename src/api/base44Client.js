@@ -6,6 +6,7 @@
 // The id must match a seeded user so dashboards scoped to that user render data.
 // Persisted to localStorage so it survives navigation within the SPA.
 import { supabase } from './supabaseClient';
+import { getViewAsRole } from '../lib/perspective';
 
 const DEFAULT_MOCK_USER = {
   id: 'demo-user',
@@ -217,17 +218,33 @@ const mapSupabaseUser = (u) => {
   };
 };
 
+// Admin "perspective" (view-as) overlay. A REAL admin can wear another role's
+// hat (teacher / student / guest) WITHOUT losing admin: we swap the EFFECTIVE
+// role but keep the admin's own id/email, so dashboards, page gating and the
+// registration flow all behave as that role while the account stays the admin's.
+//
+// SAFETY: this only ever applies when the resolved user is genuinely an admin,
+// and it only ever swaps admin -> {teacher,student,guest} (never -> admin). A
+// non-admin who sets the localStorage key is unaffected — no privilege gain.
+const applyAdminPerspective = (user) => {
+  if (!user || user.role !== 'admin') return user;
+  if (typeof window === 'undefined') return user;
+  const role = getViewAsRole();
+  if (!role) return user;
+  return { ...user, role, realRole: 'admin', isViewingAs: true, viewAsRole: role };
+};
+
 export const base44 = {
   entities,
   auth: {
     me: async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) return mapSupabaseUser(session.user);
+        if (session?.user) return applyAdminPerspective(mapSupabaseUser(session.user));
       } catch {
         // fall through to the dev mock
       }
-      return clone(MOCK_USER);
+      return applyAdminPerspective(clone(MOCK_USER));
     },
     login: async () => {
       sessionStorage.setItem('bready_pending_login', '1');
@@ -241,6 +258,15 @@ export const base44 = {
         await supabase.auth.signOut();
       } catch {
         // ignore — already signed out
+      }
+      // Clear any admin perspective / impersonation / sample-data so a fresh
+      // login never inherits a stale "view-as" state from the previous session.
+      try {
+        localStorage.removeItem('adminViewAsMode');
+        localStorage.removeItem('adminImpersonation');
+        localStorage.removeItem('breadyShowSampleData');
+      } catch {
+        // ignore — storage unavailable
       }
     },
     updateMyUserData: (patch) => {

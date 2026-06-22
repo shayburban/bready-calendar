@@ -86,23 +86,8 @@ export default function GuestHeader({ isViewAsMode = false }) {
     return (
         <>
             <header className="bg-white shadow-md fixed top-0 left-0 right-0 z-50">
-                {/* View As Mode Banner */}
-                {isViewAsMode && (
-                    <div className="bg-orange-500 text-white text-center py-2 text-sm">
-                        <span className="font-medium">Admin View Mode Active</span> - Viewing as Guest
-                        <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="ml-4 text-white hover:bg-orange-600"
-                            onClick={() => {
-                                localStorage.removeItem('adminViewAsMode');
-                                window.location.href = '/AdminDashboard';
-                            }}
-                        >
-                            Exit View Mode
-                        </Button>
-                    </div>
-                )}
+                {/* View-as banner + exit are handled globally by GlobalAdminBanner
+                    (Layout) — no duplicate banner / partial-cleanup exit here. */}
                 <div className="h-20 flex items-center justify-between"> {/* This div ensures the height and proper alignment of the main header content */}
                     {isDesktop && <DesktopHeader allItems={guestItems} isMenuOpen={isMenuOpen} onMenuClick={() => setIsMenuOpen(!isMenuOpen)} />}
                     {isTablet && <TabletHeader onMenuClick={() => setIsMenuOpen(!isMenuOpen)} onSearchClick={() => setIsSearchOpen(true)} />}
