@@ -1,47 +1,54 @@
 // ============================================================================
 // ⚠️  FAKE / DEMO DATA — THIS IS NOT REAL. ⚠️
 // ============================================================================
-// Every booking produced by this file is hand-written DEMO data. It is NEVER
+// Every event produced by this file is hand-written DEMO data. It is NEVER
 // fetched from Supabase, never written back, and never reaches a real student
 // or teacher. Its ONLY purpose is to let us eyeball the teacher calendar's
-// chips + popup cards (Waiting For Confirmation / Booked / Completed) and
-// confirm they render correctly while real bookings don't exist yet.
+// chips + popup cards across EVERY status while real bookings don't exist yet.
 //
-// HOW TO TURN IT ON:  add `?demo=1` to the calendar URL, e.g.
-//   https://bready-calendar.vercel.app/TeacherCalendar?demo=1
-//   https://bready-calendar.vercel.app/TeacherCalendarWeekly?demo=1
-// With NO `?demo=1`, the calendar shows ONLY real `get_my_bookings` data
-// (which is currently empty) — so production users never see this.
+// HOW TO TURN IT ON (either works):
+//   1. The orange perspective bar's "Sample data" checkbox (sets the shared
+//      `breadyShowSampleData` flag — see src/lib/perspective.js). Reloads, then
+//      these events appear. Toggling it OFF returns to real (empty/live) data.
+//   2. add `?demo=1` to the calendar URL, e.g.
+//      https://bready-calendar.vercel.app/TeacherCalendar?demo=1
+// With BOTH off, the calendar shows ONLY real `get_my_bookings` data (currently
+// empty) — so production users never see this.
 //
-// WHY anchored to "today": the rows are dated relative to `new Date()` so they
-// always fall inside the current month/week you're looking at, regardless of
-// when you open the page.
+// Every name/subject/description is prefixed "[DEMO]" so it is glaringly obvious
+// in the chips, tooltips and popup cards that sample mode is active.
 //
-// NOTES / KNOWN DEMO BEHAVIOUR:
-//  • The Waiting card's Approve/Reject buttons are wired to the real RPC seam,
-//    but `respondBookingRequest` short-circuits any id starting with "demo-"
-//    (see src/lib/scheduling/bookingApi.js) so it returns success WITHOUT
-//    touching the database. After the refresh the demo card reappears (the
-//    list is regenerated each load) — expected, because nothing was persisted.
-//  • The single demo "synced" event exists so you can see the synced-overlap
-//    warning fire on REAL data: open availability over that day/time and the
-//    sidebar will (correctly) warn. With demo off there are no synced events,
-//    so the warning never fires spuriously.
+// WHY anchored to "today": rows are dated relative to `new Date()` so they always
+// fall inside the month you're looking at (around now → June/July 2026).
 //
-// SAFE TO DELETE this whole file (and its two import sites + the demo guard in
+// SAFE TO DELETE this whole file (and its import sites + the demo guard in
 // bookingApi.js) once real data / Google Calendar sync exists.
 // ============================================================================
 
 import { mapBookingToEvent } from '@/lib/calendar/mapBookingToEvent';
+import { isSampleData } from '@/lib/perspective';
 
-// True only when the page URL carries `?demo=1`. Wrapped in try/catch so it is
-// safe in any (even non-browser) environment.
+// Tailwind chip colors per status (mirrors the calendar legend).
+const TYPE_COLOR = {
+  availability: 'bg-green-500',
+  booked: 'bg-orange-500',
+  completed: 'bg-gray-800',
+  cancelled: 'bg-gray-600',
+  waiting: 'bg-pink-200',
+  synced: 'bg-blue-500',
+  'not-reviewed': 'bg-red-500',
+};
+
+// Demo is ON when the URL carries `?demo=1` OR the shared "Sample data" toggle
+// (orange perspective bar / admin "View as" menu) is on. Wrapped so it is safe
+// in any (even non-browser) environment.
 export function demoCalendarEnabled() {
   try {
-    return new URLSearchParams(window.location.search).get('demo') === '1';
+    if (new URLSearchParams(window.location.search).get('demo') === '1') return true;
   } catch {
-    return false;
+    /* no window (SSR/tests) */
   }
+  return isSampleData();
 }
 
 // Build an ISO start/end pair `dayOffset` days from `base`, at the given local
@@ -56,9 +63,10 @@ function isoSpan(base, dayOffset, hour, durationMin) {
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-// get_my_bookings-shaped FAKE rows. Mapped through the SAME mapBookingToEvent
-// the real pipeline uses, so what you see is exactly what a real row would
-// produce. Covers each rendered status × both viewer roles.
+// get_my_bookings-shaped FAKE rows for the statuses mapBookingToEvent supports
+// (requested→waiting, confirmed→booked, completed→completed). Mapped through the
+// SAME mapper the real pipeline uses, so what you see is exactly what a real row
+// would produce.
 function demoBookingRows(base) {
   const mk = (id, dayOffset, hour, durMin, status, role, who, subject, rate) => {
     const { start, end } = isoSpan(base, dayOffset, hour, durMin);
@@ -68,50 +76,74 @@ function demoBookingRows(base) {
       viewer_role: role, // 'teacher' | 'student'
       start_time: start,
       end_time: end,
-      student_name: role === 'teacher' ? who : 'You (demo)',
-      tutor_name: role === 'student' ? who : 'You (demo)',
-      subject,
+      student_name: role === 'teacher' ? `[DEMO] ${who}` : '[DEMO] You',
+      tutor_name: role === 'student' ? `[DEMO] ${who}` : '[DEMO] You',
+      subject: `[DEMO] ${subject}`,
       amount: rate * (durMin / 60),
       duration_hours: durMin / 60,
       hourly_rate: rate,
     };
   };
   return [
-    // The headline card: Waiting For Confirmation (T) → "Proposed Booking".
-    mk('demo-waiting-t', 1, 10, 60, 'requested', 'teacher', 'Dana Demo (fake)', 'Mathematics', 120),
-    // Confirmed lesson as teacher → Booked (T).
-    mk('demo-booked-t', 2, 14, 60, 'confirmed', 'teacher', 'Omer Demo (fake)', 'Physics', 150),
-    // Completed lesson as teacher → Completed (T).
-    mk('demo-completed-t', -1, 9, 60, 'completed', 'teacher', 'Lior Demo (fake)', 'Chemistry', 100),
-    // Waiting as student (S) → the S-side Waiting card.
-    mk('demo-waiting-s', 3, 16, 60, 'requested', 'student', 'Mr. Demo (fake)', 'English', 90),
-    // Confirmed lesson as student → Booked (S).
-    mk('demo-booked-s', 1, 12, 60, 'confirmed', 'student', 'Ms. Demo (fake)', 'Biology', 110),
+    // Waiting For Confirmation — teacher + student sides.
+    mk('demo-waiting-t', 1, 10, 60, 'requested', 'teacher', 'Dana Demo', 'Mathematics', 120),
+    mk('demo-waiting-s', 3, 16, 60, 'requested', 'student', 'Mr. Demo', 'English', 90),
+    // Booked (confirmed) — teacher + student sides, June + July.
+    mk('demo-booked-t', 2, 14, 60, 'confirmed', 'teacher', 'Omer Demo', 'Physics', 150),
+    mk('demo-booked-s', 1, 12, 60, 'confirmed', 'student', 'Ms. Demo', 'Biology', 110),
+    mk('demo-booked-t2', 18, 11, 90, 'confirmed', 'teacher', 'Noa Demo', 'Calculus', 130),
+    // Completed — teacher + student sides (retrospective).
+    mk('demo-completed-t', -1, 9, 60, 'completed', 'teacher', 'Lior Demo', 'Chemistry', 100),
+    mk('demo-completed-s', -3, 15, 60, 'completed', 'student', 'Dr. Demo', 'History', 80),
   ];
 }
 
-// One FAKE "synced" Google-Calendar-style event (event shape; mapBookingToEvent
-// only maps bookings, so this is built directly). Lets you watch the
-// synced-overlap warning behave on real data instead of phantom collisions.
-function demoSyncedEvent(base) {
+// Calendar-event-shaped FAKE rows for statuses mapBookingToEvent does NOT map
+// (availability, cancelled, not-reviewed) plus synced. Built directly in the
+// event shape the grid + popup cards consume.
+function directEvent(base, { id, dayOffset, time, type, role, who, subject }) {
   const d = new Date(base);
   d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + 2); // same day as demo-booked-t
-  return {
-    id: 'demo-synced-1',
-    type: 'synced',
-    color: 'bg-blue-500',
+  d.setDate(d.getDate() + dayOffset);
+  const ev = {
+    id,
+    type,
     date: d.getDate(),
     year: d.getFullYear(),
     month: d.getMonth(),
-    time: '15:00 - 16:00',
-    description: 'Demo synced Google Calendar event (fake)',
+    time,
+    color: TYPE_COLOR[type] || 'bg-gray-400',
+    description: `[DEMO] ${subject || type} — sample data, not real`,
   };
+  if (role) ev.role = role;
+  if (role === 'T') ev.student = `[DEMO] ${who || 'Student'}`;
+  if (role === 'S') ev.teacher = `[DEMO] ${who || 'Teacher'}`;
+  if (subject) ev.subject = `[DEMO] ${subject}`;
+  return ev;
+}
+
+function demoDirectEvents(base) {
+  return [
+    // Availability — teacher opens slots (T) + a student study slot (S).
+    directEvent(base, { id: 'demo-avail-t1', dayOffset: 1, time: '09:00 - 12:00', type: 'availability', role: 'T', subject: 'Open for booking' }),
+    directEvent(base, { id: 'demo-avail-t2', dayOffset: 2, time: '13:00 - 15:00', type: 'availability', role: 'T', subject: 'Open for booking' }),
+    directEvent(base, { id: 'demo-avail-s1', dayOffset: 2, time: '16:00 - 17:00', type: 'availability', role: 'S', subject: 'My study slot' }),
+    directEvent(base, { id: 'demo-avail-t3', dayOffset: 20, time: '10:00 - 13:00', type: 'availability', role: 'T', subject: 'Open for booking' }),
+    // Cancellation Fees — teacher + student sides.
+    directEvent(base, { id: 'demo-cancelled-t', dayOffset: -2, time: '11:00 - 12:00', type: 'cancelled', role: 'T', who: 'Gil Demo', subject: 'Late cancellation' }),
+    directEvent(base, { id: 'demo-cancelled-s', dayOffset: 5, time: '17:00 - 18:00', type: 'cancelled', role: 'S', who: 'Prof. Demo', subject: 'Cancelled lesson' }),
+    // Not Reviewed — teacher + student sides.
+    directEvent(base, { id: 'demo-notreviewed-t', dayOffset: -4, time: '10:00 - 11:00', type: 'not-reviewed', role: 'T', who: 'Sara Demo', subject: 'Awaiting review' }),
+    directEvent(base, { id: 'demo-notreviewed-s', dayOffset: -1, time: '14:00 - 15:00', type: 'not-reviewed', role: 'S', who: 'Mr. Demo', subject: 'Awaiting review' }),
+    // Synced (external Google-style) events — June + July, amber/blue overlap test.
+    directEvent(base, { id: 'demo-synced-1', dayOffset: 2, time: '15:00 - 16:00', type: 'synced', subject: 'Mock Google Sync — overlaps an external event' }),
+    directEvent(base, { id: 'demo-synced-2', dayOffset: 19, time: '18:00 - 19:30', type: 'synced', subject: 'Mock Google Sync — external event' }),
+  ];
 }
 
 // The full set of FAKE calendar events, in the calendar's event shape, ready to
-// spread alongside live events. `base` defaults to now.
+// spread alongside live events. `base` defaults to now (→ June/July 2026).
 export function getDemoCalendarEvents(base = new Date()) {
   const fromBookings = demoBookingRows(base).map(mapBookingToEvent).filter(Boolean);
-  return [...fromBookings, demoSyncedEvent(base)];
+  return [...fromBookings, ...demoDirectEvents(base)];
 }
