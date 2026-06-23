@@ -63,6 +63,7 @@ import { mapBookingToEvent } from '@/lib/calendar/mapBookingToEvent';
 import { demoCalendarEnabled, getDemoCalendarEvents } from '@/data/demoCalendarBookings';
 import { useGoogleCalendarSync } from '@/data/useGoogleCalendarSync';
 import { connectGoogleCalendar, disconnectGoogleCalendar } from '@/api/googleCalendar';
+import GoogleCalendarConnectDialog from '@/components/calendar/GoogleCalendarConnectDialog';
 import {
   computeSiblingEvents,
   synthesizeSavedAvailEvent,
@@ -298,6 +299,8 @@ export default function TeacherCalendar() {
   // through the last currently-visible month (including months loaded via
   // Show More Months) instead of stopping at primaryRange.endDate.
   const [noEndDate, setNoEndDate] = useState(false);
+  // Controls the in-app Google Calendar connect card (sign-in → connect → status).
+  const [showGoogleDialog, setShowGoogleDialog] = useState(false);
 
   const openAddModalForDay = (dayNumber, monthDate) => {
     const ref = monthDate || currentDate;
@@ -1250,21 +1253,7 @@ export default function TeacherCalendar() {
                       variant={gcalConnected ? 'default' : 'outline'}
                       size="sm"
                       title={gcalConnected ? 'Connected — click to disconnect' : 'Connect your Google Calendar (busy times show as warnings; booked lessons sync to Google)'}
-                      onClick={async () => {
-                        try {
-                          if (gcalConnected) {
-                            if (!window.confirm('Disconnect your Google Calendar?\n\nBooked lessons will stop syncing and external busy-time warnings will turn off.')) return;
-                            await disconnectGoogleCalendar();
-                          } else {
-                            // Ask first; on agree, continue to Google's consent screen.
-                            if (!window.confirm('Connect your Google Calendar?\n\nYou’ll be sent to Google to approve access. After you agree, your booked lessons sync to your Google Calendar and external busy times show as warnings.')) return;
-                            await connectGoogleCalendar('teacher');
-                          }
-                        } catch (e) {
-                          // Surface the real reason instead of failing silently.
-                          alert(e?.message || 'Could not connect Google Calendar. Are you signed in?');
-                        }
-                      }}
+                      onClick={() => setShowGoogleDialog(true)}
                     >
                       {gcalConnected ? 'Google ✓' : 'Google'}
                     </Button>
@@ -1471,6 +1460,11 @@ export default function TeacherCalendar() {
         onSaveAvailability={handleSaveAvailability}
         onBookingCreated={loadEvents}
         syncedEvents={events.filter((e) => e.type === 'synced')}
+      />
+      <GoogleCalendarConnectDialog
+        open={showGoogleDialog}
+        onOpenChange={setShowGoogleDialog}
+        role="teacher"
       />
     </div>
   );
