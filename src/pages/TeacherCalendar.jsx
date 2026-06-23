@@ -1252,8 +1252,14 @@ export default function TeacherCalendar() {
                       title={gcalConnected ? 'Connected — click to disconnect' : 'Connect your Google Calendar (busy times show as warnings; booked lessons sync to Google)'}
                       onClick={async () => {
                         try {
-                          if (gcalConnected) await disconnectGoogleCalendar();
-                          else await connectGoogleCalendar('teacher');
+                          if (gcalConnected) {
+                            if (!window.confirm('Disconnect your Google Calendar?\n\nBooked lessons will stop syncing and external busy-time warnings will turn off.')) return;
+                            await disconnectGoogleCalendar();
+                          } else {
+                            // Ask first; on agree, continue to Google's consent screen.
+                            if (!window.confirm('Connect your Google Calendar?\n\nYou’ll be sent to Google to approve access. After you agree, your booked lessons sync to your Google Calendar and external busy times show as warnings.')) return;
+                            await connectGoogleCalendar('teacher');
+                          }
                         } catch (e) {
                           // Surface the real reason instead of failing silently.
                           alert(e?.message || 'Could not connect Google Calendar. Are you signed in?');
