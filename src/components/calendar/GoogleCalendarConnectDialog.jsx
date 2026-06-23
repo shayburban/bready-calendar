@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Calendar, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { supabase } from '@/api/supabaseClient';
+import { toast } from '@/components/ui/use-toast';
 import {
   connectGoogleCalendar,
   disconnectGoogleCalendar,
@@ -51,16 +52,28 @@ export default function GoogleCalendarConnectDialog({ open, onOpenChange, role =
   const signIn = async () => {
     setBusy(true);
     setError(null);
+    // Mark that a sign-in is in flight (same flag LoginModal/RegisterModal use).
+    // GoogleAuthResultToaster reads it on return to detect a silent bounce-back.
+    try { sessionStorage.setItem('bready_pending_login', '1'); } catch { /* ignore */ }
     try {
-      const { error: e } = await supabase.auth.signInWithOAuth({
+      const { data, error: e } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.href },
       });
       if (e) throw e;
+      // supabase-js builds the authorize URL client-side and navigates to it.
+      // If no URL came back, the redirect won't happen — surface that instead
+      // of freezing on "Redirecting to Google…".
+      if (!data?.url) {
+        throw new Error('The Google provider is likely not enabled for this site yet.');
+      }
       // browser redirects to Google here
     } catch (e) {
-      setError(e?.message || 'Could not start Google sign-in.');
+      const msg = e?.message || 'Could not start Google sign-in.';
+      setError(msg);
       setBusy(false);
+      try { sessionStorage.removeItem('bready_pending_login'); } catch { /* ignore */ }
+      toast({ variant: 'destructive', title: 'Google sign-in couldn’t start', description: msg });
     }
   };
 
@@ -71,8 +84,10 @@ export default function GoogleCalendarConnectDialog({ open, onOpenChange, role =
     try {
       await connectGoogleCalendar(role); // redirects to Google's consent
     } catch (e) {
-      setError(e?.message || 'Could not start the calendar connection.');
+      const msg = e?.message || 'Could not start the calendar connection.';
+      setError(msg);
       setBusy(false);
+      toast({ variant: 'destructive', title: 'Couldn’t connect Google Calendar', description: msg });
     }
   };
 
@@ -82,8 +97,11 @@ export default function GoogleCalendarConnectDialog({ open, onOpenChange, role =
     try {
       await disconnectGoogleCalendar();
       await refresh();
+      toast({ title: 'Google Calendar disconnected', description: 'Your lessons will no longer sync to Google.' });
     } catch (e) {
-      setError(e?.message || 'Could not disconnect.');
+      const msg = e?.message || 'Could not disconnect.';
+      setError(msg);
+      toast({ variant: 'destructive', title: 'Couldn’t disconnect', description: msg });
     } finally {
       setBusy(false);
     }

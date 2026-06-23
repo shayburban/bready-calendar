@@ -23,14 +23,14 @@ export function Toaster() {
         // Without this filter a dismissed toast stays painted until
         // REMOVE_TOAST fires (200 ms later) AND it sits visually live for
         // those 200 ms. Filtering on `open !== false` makes both the
-        // X-click and the 5s auto-dismiss feel instant.
+        // X-click and the 3s auto-dismiss feel instant.
         .filter((t) => t.open !== false)
         .map(function ({ id, title, description, action, ...props }) {
           return (
-            // duration={5000} is defensive (Step 1 from the spec): plain
+            // duration={3000} is defensive (Step 1 from the spec): plain
             // <div> ignores it, but if/when this file is migrated to real
             // Radix Toast primitives the countdown prop is already wired.
-            <Toast key={id} duration={5000} {...props}>
+            <Toast key={id} duration={3000} {...props}>
               <div className="grid gap-1">
                 {title && <ToastTitle>{title}</ToastTitle>}
                 {description && (
