@@ -33,6 +33,7 @@ import AdminAnalytics from "./AdminAnalytics";
 import AdminPricingManagement from "./AdminPricingManagement";
 
 import AdminPendingApprovals from "./AdminPendingApprovals";
+import AdminCalendarSync from "./AdminCalendarSync";
 
 import AdminContentManagement from "./AdminContentManagement";
 
@@ -95,7 +96,8 @@ const PAGES = {
     AdminPricingManagement: AdminPricingManagement,
     
     AdminPendingApprovals: AdminPendingApprovals,
-    
+    AdminCalendarSync: AdminCalendarSync,
+
     AdminContentManagement: AdminContentManagement,
     
     AdminSystemDesign: AdminSystemDesign,
@@ -180,7 +182,9 @@ function PagesContent() {
                 <Route path="/AdminPricingManagement" element={<AdminPricingManagement />} />
                 
                 <Route path="/AdminPendingApprovals" element={<AdminPendingApprovals />} />
-                
+
+                <Route path="/AdminCalendarSync" element={<AdminCalendarSync />} />
+
                 <Route path="/AdminContentManagement" element={<AdminContentManagement />} />
                 
                 <Route path="/AdminSystemDesign" element={<AdminSystemDesign />} />

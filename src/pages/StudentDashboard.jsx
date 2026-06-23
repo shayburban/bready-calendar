@@ -3,6 +3,7 @@ import { User, Booking, TeacherProfile, Review, StudentRequest, SearchQuery } fr
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import GoogleCalendarConnectButton from '@/components/scheduling/GoogleCalendarConnectButton';
 import {
   BookOpen,
   Calendar as CalendarIcon,
@@ -115,6 +116,9 @@ export default function StudentDashboard() {
             <span className="mx-2">/</span>
             <span>Dashboard</span>
           </nav>
+          <div className="mt-4 flex justify-center">
+            <GoogleCalendarConnectButton role="student" />
+          </div>
         </div>
       </div>
 

@@ -10,6 +10,7 @@
 import { supabase } from '@/api/supabaseClient';
 import { mapRpcError } from '@/lib/scheduling/errorMap';
 import { now } from '@/lib/scheduling/timekit';
+import { syncBookingToCalendar } from '@/api/googleCalendar';
 
 export { mapRpcError };
 
@@ -64,9 +65,13 @@ export const createHold = ({ teacherId, slotStartUtc, durationMinutes, sessionId
 export const rebindHold = (holdId, studentId) =>
   callRpc('rebind_hold', { p_hold_id: holdId, p_student_id: studentId });
 
-export const commitBooking = ({ holdId, paymentRef, amount, subject }) => {
+export const commitBooking = async ({ holdId, paymentRef, amount, subject }) => {
   invalidateSlotsCache();
-  return callRpc('commit_booking', { p_hold_id: holdId, p_payment_ref: paymentRef, p_amount: amount, p_subject: subject });
+  const r = await callRpc('commit_booking', { p_hold_id: holdId, p_payment_ref: paymentRef, p_amount: amount, p_subject: subject });
+  // Best-effort outbound mirror (enqueues for whichever parties connected Google).
+  // Fire-and-forget: the booking is already committed regardless of the mirror.
+  if (r.ok && r.data?.id) syncBookingToCalendar(r.data.id, 'create');
+  return r;
 };
 
 // Out-of-availability request flow (0023). A student requests ANY future time
@@ -168,9 +173,11 @@ export const fetchMyBookings = (opts = {}) =>
 // Task Manager mutations (0017/0018). cancel = set status='cancelled' (never a
 // hard delete); the RPC derives the policy outcome atomically. Subject persists
 // the editable reminder. Both are auth.uid()-scoped and SECURITY DEFINER.
-export const cancelBooking = (bookingId) => {
+export const cancelBooking = async (bookingId) => {
   invalidateSlotsCache(); // a cancellation frees the slot back to the market (R22)
-  return callRpc('cancel_booking', { p_booking_id: bookingId });
+  const r = await callRpc('cancel_booking', { p_booking_id: bookingId });
+  if (r.ok) syncBookingToCalendar(bookingId, 'delete'); // best-effort mirror delete
+  return r;
 };
 
 export const updateBookingSubject = (bookingId, subject) =>

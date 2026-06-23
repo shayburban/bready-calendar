@@ -61,6 +61,8 @@ import { goToCalendarView } from '@/lib/calendarViewNavigation';
 import { fetchMyBookings } from '@/lib/scheduling/bookingApi';
 import { mapBookingToEvent } from '@/lib/calendar/mapBookingToEvent';
 import { demoCalendarEnabled, getDemoCalendarEvents } from '@/data/demoCalendarBookings';
+import { useGoogleCalendarSync } from '@/data/useGoogleCalendarSync';
+import { connectGoogleCalendar, disconnectGoogleCalendar } from '@/api/googleCalendar';
 import {
   computeSiblingEvents,
   synthesizeSavedAvailEvent,
@@ -249,6 +251,10 @@ export default function TeacherCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('Month');
   const [events, setEvents] = useState([]);
+  // Live Google Calendar "Busy" overlays (teacher-only, inbound). Returns [] when
+  // the teacher hasn't connected — then behavior is identical to before. These
+  // flow through the SAME synced-overlap path as mock/demo synced events (R14/R15g).
+  const { syncedEvents: gcalSyncedEvents, connected: gcalConnected } = useGoogleCalendarSync();
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -1154,7 +1160,7 @@ export default function TeacherCalendar() {
             onNoEndDateChange={handleNoEndDateChange}
             onResetAvailabilityForm={resetAvailabilityForm}
             detectSyncedOverlap={(slots) =>
-              syncedOverlapsForSlots(slots, events.filter((e) => e.type === 'synced'))
+              syncedOverlapsForSlots(slots, [...events, ...gcalSyncedEvents].filter((e) => e.type === 'synced'))
             }
           />
 
@@ -1240,7 +1246,22 @@ export default function TeacherCalendar() {
                   </Select>
                   <div className="flex items-center space-x-2">
                     <span className="text-sm whitespace-nowrap">Synchronize Calendar with</span>
-                    <Button variant="outline" size="sm">Google</Button>
+                    <Button
+                      variant={gcalConnected ? 'default' : 'outline'}
+                      size="sm"
+                      title={gcalConnected ? 'Connected — click to disconnect' : 'Connect your Google Calendar (busy times show as warnings; booked lessons sync to Google)'}
+                      onClick={async () => {
+                        try {
+                          if (gcalConnected) await disconnectGoogleCalendar();
+                          else await connectGoogleCalendar('teacher');
+                        } catch (e) {
+                          // Surface the real reason instead of failing silently.
+                          alert(e?.message || 'Could not connect Google Calendar. Are you signed in?');
+                        }
+                      }}
+                    >
+                      {gcalConnected ? 'Google ✓' : 'Google'}
+                    </Button>
                     <Button variant="outline" size="sm">Apple</Button>
                   </div>
                 </div>
@@ -1291,7 +1312,7 @@ export default function TeacherCalendar() {
                         const cellDate = day.isCurrentMonth
                           ? new Date(monthDate.getFullYear(), monthDate.getMonth(), day.date)
                           : null;
-                        const dayEvents = events.filter(event =>
+                        const dayEvents = [...events, ...gcalSyncedEvents].filter(event =>
                           event.date === day.date &&
                           day.isCurrentMonth &&
                           // Real events carry {year, month}; match the rendered

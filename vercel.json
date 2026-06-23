@@ -1,5 +1,14 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/(.*)", "destination": "/index.html" }
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ],
+  "functions": {
+    "api/cron/drain-calendar-outbox.js": { "maxDuration": 60 },
+    "api/google/freebusy-overlaps.js": { "maxDuration": 30 },
+    "api/cron/renew-watch-channels.js": { "maxDuration": 60 }
+  },
+  "crons": [
+    { "path": "/api/cron/renew-watch-channels", "schedule": "30 3 * * *" }
   ]
 }
