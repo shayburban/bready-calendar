@@ -1,0 +1,35 @@
+# CLAUDE-ENHANCEMENT: additive, safe to delete
+#
+# Context/token trimming for Claude Code's file search & reads.
+# NOT a security boundary — it only reduces what Claude pulls into context.
+# It does NOT hide files and does NOT protect secrets. Secret protection comes from
+# permissions.deny Read rules (added in Rung 4) + the "Secrets" rule in
+# docs/claude/agent-principles.md. .env is listed below only to keep it out of
+# context, never as a guarantee.
+
+# Dependencies & build output
+node_modules/
+dist/
+dist-ssr/
+
+# Test / tooling artifacts
+test-results/
+playwright-report/
+blob-report/
+coverage/
+.vercel/
+
+# Visual-regression baselines (~108 images — noise for code work)
+baseline/
+baseline-stitch-old/
+current/
+diff/
+role-screens/
+
+# Logs & local files
+*.log
+*.local
+
+# Keep secrets out of context (NOT a security control — see note above)
+.env
+.env.*
