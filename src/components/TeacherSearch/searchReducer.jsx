@@ -40,7 +40,10 @@ const applyAllFilters = (teachers, filters, query) => {
         const queryMatch = normalizedQuery === '' ||
             (teacher.name && teacher.name.toLowerCase().includes(normalizedQuery)) ||
             (teacher.subjects && teacher.subjects.some(s => s.toLowerCase().includes(normalizedQuery))) ||
-            (teacher.specializations && teacher.specializations.some(s => s.toLowerCase().includes(normalizedQuery)));
+            (teacher.specializations && teacher.specializations.some(s => s.toLowerCase().includes(normalizedQuery))) ||
+            // Also let users search by the service a teacher offers (e.g. "Consulting"),
+            // so the v9 card's "searched-service replaces trial" logic has something to match.
+            (Array.isArray(teacher.services) && teacher.services.some(svc => (svc?.name || '').toLowerCase().includes(normalizedQuery)));
 
         // Subject Filter
         const subjectMatch = filters.subjects.length === 0 ||

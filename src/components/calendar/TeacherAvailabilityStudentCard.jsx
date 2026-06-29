@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, AlertTriangle, X } from 'lucide-react';
 import { format } from 'date-fns';
 import TabSelector from '../common/TabSelector';
+import ServicePackageInfo from './ServicePackageInfo';
 import { cn } from '@/lib/utils';
 // Task 1 — Start/End Time now mount the shared <TimeRangeFields/>
 // component (same one used by the sidebar's Set Availability tab and
@@ -116,13 +117,8 @@ export default function TeacherAvailabilityStudentCard({ event, onClose, onDateC
             </div>
 
             <p className="text-sm font-bold underline mt-2 mb-1">Teacher’s Price</p>
-            <div className="text-sm space-y-1 mb-3">
-                <p><span className="font-bold opacity-75">Trial Lesson:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold opacity-75">Online Classes:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold opacity-75">Consulting:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold opacity-75">Technical Interview:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold opacity-75">Packages:</span> 4 $ for 1 Hr. till 03.08.2021 4 Hrs. left on this package</p>
-            </div>
+            {/* Task 3 — single service/package line (was a hardcoded multi-service list). */}
+            <ServicePackageInfo />
 
             <p className="text-sm font-bold underline mt-5 mb-3">Book This Teacher</p>
 

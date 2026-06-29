@@ -8,6 +8,7 @@ import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, Ban } from 'lucide-rea
 import { Calendar } from '@/components/ui/calendar';
 import CardDateDropdown from './CardDateDropdown';
 import TabSelector from '../common/TabSelector';
+import ServicePackageInfo from './ServicePackageInfo';
 
 export default function CancellationFeesCard({ event, onClose, onDateChange }) {
     const [date, setDate] = useState(new Date(2021, 6, 19));
@@ -74,7 +75,8 @@ export default function CancellationFeesCard({ event, onClose, onDateChange }) {
                 <Input placeholder="Write a reminder" className="bg-gray-50 mt-1 px-3 py-2 text-base flex h-10 w-full rounded-md border border-input ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm" />
             </div>
 
-            <p className="text-sm mb-3"><span className="font-bold opacity-75">Online Classes:</span> 10 $ for 1 Hr.</p>
+            {/* Task 3 — single service/package line (already a single service here). */}
+            <ServicePackageInfo />
 
             <p className="text-sm font-bold underline mb-2">Reason For Unsuccessful Meeting</p>
             <Textarea

@@ -333,8 +333,11 @@ export default function TeacherAvailabilityCard({ event, onClose, onDateChange, 
     console.log("Date selected, new data should be fetched for:", date);
   };
 
+  // Task 1 — wrap in the standard white popup-card container (bg-white, rounded,
+  // shadow, max-w-sm) so "My Availability (T)" matches the Student availability
+  // card and every other popup card.
   return (
-    <div className="p-4 space-y-3">
+    <div className="bg-white rounded-lg shadow-md p-4 space-y-3 w-full max-w-sm mx-auto" onClick={(e) => e.stopPropagation()}>
       <h3 className="text-center font-bold text-lg text-gray-800">My Availability {roleDisplay}</h3>
 
       <Popover open={datePickerOpen} onOpenChange={setDatePickerOpen}>

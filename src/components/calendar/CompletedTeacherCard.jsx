@@ -7,6 +7,7 @@ import { MoreVertical, Pencil, Trash2, Mail, ChevronDown, CheckCircle2 } from 'l
 import { Calendar } from '@/components/ui/calendar';
 import CardDateDropdown from './CardDateDropdown';
 import TabSelector from '../common/TabSelector';
+import ServicePackageInfo from './ServicePackageInfo';
 
 export default function CompletedTeacherCard({ event, onClose, onDateChange }) {
     const [date, setDate] = useState(new Date(2021, 6, 19));
@@ -75,12 +76,8 @@ export default function CompletedTeacherCard({ event, onClose, onDateChange }) {
                 <Input placeholder="Write a reminder" className="bg-gray-50 mt-1 px-3 py-2 text-base flex h-10 w-full rounded-md border border-input ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 md:text-sm" />
             </div>
 
-            <div className="text-xs space-y-1 mb-2 opacity-75">
-                <p><span className="font-bold">Online Classes:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold">Consulting:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold">Technical Interview:</span> 10 $ for 1 Hr.</p>
-                <p><span className="font-bold">Packages:</span> 4 $ for 1 Hr. till 03.08.2021 4 Hrs. left on this package</p>
-            </div>
+            {/* Task 3 — single service/package line (was a hardcoded multi-service list). */}
+            <ServicePackageInfo />
         </div>
     );
 }

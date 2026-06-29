@@ -47,9 +47,10 @@ const ResultsGrid = ({ state, dispatch }) => {
                     <p className="text-gray-500">Try adjusting your filters or search terms</p>
                 </div>
             ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 gap-6">
+                    {/* Single column — the v9 compact card is a full-width horizontal card. */}
                     {filteredResults.map(teacher => (
-                        <TeacherCard key={teacher.id} teacher={teacher} />
+                        <TeacherCard key={teacher.id} teacher={teacher} searchQuery={state.searchQuery} />
                     ))}
                 </div>
             )}
