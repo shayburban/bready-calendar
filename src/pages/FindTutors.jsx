@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import SearchContainer from '@/components/TeacherSearch/SearchContainer';
 import ListingBanner from '@/components/tutors/ListingBanner';
+import TeacherDiscovery from '@/components/TeacherDiscovery/TeacherDiscovery';
 import { listTeacherCards } from '@/api/teacherSearchApi';
 
 // Fallback catalog shown until real verified teachers exist (or when offline).
@@ -54,14 +55,23 @@ export default function FindTutors() {
     }, []);
 
     return (
-        <div className="bg-gray-50 min-h-screen">
-            <ListingBanner
-                subject="All Subjects"
-                tags={["Find your perfect match", "Expert Tutors", "Flexible Scheduling"]}
-            />
-            <div className="container mx-auto px-4 py-8">
-                <SearchContainer initialTeachers={teachers} />
+        <>
+            {/* PHONE (< md): Bumble-style swipe-to-book Teacher Discovery — a
+                full-screen takeover mounted only on phones. */}
+            <div className="md:hidden">
+                <TeacherDiscovery teachers={teachers} />
             </div>
-        </div>
+
+            {/* TABLET / DESKTOP (md+): the existing listing grid, untouched. */}
+            <div className="hidden md:block bg-gray-50 min-h-screen">
+                <ListingBanner
+                    subject="All Subjects"
+                    tags={["Find your perfect match", "Expert Tutors", "Flexible Scheduling"]}
+                />
+                <div className="container mx-auto px-4 py-8">
+                    <SearchContainer initialTeachers={teachers} />
+                </div>
+            </div>
+        </>
     );
 }
