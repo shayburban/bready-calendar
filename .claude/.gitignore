@@ -1,0 +1,5 @@
+# CLAUDE-ENHANCEMENT: additive, safe to delete
+# Machine-specific Claude config — never commit.
+settings.local.json
+# Local hook dependencies, if ever added.
+hooks/node_modules/
