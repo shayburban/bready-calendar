@@ -13,6 +13,9 @@ function toCard(row) {
     subjects: Array.isArray(row.subjects) ? row.subjects : [],
     specializations: Array.isArray(row.specializations) ? row.specializations : [],
     languages: Array.isArray(row.languages) ? row.languages : [],
+    // Detailed [{language, proficiency}] for display (real registration data,
+    // teacher_profiles.languages). `languages` above stays string[] for filters.
+    languageLevels: Array.isArray(row.language_levels) ? row.language_levels : [],
     availability: Array.isArray(row.availability) ? row.availability : [],
     hourlyRate: { regular: row.regular_rate != null ? Number(row.regular_rate) : 0 },
     rating: row.rating != null ? Number(row.rating) : 0,

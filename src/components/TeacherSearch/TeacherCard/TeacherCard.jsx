@@ -102,7 +102,9 @@ function subjectName(value, fallback) {
 }
 
 function buildSpeaks(teacher) {
-    const langs = Array.isArray(teacher.languages) ? teacher.languages : [];
+    const langs = Array.isArray(teacher.languageLevels) && teacher.languageLevels.length
+        ? teacher.languageLevels
+        : (Array.isArray(teacher.languages) ? teacher.languages : []);
     if (langs.length === 0) {
         return { list: FALLBACK.speaks, extra: 0, rest: [] };
     }

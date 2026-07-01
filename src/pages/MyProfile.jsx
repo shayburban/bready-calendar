@@ -123,7 +123,9 @@ function PersonalInformation({ user, country, profile }) {
         <h4 className="font-semibold text-gray-900 mb-3">Languages Spoken</h4>
         <div className="flex flex-wrap gap-3">
           {(profile?.languages || ['English, Expert', 'Hebrew, Native', 'Spanish, Intermediate']).map((l, i) => (
-            <Chip key={i}>{l}</Chip>
+            <Chip key={i}>
+              {typeof l === 'string' ? l : [l.language || l.name, l.proficiency || l.level].filter(Boolean).join(', ')}
+            </Chip>
           ))}
         </div>
       </SectionCard>
