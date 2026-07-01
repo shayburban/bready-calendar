@@ -26,6 +26,11 @@ const GRADIENTS = [
   'linear-gradient(135deg,#FB7185,#E11D48)',
 ];
 
+// Proficiency shown beneath a language when the source carries no explicit level
+// (app teacher data + the search RPC send plain strings). A real level/proficiency
+// always wins; otherwise it falls back by position: 1st language Native, then Fluent…
+const LEVEL_LADDER = ['Native', 'Fluent', 'Advanced', 'Intermediate', 'Beginner'];
+
 const FALLBACK = {
   reviewCount: 10,
   location: 'New York, USA',
@@ -79,7 +84,11 @@ function normSpeaks(teacher) {
     .map((l) => (typeof l === 'string'
       ? { language: l, level: '' }
       : { language: l.language || l.name || '', level: l.level || l.proficiency || '' }))
-    .filter((l) => l.language);
+    .filter((l) => l.language)
+    .map((l, i) => ({
+      language: l.language,
+      level: l.level || LEVEL_LADDER[Math.min(i, LEVEL_LADDER.length - 1)],
+    }));
   return norm.length ? norm : FALLBACK.speaks;
 }
 

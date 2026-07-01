@@ -53,7 +53,7 @@ function Stars({ rating, size = 13 }) {
   );
 }
 
-const Divider = ({ m = '15px 0' }) => <div style={{ height: 1, background: '#EFF1F4', margin: m }} />;
+const Divider = ({ m = '8px 0' }) => <div style={{ height: 1, background: '#EFF1F4', margin: m }} />;
 
 const Avatar = ({ t, size, font }) => (
   <div style={{ width: size, height: size, borderRadius: '50%', background: t.grad, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 700, fontSize: font, flex: '0 0 auto', boxShadow: size >= 70 ? '0 5px 14px rgba(20,30,45,.18)' : 'none' }}>
@@ -173,7 +173,7 @@ function SwipeCard({
   const allSpecs = t.specializations;
   const visibleSpecs = specsExpanded ? allSpecs : allSpecs.slice(0, 2);
   const showSpecsMore = allSpecs.length > 2;
-  const cancDiv = t.cancellation && t.cancellation.length > 34 ? '5px 0' : '15px 0';
+  const cancDiv = t.cancellation && t.cancellation.length > 34 ? '4px 0' : '9px 0';
 
   const subjectList = t.subjectsByLevel[subjectLevel] || [];
   const expEntries = t.experienceByCat[expCat] || [];
@@ -189,7 +189,7 @@ function SwipeCard({
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
       style={{
-        position: 'absolute', inset: 14, zIndex: 3, background: '#fff',
+        position: 'absolute', inset: 10, zIndex: 3, background: '#fff',
         border: '1px solid #E4E8EC', borderRadius: 20,
         boxShadow: '0 12px 34px rgba(20,30,45,.13)', overflow: 'hidden',
         display: 'flex', flexDirection: 'column', touchAction: 'pan-y',
@@ -208,9 +208,9 @@ function SwipeCard({
         </div>
 
         {/* ===================== SUMMARY ===================== */}
-        <div style={{ padding: '24px 16px 8px' }}>
+        <div style={{ padding: '16px 16px 6px' }}>
           <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-            <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, width: 82 }}>
+            <div style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 82 }}>
               <div style={{ position: 'relative' }}>
                 <Avatar t={t} size={74} font={24} />
                 {t.online && <span style={{ position: 'absolute', right: 4, bottom: 4, width: 14, height: 14, borderRadius: '50%', background: '#22C55E', border: '2.5px solid #fff' }} />}
@@ -228,7 +228,7 @@ function SwipeCard({
                   <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? '#1E7FE0' : 'none'} stroke={saved ? '#1E7FE0' : '#16233A'} strokeWidth="1.6"><path d="M6 3h12v18l-6-4-6 4z" /></svg>
                 </button>
               </div>
-              <div style={{ marginTop: 9, display: 'flex', flexDirection: 'column', gap: 7 }}>
+              <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {visibleServices.map((pr, i) => (
                   <div key={i} style={{ fontSize: 13, color: '#1B2733', lineHeight: 1.1 }}>
                     <span style={{ fontWeight: 700 }}>{pr.label}:</span>{' '}
@@ -266,9 +266,9 @@ function SwipeCard({
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#16233A" strokeWidth="1.5" style={{ flex: '0 0 auto' }}><circle cx="12" cy="12" r="9" /><line x1="3" y1="12" x2="21" y2="12" /><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" /></svg>
             <div style={{ flex: 1, display: 'flex', justifyContent: 'space-around', gap: 6 }}>
               {t.speaks.slice(0, 3).map((lg, i) => (
-                <div key={i} style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: '#2E3A46' }}>{lg.language}</div>
-                  <div style={{ fontSize: 11, color: '#8A93A0' }}>{lg.level}</div>
+                <div key={i} style={{ flex: '1 1 0', minWidth: 0, textAlign: 'center' }}>
+                  <div style={{ fontSize: 16, fontWeight: 600, color: '#2E3A46', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lg.language}</div>
+                  <div style={{ fontSize: 14, fontWeight: 400, color: '#9CA3AF', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lg.level}</div>
                 </div>
               ))}
             </div>
@@ -277,7 +277,7 @@ function SwipeCard({
 
           <Divider />
 
-          <div style={{ fontSize: 15, fontWeight: 800, color: '#16233A', marginBottom: 11 }}>Specializations</div>
+          <div style={{ fontSize: 15, fontWeight: 800, color: '#16233A', marginBottom: 8 }}>Specializations</div>
           <div style={{ display: 'flex', gap: 7, flexWrap: specsExpanded ? 'wrap' : 'nowrap', overflow: 'hidden' }}>
             {visibleSpecs.map((sp, i) => (
               <span key={i} style={{ fontSize: 12, color: '#48515D', background: '#F2F4F6', padding: '7px 12px', borderRadius: 20, flex: '0 1 auto', minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sp}</span>
@@ -309,12 +309,12 @@ function SwipeCard({
           {/* cancellation */}
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
             <span style={{ flex: '0 0 auto', fontSize: 14, fontWeight: 800, color: '#16233A', width: 82 }}>Cancellation</span>
-            <span style={{ flex: 1, fontSize: 13, color: '#48515D', lineHeight: 1.4 }}>{t.cancellation}</span>
+            <span style={{ flex: 1, fontSize: 13, color: '#48515D', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{t.cancellation}</span>
           </div>
         </div>
 
         {/* scroll cue */}
-        <div ref={cueRef} style={{ background: '#F4F6F8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, color: '#A6AEB8', fontSize: 11, padding: '12px 0 14px' }}>
+        <div ref={cueRef} style={{ background: '#F4F6F8', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, color: '#A6AEB8', fontSize: 11, padding: '6px 0 8px' }}>
           <span style={{ fontWeight: 600 }}>Scroll for full profile</span>
           <svg className="dc-bob" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2"><polyline points="6 9 12 15 18 9" /></svg>
         </div>
@@ -648,7 +648,7 @@ function MessageSheet({ teacher, onClose, onSend }) {
 
 function EmptyState({ onReset }) {
   return (
-    <div style={{ position: 'absolute', inset: 14, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 30, background: '#fff', border: '1px solid #E7EAEE', borderRadius: 20 }}>
+    <div style={{ position: 'absolute', inset: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', gap: 14, padding: 30, background: '#fff', border: '1px solid #E7EAEE', borderRadius: 20 }}>
       <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#E7F6EA', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke={ACCENT} strokeWidth="1.8"><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>
       </div>
@@ -934,8 +934,8 @@ export default function TeacherDiscovery({ teachers = [] }) {
 
       {/* ARENA */}
       <div style={{ position: 'relative', flex: '1 1 auto', minHeight: 0, overflow: 'hidden', background: '#EEF0F3' }}>
-        {deck.length > 2 && <div style={{ position: 'absolute', inset: 14, background: '#fff', border: '1px solid #E7EAEE', borderRadius: 20, boxShadow: '0 4px 14px rgba(20,30,45,.05)', transform: 'scale(.9)', zIndex: 1 }} />}
-        {deck.length > 1 && <div style={{ position: 'absolute', inset: 14, background: '#fff', border: '1px solid #E7EAEE', borderRadius: 20, boxShadow: '0 6px 18px rgba(20,30,45,.06)', transform: 'scale(.95)', zIndex: 2 }} />}
+        {deck.length > 2 && <div style={{ position: 'absolute', inset: 10, background: '#fff', border: '1px solid #E7EAEE', borderRadius: 20, boxShadow: '0 4px 14px rgba(20,30,45,.05)', transform: 'scale(.9)', zIndex: 1 }} />}
+        {deck.length > 1 && <div style={{ position: 'absolute', inset: 10, background: '#fff', border: '1px solid #E7EAEE', borderRadius: 20, boxShadow: '0 6px 18px rgba(20,30,45,.06)', transform: 'scale(.95)', zIndex: 2 }} />}
 
         {top ? (
           <SwipeCard
